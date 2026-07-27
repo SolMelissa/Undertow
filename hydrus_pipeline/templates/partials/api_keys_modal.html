@@ -1,0 +1,129 @@
+<div class="flex flex-col gap-3" x-data="{ tab: '{{ default_tab or 'hydrus' }}', open: '{{ 'reddit' if oauth_output or test_output else '' }}' }">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">CREDENTIALS</div>
+  <div class="text-xs font-mono flex flex-col gap-1">
+    <div>Hydrus API key: {% if hydrus_ok %}<span class="text-[#39ff88]">configured — {{ hydrus_key_masked }}</span>{% else %}<span class="text-[#ff4f6d]">NOT configured</span>{% endif %}</div>
+  </div>
+
+  {% if message %}
+  <div class="alert {{ 'alert-error' if message_error else 'alert-success' }} py-2 text-sm">{{ message }}</div>
+  {% endif %}
+
+  <div class="tabs tabs-boxed bg-[#0a0f16]">
+    <a class="tab" :class="tab === 'hydrus' ? 'tab-active' : ''" @click="tab = 'hydrus'">Hydrus API Key</a>
+    <a class="tab" :class="tab === 'services' ? 'tab-active' : ''" @click="tab = 'services'">
+      Other Services
+      {% set missing_count = (services | rejectattr('configured') | list | length) + (0 if reddit_ok else 1) %}
+      {% if missing_count %}<span class="badge badge-error badge-xs ml-1">{{ missing_count }}</span>{% endif %}
+    </a>
+  </div>
+
+  <div x-show="tab === 'hydrus'" class="flex flex-col gap-2">
+    <p class="text-xs text-[#8aa0a8]">
+      Get this from Hydrus: services &rarr; manage services &rarr; enable Client API (port 45869),
+      then services &rarr; review services &rarr; Client API &rarr; generate a new access key.
+    </p>
+    <form hx-post="/api-keys/hydrus" hx-target="#modal-content" hx-swap="innerHTML" class="flex gap-2">
+      <input type="text" name="api_key" required placeholder="paste Hydrus Client API access key"
+             class="input input-sm input-bordered flex-1 bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+      <button type="submit" class="btn btn-sm btn-primary">Save</button>
+    </form>
+  </div>
+
+  <div x-show="tab === 'services'" class="flex flex-col gap-2">
+    <p class="text-xs text-[#8aa0a8]">
+      Services that hit a shared/anonymous rate limit or auth wall unless you register your own
+      key. Missing ones are listed first. Each subscription check picks these up automatically -
+      no daemon restart needed.
+    </p>
+    <div class="flex flex-col gap-2 overflow-y-auto max-h-96 pr-1">
+
+      <!-- Reddit: own multi-step OAuth flow, so it gets a collapsible card instead of the
+           generic field-form used by every other service below. -->
+      <div class="border border-[#17323a] rounded p-2 flex flex-col gap-2">
+        <button type="button" class="flex items-center justify-between w-full text-left" @click="open = (open === 'reddit' ? '' : 'reddit')">
+          <div class="text-sm font-bold text-[#ff9d3c]">Reddit</div>
+          {% if reddit_ok %}
+          <span class="text-xs text-[#39ff88]">configured — client-id {{ reddit_cid_masked }}</span>
+          {% else %}
+          <span class="text-xs text-[#8aa0a8]">NOT configured (built-in shared client still works)</span>
+          {% endif %}
+        </button>
+        <div x-show="open === 'reddit'" class="flex flex-col gap-4">
+          <div class="flex flex-col gap-2">
+            <div class="text-sm font-bold text-[#ff9d3c]">Test without a custom app</div>
+            <p class="text-xs text-[#8aa0a8]">Uses gallery-dl's own built-in shared OAuth client. --simulate, nothing gets saved.</p>
+            <form hx-post="/api-keys/reddit/test-shared" hx-target="#modal-content" hx-swap="innerHTML" hx-indicator="#reddit-test-indicator" class="flex gap-2">
+              <input type="hidden" name="_tab" value="services">
+              <input type="text" name="subreddit" placeholder="subreddit (default pics)"
+                     class="input input-sm input-bordered flex-1 bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+              <button type="submit" class="btn btn-sm">Test</button>
+              <span id="reddit-test-indicator" class="htmx-indicator loading loading-spinner loading-sm text-[#39d3ff]"></span>
+            </form>
+            {% if test_output %}
+            <pre class="text-xs bg-[#020304] border border-[#17323a] rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">{{ test_output }}</pre>
+            {% endif %}
+          </div>
+
+          <div class="flex flex-col gap-2 border-t border-[#17323a] pt-3">
+            <div class="text-sm font-bold text-[#ff9d3c]">Configure a custom app (better rate limits + private/quarantined subs)</div>
+            <p class="text-xs text-[#8aa0a8]">
+              Create a Reddit "installed app" at
+              <a class="link text-[#39d3ff]" href="https://www.reddit.com/prefs/apps" target="_blank" rel="noopener">reddit.com/prefs/apps</a>
+              with redirect uri <code>http://localhost:6414/</code>, then paste its client ID below.
+            </p>
+            <form hx-post="/api-keys/reddit/configure" hx-target="#modal-content" hx-swap="innerHTML" hx-indicator="#reddit-oauth-indicator" class="flex flex-col gap-2">
+              <input type="hidden" name="_tab" value="services">
+              <input type="text" name="client_id" required placeholder="Reddit app client ID"
+                     class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+              <input type="text" name="username" required placeholder="Your Reddit username (for the User-Agent header)"
+                     class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+              <div class="flex items-center gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">Save &amp; Run OAuth</button>
+                <span id="reddit-oauth-indicator" class="htmx-indicator loading loading-spinner loading-sm text-[#39d3ff]"></span>
+                <span class="htmx-indicator text-xs text-[#8aa0a8]">opening a browser tab, waiting for the redirect...</span>
+              </div>
+            </form>
+            {% if oauth_output %}
+            <pre class="text-xs bg-[#020304] border border-[#17323a] rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">{{ oauth_output }}</pre>
+            <form hx-post="/api-keys/reddit/refresh-token" hx-target="#modal-content" hx-swap="innerHTML" class="flex gap-2">
+              <input type="hidden" name="_tab" value="services">
+              <input type="text" name="refresh_token" required placeholder="paste the refresh-token printed above"
+                     class="input input-sm input-bordered flex-1 bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+              <button type="submit" class="btn btn-sm btn-primary">Save token</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% for svc in services %}
+      <div class="border border-[#17323a] rounded p-2 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div class="text-sm font-bold text-[#ff9d3c]">{{ svc.label }}</div>
+          {% if svc.configured %}
+          <span class="text-xs text-[#39ff88]">configured</span>
+          {% else %}
+          <span class="text-xs text-[#ff4f6d]">NOT configured</span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-[#8aa0a8]">{{ svc.note }}</p>
+        <a class="link text-xs text-[#39d3ff] w-fit" href="{{ svc.url }}" target="_blank" rel="noopener">{{ svc.url }}</a>
+        <form hx-post="/api-keys/service/{{ svc.id }}" hx-target="#modal-content" hx-swap="innerHTML" class="flex flex-col gap-2">
+          <input type="hidden" name="_tab" value="services">
+          {% for field in svc.fields %}
+          <input type="text" name="{{ field.key }}"
+                 placeholder="{{ field.label }}{% if svc.masked_values.get(field.key) not in (none, '(not set)') %} (currently {{ svc.masked_values[field.key] }}){% endif %}"
+                 class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+          {% endfor %}
+          <button type="submit" class="btn btn-sm btn-primary w-fit">Save</button>
+        </form>
+      </div>
+      {% endfor %}
+
+    </div>
+  </div>
+
+  <div class="flex justify-end mt-2">
+    <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+  </div>
+</div>

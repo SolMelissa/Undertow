@@ -1,0 +1,19 @@
+<div class="hud-panel">
+  <div class="hud-titlebar">ACTIVITY :: queue+due<div class="rule"></div></div>
+  <div class="p-2">
+    {% if not spark %}
+    <div class="text-[11px] text-[#5a8a6c] h-10 flex items-center">gathering telemetry&hellip;</div>
+    {% else %}
+    <svg viewBox="0 0 {{ spark.width }} {{ spark.height }}" class="w-full h-10" preserveAspectRatio="none">
+      <polyline points="{{ spark.points }}" fill="none" stroke="#39d3ff" stroke-width="2"
+                stroke-linejoin="round" stroke-linecap="round" />
+      <circle cx="{{ spark.last_x }}" cy="{{ spark.last_y }}" r="5" fill="#020604" />
+      <circle cx="{{ spark.last_x }}" cy="{{ spark.last_y }}" r="3.5" fill="#39d3ff" />
+    </svg>
+    <div class="flex justify-between text-[11px] text-[#5a8a6c] mt-1">
+      <span>peak <span class="text-[#39ff88]">{{ spark.peak }}</span></span>
+      <span>now <span class="text-[#39ff88]">{{ spark.now }}</span></span>
+    </div>
+    {% endif %}
+  </div>
+</div>

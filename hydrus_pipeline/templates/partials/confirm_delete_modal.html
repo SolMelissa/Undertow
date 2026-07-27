@@ -1,0 +1,10 @@
+<div class="flex flex-col gap-3">
+  <div class="text-lg font-bold text-[#ff4f6d]">Delete subscription #{{ sub.id }}?</div>
+  <p class="text-sm text-[#8aa0a8]">
+    This only removes it from hydownloader - already-downloaded files are unaffected.
+  </p>
+  <div class="flex gap-2 justify-end">
+    <button class="btn btn-sm" hx-get="/subscriptions/{{ sub.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML">Cancel</button>
+    <button class="btn btn-sm btn-error" hx-post="/subscriptions/{{ sub.id }}/delete" hx-target="#modal-content" hx-swap="innerHTML">Delete</button>
+  </div>
+</div>

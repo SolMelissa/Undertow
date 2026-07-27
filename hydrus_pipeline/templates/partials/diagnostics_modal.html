@@ -1,0 +1,59 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">SYSTEM DIAGNOSTICS</div>
+  <div class="text-sm flex flex-col gap-1 font-mono">
+    <div>Hydrus:               {% if report.status.hydrus_running %}<span class="text-[#39ff88]">running (PID {{ report.status.hydrus_pid }})</span>{% else %}<span class="text-[#ff4f6d]">NOT running</span>{% endif %}</div>
+    <div>hydownloader daemon:  {% if report.status.daemon_running %}<span class="text-[#39ff88]">running (PID {{ report.status.daemon_pid }})</span>{% else %}<span class="text-[#ff4f6d]">NOT running</span>{% endif %}</div>
+    <div>hydownloader systray: {% if report.status.systray_running %}<span class="text-[#39ff88]">running (PID {{ report.status.systray_pid }})</span>{% else %}<span class="text-[#ff4f6d]">NOT running</span>{% endif %}</div>
+    <div class="mt-1">Daemon API: {% if report.api_reachable %}<span class="text-[#39ff88]">reachable</span> at {{ report.api_base_url }}{% else %}<span class="text-[#ff4f6d]">NOT reachable</span> - {{ report.api_reason or 'unknown' }}{% endif %}</div>
+    <div>Hydrus API: {% if report.hydrus_api_reachable %}<span class="text-[#39ff88]">reachable</span>{% else %}<span class="text-[#ff4f6d]">NOT reachable</span> - {{ report.hydrus_api_reason or 'unknown' }}{% endif %}</div>
+    <div class="mt-1">Flagged subscriptions:
+      {% if flagged_error %}<span class="text-[#ff4f6d]">couldn't check</span> - {{ flagged_error }}
+      {% elif flagged_count %}<span class="text-[#ffd166]">{{ flagged_count }}</span> failing repeatedly or stale - see the main table
+      {% else %}<span class="text-[#39ff88]">none</span>{% endif %}
+    </div>
+    <div class="mt-1">gallery-dl:
+      {% if report.gallery_dl.on_path %}<span class="text-[#39ff88]">found</span> ({{ report.gallery_dl.resolved_path }})
+      {% elif report.gallery_dl.user_install_path %}<span class="text-[#ffd166]">installed but NOT on PATH</span> — {{ report.gallery_dl.hint }}
+      {% else %}<span class="text-[#ff4f6d]">NOT found</span> (not on PATH, 'pip show' found nothing either){% endif %}
+    </div>
+    {% if report.multiple_python_paths %}
+    <div class="text-[#8aa0a8]">Note: multiple Python installs on PATH: {{ report.multiple_python_paths|join(', ') }}</div>
+    {% endif %}
+    {% if report.watchdog_last_check %}
+    <div class="mt-1 text-[#8aa0a8]">
+      Background watchdog last ran at {{ report.watchdog_last_check }}.
+      {% if report.watchdog_actions %}
+        <div>Its last check took action:</div>
+        <ul class="list-disc list-inside">{% for a in report.watchdog_actions %}<li>{{ a }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if cap_message %}
+  <div class="alert {{ 'alert-error' if cap_error else 'alert-success' }} py-2 text-sm">{{ cap_message }}</div>
+  {% endif %}
+  {% if restart_message %}
+  <div class="alert alert-info py-2 text-sm">{{ restart_message }}</div>
+  {% endif %}
+
+  <div class="flex flex-wrap gap-2 justify-end mt-2">
+    {% set all_up = report.status.hydrus_running and report.status.daemon_running and report.status.systray_running %}
+    <button class="btn btn-sm bg-[#123038] border-none text-[#39ff88] hover:bg-[#17434d]" {{ 'disabled' if all_up else '' }}
+            hx-post="/diagnostics/restart-services" hx-target="#modal-content" hx-swap="innerHTML">Restart down services</button>
+    <button class="btn btn-sm bg-[#123038] border-none text-[#39ff88] hover:bg-[#17434d]"
+            hx-post="/diagnostics/cap-existing" hx-target="#modal-content" hx-swap="innerHTML">Cap existing subs' file limits</button>
+    <button class="btn btn-sm bg-[#123038] border-none text-[#39ff88] hover:bg-[#17434d]"
+            hx-post="/diagnostics/block-video" hx-target="#modal-content" hx-swap="innerHTML"
+            title="Blocks video files (gifs still allowed) on any existing subscription that has no filter of its own set yet">Block video on existing subs</button>
+    <button class="btn btn-sm bg-[#123038] border-none text-[#39ff88] hover:bg-[#17434d]"
+            hx-post="/diagnostics/fuzz-intervals" hx-vals='{"force_all": "false"}' hx-target="#modal-content" hx-swap="innerHTML"
+            title="Re-randomizes check_interval (12-24h spread) for subs still sitting on the standard band - leaves deliberately custom intervals alone">Fuzz existing intervals</button>
+    <button class="btn btn-sm bg-[#2a1810] border-none text-[#ff9d3c] hover:bg-[#3a2216]"
+            hx-post="/diagnostics/fuzz-intervals" hx-vals='{"force_all": "true"}' hx-target="#modal-content" hx-swap="innerHTML"
+            hx-confirm="Re-randomize check_interval for ALL subscriptions, including any you set to a custom interval on purpose?"
+            title="Same, but also re-randomizes subs with a custom (non-default-band) interval">Fuzz ALL intervals</button>
+    <button class="btn btn-sm" hx-get="/diagnostics" hx-target="#modal-content" hx-swap="innerHTML">Refresh</button>
+    <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+  </div>
+</div>

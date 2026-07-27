@@ -1,0 +1,11 @@
+<div class="hud-panel">
+  <div class="hud-titlebar">HYDRUS<div class="rule"></div></div>
+  <div class="p-2 text-[11px] flex flex-col gap-1.5">
+    {% if not stats.reachable %}
+    <div class="text-[#5a8a6c]">unavailable - {{ stats.error or 'unknown' }}</div>
+    {% else %}
+    <div class="flex justify-between"><span class="text-[#5a8a6c]">TOTAL FILES</span><span class="text-[#39ff88]">{{ stats.total_files }}</span></div>
+    <div class="flex justify-between"><span class="text-[#5a8a6c]">INBOX</span><span class="text-[#39d3ff]">{{ stats.inbox_count }}</span></div>
+    {% endif %}
+  </div>
+</div>

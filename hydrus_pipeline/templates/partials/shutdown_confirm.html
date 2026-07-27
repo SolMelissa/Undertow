@@ -1,0 +1,12 @@
+<div class="flex flex-col gap-3">
+  <div class="text-lg font-bold text-[#ff4f6d] tracking-wide">SHUT DOWN PIPELINE?</div>
+  <p class="text-sm text-[#8aa0a8]">
+    Stops the hydownloader daemon (only if idle - a busy daemon is left running, same as
+    quitting the console UI) and the systray, then closes this dashboard process entirely.
+    Hydrus itself is never touched - close it yourself separately if you want it closed too.
+  </p>
+  <div class="flex gap-2 justify-end">
+    <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Cancel</button>
+    <button class="btn btn-sm btn-error" hx-post="/shutdown-app" hx-target="#modal-content" hx-swap="innerHTML">Shut Down</button>
+  </div>
+</div>

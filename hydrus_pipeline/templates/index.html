@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en" data-theme="night">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hydrus Pipeline</title>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" type="text/css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root { --term-green: #39ff88; --term-dim: #1c6b3e; }
+  body {
+    background: #010302;
+    color: var(--term-green);
+    font-family: 'Share Tech Mono', 'Consolas', monospace;
+    font-size: 12.5px;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--term-dim); }
+  ::-webkit-scrollbar-track { background: #010302; }
+  #log-box div:last-child { color: #eafff0; }
+  .htmx-indicator { opacity: 0; transition: opacity 150ms ease-in; }
+  .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+
+  #matrix-rain { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.5; }
+  .app-layer { position: relative; z-index: 1; }
+
+  .vt { font-family: 'VT323', monospace; letter-spacing: 0.03em; }
+
+  .hud-panel {
+    position: relative;
+    background: #030805;
+    border: 1px solid var(--term-dim);
+    box-shadow: 0 0 0 1px #010302, inset 0 0 12px rgba(57,255,136,0.05);
+  }
+  .hud-titlebar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 8px;
+    background: #04140a;
+    border-bottom: 1px solid var(--term-dim);
+    font-size: 10.5px; letter-spacing: 0.08em; color: var(--term-green);
+    white-space: nowrap; overflow: hidden;
+  }
+  .hud-titlebar::before { content: "["; color: #ff9d3c; }
+  .hud-titlebar::after { content: "]"; color: #ff9d3c; }
+  .hud-titlebar .rule { flex: 1; border-bottom: 1px dashed var(--term-dim); height: 0; margin-left: 6px; }
+
+  .pulse-dot { width: 6px; height: 6px; display: inline-block; background: currentColor;
+    box-shadow: 0 0 6px currentColor; animation: pulse 1.4s steps(2) infinite; }
+  @keyframes pulse { 50% { opacity: 0.2; } }
+
+  .radar-spin { width: 10px; height: 10px; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 0deg, #ff9d3c 60deg, transparent 90deg);
+    animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .cursor-blink { display: inline-block; width: 0.6em; background: var(--term-green); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .glitch { position: relative; }
+  .glitch::before, .glitch::after {
+    content: attr(data-text); position: absolute; left: 0; top: 0; width: 100%; overflow: hidden;
+    background: #010302; clip-path: inset(0 0 0 0);
+  }
+  .glitch::before { color: #ff4f6d; animation: glitch1 3.2s infinite linear alternate-reverse; }
+  .glitch::after { color: #39d3ff; animation: glitch2 2.6s infinite linear alternate-reverse; }
+  @keyframes glitch1 { 0% { clip-path: inset(10% 0 80% 0); transform: translate(-1px); } 20% { clip-path: inset(60% 0 5% 0); transform: translate(1px); } 40% { clip-path: inset(20% 0 60% 0); transform: translate(-1px); } 60% { clip-path: inset(80% 0 2% 0); transform: translate(1px); } 100% { clip-path: inset(40% 0 40% 0); transform: translate(0); } }
+  @keyframes glitch2 { 0% { clip-path: inset(70% 0 5% 0); transform: translate(1px); } 30% { clip-path: inset(10% 0 75% 0); transform: translate(-1px); } 60% { clip-path: inset(45% 0 40% 0); transform: translate(1px); } 100% { clip-path: inset(20% 0 60% 0); transform: translate(0); } }
+
+  .scanlines { position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgba(57,255,136,0.035) 0px, rgba(57,255,136,0.035) 1px, transparent 1px, transparent 2px);
+    mix-blend-mode: overlay; opacity: 0.6; }
+  .crt-vignette { position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    box-shadow: inset 0 0 160px rgba(0,0,0,0.75); }
+
+  .bracket-btn {
+    font-family: inherit; font-size: 11px; letter-spacing: 0.05em;
+    background: #030805; border: 1px solid var(--term-dim); color: var(--term-green);
+    padding: 4px 10px; border-radius: 0;
+  }
+  .bracket-btn:hover { background: var(--term-green); color: #010302; }
+  .bracket-btn::before { content: "[ "; } .bracket-btn::after { content: " ]"; }
+  .bracket-btn-danger { border-color: #6b1c2a; color: #ff4f6d; }
+  .bracket-btn-danger:hover { background: #ff4f6d; color: #010302; }
+
+  .tag-ok { color: var(--term-green); }
+  .tag-fail { color: #ff4f6d; }
+  .glow-title { text-shadow: 0 0 8px rgba(57,255,136,0.6), 0 0 18px rgba(57,255,136,0.25); }
+
+  .status-wall { background: #030805; border-bottom: 1px solid var(--term-dim); }
+
+  /* Cockpit layout: LEFT and RIGHT are FIXED-width (same width as each other, skinny) - they
+     hold gadgets/instruments, not the actual data, so they never need to grow. MAIN (the real
+     subscriptions/log data) is the only flexible track and gets whatever's left via minmax(0,1fr)
+     - the minmax(0, ...) matters because a plain "1fr" grid track still respects its content's
+     min-content width by default, which can force the track wider than the available space and
+     break the whole layout; minmax(0,1fr) explicitly allows it to shrink below that.
+
+     Three stages:
+       - wide:   left(fixed) | main(flexible) | right(fixed) - all three side by side
+       - medium: left(fixed) | main(flexible), with RIGHT dropped to its own full-width row
+                 below both (not merged into LEFT's column - it gets the whole width to itself)
+       - narrow: everything stacks full-width, MAIN first (the actual functional cockpit),
+                 then LEFT, then RIGHT */
+  .cockpit-grid {
+    display: grid; gap: 0.75rem;
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "left" "right";
+    align-items: start;
+  }
+  .cockpit-left { grid-area: left; }
+  .cockpit-main { grid-area: main; min-width: 0; }
+  .cockpit-right { grid-area: right; }
+
+  @media (min-width: 768px) {
+    .cockpit-grid {
+      grid-template-columns: 260px minmax(0, 1fr);
+      grid-template-areas: "left main" "right right";
+    }
+  }
+  @media (min-width: 1280px) {
+    .cockpit-grid {
+      grid-template-columns: 260px minmax(0, 1fr) 260px;
+      grid-template-areas: "left main right";
+    }
+  }
+
+  table.term-table th, table.term-table td { font-size: 11px; padding: 2px 6px; }
+
+  /* --- decorative chaos widgets - heights/motion driven by JS below, not CSS keyframes,
+     so SIGNAL and SCOPE move like real instruments instead of one repeating loop --- */
+  .eq { display: flex; align-items: flex-end; gap: 2px; height: 44px; }
+  .eq span { flex: 1; background: linear-gradient(to top, #39ff88, #39d3ff); }
+
+  #hexdump { font-size: 10px; line-height: 1.5; color: #2a8a55; white-space: pre; }
+  #hexdump .addr { color: #1c6b3e; }
+  #hexdump .ascii { color: #39ff88; }
+
+  #radar-canvas { width: 100%; aspect-ratio: 1 / 1; display: block; }
+</style>
+</head>
+<body class="min-h-screen">
+<canvas id="matrix-rain"></canvas>
+<div class="scanlines"></div>
+<div class="crt-vignette"></div>
+
+<div class="app-layer">
+  <div class="px-4 py-1 text-[10px] text-[var(--term-dim)] border-b border-[#0d2416] bg-[#010805] whitespace-nowrap overflow-x-auto">
+    root@hydrus-pipeline:~# tail -f /var/log/hydrus_pipeline.webui &nbsp;·&nbsp;
+    [ OK ] bound 127.0.0.1:8765 &nbsp;·&nbsp; [ OK ] htmx/alpine runtime attached &nbsp;·&nbsp;
+    [ OK ] daemon api client ready<span class="cursor-blink">&nbsp;</span>
+  </div>
+
+  <div class="navbar bg-[#030805] border-b border-[var(--term-dim)] px-4 py-1 min-h-0">
+    <div class="flex-1 flex items-baseline gap-3">
+      <span class="glitch vt text-2xl font-bold text-[var(--term-green)]" data-text="HYDRUS//PIPELINE">HYDRUS//PIPELINE</span>
+      <span class="text-[10px] text-[#ff9d3c] hidden sm:inline tracking-widest">::UPLINK_ESTABLISHED::</span>
+    </div>
+    <span id="clock" class="text-xs text-[var(--term-dim)] tabular-nums hidden md:inline"></span>
+  </div>
+
+  <!-- STATUS WALL: dedicated dense status band - real service/worker status on the left,
+       decorative signal-noise readouts on the right so this reads as a proper NOC status wall
+       rather than a couple of badges tucked in a corner. -->
+  <div class="status-wall">
+    <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-1.5 text-[11px]">
+      <div id="status-badges" class="flex flex-wrap gap-3"
+           hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+        loading...
+      </div>
+      <div id="noise-readouts" class="flex flex-wrap gap-4 text-[#1c6b3e]"></div>
+    </div>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-1.5 px-4 py-2 bg-[#020604] border-b border-[#0d2416]">
+    <button class="bracket-btn" hx-get="/subscriptions/add-modal" hx-target="#modal-content" hx-swap="innerHTML">SUBSCRIBE</button>
+    <button class="bracket-btn" hx-get="/downloads/add-modal" hx-target="#modal-content" hx-swap="innerHTML">ONE-OFF</button>
+    <button class="bracket-btn" hx-get="/diagnostics" hx-target="#modal-content" hx-swap="innerHTML">DIAG</button>
+    <button class="bracket-btn" hx-get="/api-keys" hx-target="#modal-content" hx-swap="innerHTML">KEYS</button>
+    <button class="bracket-btn" hx-post="/focus/hydrus" hx-target="#toast" hx-swap="innerHTML">HYDRUS^</button>
+    <button class="bracket-btn" hx-post="/focus/systray" hx-target="#toast" hx-swap="innerHTML">TRAY^</button>
+    <button class="bracket-btn" onclick="htmx.trigger(document.body, 'refreshSubs')">SYNC</button>
+    <button class="bracket-btn" hx-post="/launch-tui" hx-target="#toast" hx-swap="innerHTML">CONSOLE UI</button>
+    <span class="flex-1"></span>
+    <button class="bracket-btn bracket-btn-danger" hx-get="/shutdown-confirm" hx-target="#modal-content" hx-swap="innerHTML">SHUTDOWN</button>
+    <span class="htmx-indicator loading loading-spinner loading-xs text-[var(--term-green)] self-center"></span>
+  </div>
+
+  <div id="toast" class="px-4 pt-2"></div>
+
+  <div class="cockpit-grid p-3">
+
+    <!-- LEFT: graphical/chaos sidebar - fixed width, see .cockpit-left -->
+    <div class="cockpit-left flex flex-col gap-3">
+      <div id="queue-graph" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+
+      <div class="hud-panel">
+        <div class="hud-titlebar">SIGNAL<div class="rule"></div></div>
+        <div id="signal-eq" class="eq p-2">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="hud-panel">
+        <div class="hud-titlebar">SCOPE :: contacts<div class="rule"></div></div>
+        <div class="p-2">
+          <canvas id="radar-canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="hud-panel">
+        <div class="hud-titlebar">MEM :: 0x7FFE0000<div class="rule"></div></div>
+        <div id="hexdump" class="p-2 h-32 overflow-hidden"></div>
+      </div>
+
+      <div id="sector-panel" hx-get="/partials/sector" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+
+      <div id="sparkline-panel" hx-get="/partials/sparkline" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+    </div>
+
+    <!-- RIGHT: fleet/process/sector/host/network instruments -->
+    <div class="cockpit-right flex flex-col gap-3">
+      <div id="fleet-panel" hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+      <div id="hydrus-panel" hx-get="/partials/hydrus" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+      <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+      <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+      <div id="netstat" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+
+      <div class="hud-panel">
+        <div class="hud-titlebar">NET_CONNECTIONS :: per-proc<div class="rule"></div></div>
+        <!-- Same stable-scroll-container fix as the subscriptions table: this wrapper lives
+             in the static shell so htmx only ever replaces the rows inside it, never the
+             scrollable element itself - scrollTop survives every poll instead of resetting. -->
+        <div class="h-40 overflow-y-auto p-2 text-[10.5px]">
+          <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 3s" hx-swap="innerHTML">
+            loading...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN: the actual functional cockpit -->
+    <div class="cockpit-main flex flex-col gap-3" x-data="{ filter: '' }">
+
+      <div class="flex items-center gap-2">
+        <form hx-post="/subscriptions/quick-add" hx-target="#quick-add-result" hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) this.reset()"
+              class="flex flex-1 gap-2">
+          <span class="text-[var(--term-green)] self-center">$</span>
+          <input type="text" name="url" required placeholder="subscribe --url=&lt;paste url&gt; --interval=12-24h"
+                 class="input input-sm input-bordered flex-1 bg-[#020604] border-[var(--term-dim)] text-[var(--term-green)] rounded-none focus:border-[var(--term-green)] font-mono">
+          <input type="hidden" name="hours" value="">
+          <button type="submit" class="bracket-btn">EXEC</button>
+        </form>
+        <input type="text" x-model.debounce.150ms="filter" placeholder="grep..."
+               class="input input-sm input-bordered w-32 bg-[#020604] border-[#ff9d3c66] text-[var(--term-green)] rounded-none font-mono">
+      </div>
+      <div id="quick-add-result" class="text-xs -mt-2"></div>
+
+      <div class="hud-panel">
+        <div class="hud-titlebar">SUBSCRIPTIONS<div class="rule"></div></div>
+        <!-- This scroll container is the STABLE element - it lives here in the static shell,
+             never torn down by htmx. Only #subs-panel's *children* get replaced every poll, so
+             this ancestor's scrollTop survives every refresh instead of snapping to 0. -->
+        <div class="overflow-y-auto max-h-[26rem]">
+          <div id="subs-panel"
+               hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+            loading subscriptions...
+          </div>
+        </div>
+      </div>
+      <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
+
+      <div class="hud-panel">
+        <div class="hud-titlebar">/var/log/daemon.txt :: tail -f<div class="rule"></div></div>
+        <div id="log-box" class="h-64 overflow-y-auto text-[11px] leading-snug whitespace-pre-wrap break-words font-mono text-[#8fffb8] p-2">
+          loading log...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="modal" class="modal">
+    <div class="modal-box max-w-2xl bg-[#030805] border border-[var(--term-dim)] text-[var(--term-green)] rounded-none font-mono" id="modal-content"></div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+</div>
+
+<script>
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  if (e.detail.target && e.detail.target.id === 'modal-content') {
+    document.getElementById('modal').showModal();
+  }
+});
+document.body.addEventListener('closeModal', () => document.getElementById('modal').close());
+
+function tickClock() {
+  const el = document.getElementById('clock');
+  if (el) el.textContent = new Date().toISOString().replace('T', ' ').slice(0, 19) + 'Z';
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+let logOffset = null;
+async function refreshLog() {
+  try {
+    const url = logOffset === null ? '/partials/log' : `/partials/log?since=${logOffset}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    logOffset = d.offset;
+    const box = document.getElementById('log-box');
+    if (box.dataset.loaded !== '1') { box.textContent = ''; box.dataset.loaded = '1'; }
+    if (d.lines && d.lines.length) {
+      const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 10;
+      for (const line of d.lines) {
+        const div = document.createElement('div');
+        div.textContent = '> ' + line;
+        div.className = logLineClass(line);
+        box.appendChild(div);
+      }
+      while (box.childNodes.length > 500) box.removeChild(box.firstChild);
+      if (atBottom) box.scrollTop = box.scrollHeight;
+    }
+  } catch (e) {
+    // transient failure - leave whatever's already shown, next poll will catch up
+  }
+}
+function logLineClass(line) {
+  const l = line.toLowerCase();
+  if (/error|traceback|failed|exception/.test(l)) return 'text-[#ff4f6d]';
+  if (/warning/.test(l)) return 'text-[#ffd166]';
+  if (/new file|downloading|downloaded/.test(l)) return 'text-[#39ff88]';
+  if (/checking subscription|starting/.test(l)) return 'text-[#39d3ff]';
+  return 'text-[#5a8a6c]';
+}
+refreshLog();
+setInterval(refreshLog, 1500);
+
+// Matrix-style falling code rain - decorative HUD chrome behind the app content.
+(function matrixRain() {
+  const canvas = document.getElementById('matrix-rain');
+  const ctx = canvas.getContext('2d');
+  const glyphs = 'アイウエオカキクケコサシスセソ01アイウエオ<>/\\{}[]#$%&';
+  let cols, drops, fontSize = 15;
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.floor(canvas.width / fontSize);
+    drops = Array.from({ length: cols }, () => Math.random() * -50);
+  }
+  function draw() {
+    ctx.fillStyle = 'rgba(1, 3, 2, 0.15)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = fontSize + 'px monospace';
+    for (let i = 0; i < cols; i++) {
+      const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
+      const y = drops[i] * fontSize;
+      ctx.fillStyle = y < fontSize * 2 ? '#c8ffe0' : 'rgba(57,255,136,0.55)';
+      ctx.fillText(ch, i * fontSize, y);
+      if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+
+// Decorative signal-noise readouts in the status wall - purely cosmetic jitter, not real
+// telemetry (the real service/worker status lives in #status-badges next to this).
+(function noiseReadouts() {
+  const el = document.getElementById('noise-readouts');
+  function tick() {
+    const entropy = (0.6 + Math.random() * 0.35).toFixed(3);
+    const noiseFloor = -(60 + Math.random() * 20).toFixed(1);
+    const latency = (8 + Math.random() * 30).toFixed(1);
+    const jitter = (Math.random() * 4).toFixed(2);
+    el.innerHTML =
+      `<span>ENTROPY <span class="text-[#39ff88]">${entropy}</span></span>` +
+      `<span>NOISE_FLOOR <span class="text-[#39d3ff]">${noiseFloor}dB</span></span>` +
+      `<span>LATENCY <span class="text-[#ffd166]">${latency}ms</span></span>` +
+      `<span>JITTER <span class="text-[#ff9d3c]">${jitter}</span></span>`;
+  }
+  tick();
+  setInterval(tick, 1200);
+})();
+
+// Fake scrolling hex dump - classic terminal-hacker chrome, addresses/bytes are randomized,
+// not real memory (there's nothing to actually dump here - it's set dressing).
+(function hexdump() {
+  const box = document.getElementById('hexdump');
+  let addr = 0x7ffe0000;
+  function randHex(n) { return Array.from({ length: n }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')); }
+  function toAscii(bytes) {
+    return bytes.map(h => { const v = parseInt(h, 16); return (v >= 32 && v < 127) ? String.fromCharCode(v) : '.'; }).join('');
+  }
+  function tick() {
+    const bytes = randHex(16);
+    const line = document.createElement('div');
+    line.innerHTML = `<span class="addr">0x${addr.toString(16).toUpperCase().padStart(8, '0')}</span>  ${bytes.join(' ')}  <span class="ascii">|${toAscii(bytes)}|</span>`;
+    box.appendChild(line);
+    addr += 16;
+    while (box.childNodes.length > 9) box.removeChild(box.firstChild);
+  }
+  tick();
+  setInterval(tick, 350);
+})();
+
+// SIGNAL - a scrolling strip chart, not independent per-bar noise: one new random value
+// enters at the left on each tick, and the whole history shifts right, same idea as an
+// oscilloscope/seismograph trace rather than N unrelated signals jittering side by side.
+(function signalMeter() {
+  const bars = Array.from(document.querySelectorAll('#signal-eq span'));
+  let buffer = bars.map(() => 0.15);
+  bars.forEach((bar) => { bar.style.transition = 'height 140ms linear'; });
+  function tick() {
+    buffer.pop();
+    buffer.unshift(Math.random());
+    bars.forEach((bar, i) => { bar.style.height = (8 + buffer[i] * 90).toFixed(0) + '%'; });
+  }
+  tick();
+  setInterval(tick, 150);
+})();
+
+// SCOPE - exactly 3 contacts (not one-per-subscription; a busy install could mean dozens of
+// blips, which reads as clutter, not signal), each drifting slowly along its own inbound arc
+// (angle and radius both creeping over time, not a straight radial line) and reddening/
+// glowing as it nears the center - a "closing target" look rather than a fixed dot that just
+// fades on a timer. A blip that reaches the center respawns at the outer edge on a fresh
+// random arc. The rotating sweep is still there as background atmosphere but no longer drives
+// blip brightness - that's the contact's own distance-to-center now.
+(function radarScope() {
+  const canvas = document.getElementById('radar-canvas');
+  const ctx = canvas.getContext('2d');
+  let sweepAngle = 0;
+
+  function makeBlip() {
+    return {
+      angle: Math.random() * Math.PI * 2,
+      angularSpeed: (Math.random() - 0.5) * 0.010,
+      radius: 0.88 + Math.random() * 0.1,
+      radialSpeed: 0.0009 + Math.random() * 0.0012,
+    };
+  }
+  const blips = [makeBlip(), makeBlip(), makeBlip()];
+
+  function resize() {
+    const size = Math.round(canvas.getBoundingClientRect().width);
+    canvas.width = size;
+    canvas.height = size;
+  }
+
+  function draw() {
+    const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2, R = w / 2 - 3;
+    ctx.shadowBlur = 0;
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(28,107,62,0.7)';
+    ctx.lineWidth = 1;
+    [0.34, 0.67, 1.0].forEach((f) => { ctx.beginPath(); ctx.arc(cx, cy, R * f, 0, Math.PI * 2); ctx.stroke(); });
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
+    ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
+    ctx.stroke();
+
+    sweepAngle = (sweepAngle + 0.02) % (Math.PI * 2);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, R, sweepAngle - 0.45, sweepAngle);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(57,255,136,0.10)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(57,255,136,0.6)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + R * Math.cos(sweepAngle), cy + R * Math.sin(sweepAngle));
+    ctx.stroke();
+
+    for (const b of blips) {
+      b.angle += b.angularSpeed;
+      b.radius -= b.radialSpeed;
+      if (b.radius <= 0.04) Object.assign(b, makeBlip());
+
+      const closeness = 1 - b.radius; // 0 = far out, 1 = at the center
+      const bx = cx + R * b.radius * Math.cos(b.angle);
+      const by = cy + R * b.radius * Math.sin(b.angle);
+      const green = Math.round(157 * (1 - closeness) + 30 * closeness);
+      const blue = Math.round(60 * (1 - closeness) + 30 * closeness);
+      const size = 2.5 + 3 * closeness;
+
+      ctx.shadowBlur = 3 + 16 * closeness;
+      ctx.shadowColor = `rgba(255,${green},${blue},0.9)`;
+      ctx.fillStyle = `rgba(255,${green},${blue},${(0.5 + 0.5 * closeness).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(bx, by, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

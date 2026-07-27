@@ -1,0 +1,19 @@
+{% macro badge(name, up) %}
+<span class="inline-flex items-center gap-1 {{ 'tag-ok' if up else 'tag-fail' }}">
+  <span class="pulse-dot"></span>[{{ name }}:{{ 'UP' if up else 'DOWN' }}]
+</span>
+{% endmacro %}
+<div class="flex flex-wrap items-center gap-3">
+  {{ badge('HYDRUS', status.hydrus_running) }}
+  {{ badge('DAEMON', status.daemon_running) }}
+  {{ badge('TRAY', status.systray_running) }}
+  {% if not api_ok %}
+  <span class="tag-fail">API_UNREACHABLE</span>
+  {% else %}
+  <span class="hidden lg:inline text-[#5a8a6c]"><span class="text-[#39ff88]">sub</span>={{ sub_status or '-' }}</span>
+  <span class="hidden lg:inline text-[#5a8a6c]"><span class="text-[#39ff88]">url</span>={{ url_status or '-' }}</span>
+  <span class="text-[#5a8a6c]"><span class="text-[#39ff88]">q</span>={{ urls_queued }}</span>
+  <span class="text-[#5a8a6c]"><span class="text-[#39ff88]">due</span>={{ subs_due }}</span>
+  {% endif %}
+  <span class="hidden md:inline text-[#1c6b3e]">sig:0x{{ sig }}</span>
+</div>

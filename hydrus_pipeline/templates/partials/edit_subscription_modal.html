@@ -1,0 +1,40 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">EDIT #{{ sub.id }} {{ sub.downloader }}</div>
+  <p class="text-xs text-[#8aa0a8]">
+    Downloader/site can't be changed here - delete and re-add if this is on the wrong site entirely.
+    Leave a file-limit blank to remove that cap; leave the filter blank to allow every file type through.
+  </p>
+  <form hx-post="/subscriptions/{{ sub.id }}/edit" hx-target="#modal-content" hx-swap="innerHTML" class="flex flex-col gap-2">
+    <label class="text-xs text-[#8aa0a8]">Keywords
+      <input type="text" name="keywords" required value="{{ sub.keywords }}"
+             class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full">
+    </label>
+    <label class="text-xs text-[#8aa0a8]">Check interval (hours)
+      <input type="number" name="hours" step="0.5" min="0.1" value="{{ (sub.check_interval / 3600)|round(2) if sub.check_interval else '' }}"
+             class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-40">
+    </label>
+    <div class="flex gap-2">
+      <label class="text-xs text-[#8aa0a8]">Max files (initial check)
+        <input type="number" name="max_files_initial" min="1" value="{{ sub.max_files_initial or '' }}" placeholder="unlimited"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-36">
+      </label>
+      <label class="text-xs text-[#8aa0a8]">Max files (regular check)
+        <input type="number" name="max_files_regular" min="1" value="{{ sub.max_files_regular or '' }}" placeholder="unlimited"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-36">
+      </label>
+    </div>
+    <label class="text-xs text-[#8aa0a8]">File filter (gallery-dl --filter expression, blank = allow everything)
+      <input type="text" name="filter" value="{{ sub.filter or '' }}"
+             class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full font-mono">
+    </label>
+
+    {% if message %}
+    <div class="alert {{ 'alert-error' if message_error else 'alert-success' }} py-2 text-sm">{{ message }}</div>
+    {% endif %}
+
+    <div class="flex justify-end gap-2 mt-1">
+      <button type="button" class="btn btn-sm" hx-get="/subscriptions/{{ sub.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Save</button>
+    </div>
+  </form>
+</div>

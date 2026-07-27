@@ -1,0 +1,10 @@
+{% if not conns %}
+<div class="text-[#5a8a6c]">no active connections (or permission denied enumerating them)</div>
+{% endif %}
+{% for c in conns %}
+<div class="flex gap-2">
+  <span class="w-20 truncate text-[#8fffb8]" title="{{ c.name }} ({{ c.pid }})">{{ c.name }}</span>
+  <span class="flex-1 truncate text-[#5a8a6c]">{{ c.laddr }} <span class="text-[#39d3ff]">&rarr;</span> {{ c.raddr }}</span>
+  <span class="text-[#39ff88]">{{ c.status }}</span>
+</div>
+{% endfor %}

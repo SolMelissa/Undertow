@@ -1,0 +1,38 @@
+{% if error %}
+<div class="alert alert-error py-2 text-sm m-2 rounded-none font-mono">daemon unreachable: {{ error }}</div>
+{% endif %}
+<div class="overflow-x-auto">
+<table class="table table-sm table-pin-rows term-table">
+  <thead>
+    <tr class="text-[#39ff88] bg-[#04140a]">
+      <th>ID</th><th>DOWNLOADER</th><th>KEYWORDS</th><th>PAUSED</th><th>DUE</th><th>LAST</th><th>NEW</th><th>LAST CHECK</th><th>INTERVAL</th><th>NEXT CHECK</th><th>TOTAL DLS</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if not subs %}
+    <tr><td colspan="11" class="text-center text-[#5a8a6c] py-6">-- no subscriptions --  (SUBSCRIBE above, or paste a URL into the $ bar)</td></tr>
+    {% endif %}
+    {% for s in subs %}
+    <tr class="hover cursor-pointer border-b border-[#0d2416] {{ 'bg-[#0d2b16]' if s.id == active_id else '' }}"
+        x-show="!filter || $el.innerText.toLowerCase().includes(filter.toLowerCase())"
+        hx-get="/subscriptions/{{ s.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML">
+      <td class="text-[#5a8a6c]">{{ '%04d' % s.id }}</td>
+      <td>{{ s.downloader }}</td>
+      <td class="max-w-xs truncate"><span id="warn-{{ s.id }}" hx-preserve="true"></span>{% if s.id == active_id %}<span class="text-[#ffe08a]">&#9654; </span>{% endif %}{{ s.keywords }}</td>
+      <td>{% if s.paused %}<span class="tag-fail">[Y]</span>{% else %}<span class="text-[#1c6b3e]">[N]</span>{% endif %}</td>
+      <td>{% if s.is_due %}<span class="text-[#39d3ff]">[Y]</span>{% else %}<span class="text-[#1c6b3e]">[N]</span>{% endif %}</td>
+      <td>
+        {% if (s.last_result_status or '')|lower == 'ok' %}<span class="tag-ok">ok</span>
+        {% elif s.last_result_status %}<span class="text-[#ff9d3c]">{{ s.last_result_status }}</span>
+        {% else %}<span class="text-[#1c6b3e]">-</span>{% endif %}
+      </td>
+      <td id="nf-{{ s.id }}" class="tabular-nums" hx-preserve="true">&hellip;</td>
+      <td class="whitespace-nowrap text-[#8aa0a8]">{{ s.last_check_display }}</td>
+      <td class="whitespace-nowrap text-[#5a8a6c]">{{ s.check_interval_display }}</td>
+      <td class="whitespace-nowrap text-[#8aa0a8]">{{ s.next_check_display }}</td>
+      <td id="td-{{ s.id }}" class="tabular-nums" hx-preserve="true">&hellip;</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>

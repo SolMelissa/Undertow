@@ -1,0 +1,6 @@
+requests>=2.31
+psutil>=5.9
+pywin32>=306
+rich>=13.7
+flask>=3.0
+textual>=0.60

@@ -1,0 +1,29 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">SUBSCRIBE</div>
+  <p class="text-xs text-[#8aa0a8]">
+    Paste one URL, or several separated by commas. hydownloader auto-detects the site;
+    unrecognized sites still work by re-checking the exact URL on an interval.
+  </p>
+  <form hx-post="/subscriptions/add" hx-target="#modal-content" hx-swap="innerHTML" class="flex flex-col gap-2">
+    <input type="text" name="urls" required placeholder="https://example.com/artist/..." value="{{ urls_value or '' }}"
+           class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+    <input type="number" name="hours" step="0.5" min="0.1" value="{{ hours_value or '' }}" placeholder="check interval in hours (default: random 12-24h)"
+           class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-64">
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('modal').close()">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Subscribe</button>
+    </div>
+  </form>
+  {% if results %}
+  <div class="mt-2 border border-[#17323a] rounded p-2 max-h-56 overflow-y-auto text-xs font-mono flex flex-col gap-1">
+    {% for r in results %}
+    <div class="{{ {'Added': 'text-[#39ff88]', 'Skipped': 'text-[#ffd166]', 'Failed': 'text-[#ff4f6d]'}.get(r.status, 'text-[#d8f6ff]') }}">
+      {{ r.status }} — {{ r.url }}<br>
+      <span class="text-[#8aa0a8]">{{ r.detail }}</span>
+      {% if r.restarted_daemon %}<br><span class="text-[#39ff88]">new site - daemon restarted automatically to activate its worker thread</span>{% endif %}
+      {% if r.restart_error %}<br><span class="text-[#ffd166]">added, but the automatic restart failed: {{ r.restart_error }} - check Diagnostics</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>

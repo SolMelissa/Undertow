@@ -1,0 +1,21 @@
+{% for sub_id, check in latest.items() %}
+{% set new_files = check.new_files %}
+<td id="nf-{{ sub_id }}" hx-swap-oob="true">
+  {%- if new_files is none -%}
+  -
+  {%- elif new_files > 0 -%}
+  <span class="text-[#39ff88]">{{ new_files }}</span>
+  {%- else -%}
+  {{ new_files }}
+  {%- endif -%}
+</td>
+{% endfor %}
+{% for sub_id in all_ids %}
+<td id="td-{{ sub_id }}" class="tabular-nums" hx-swap-oob="true">{{ totals.get(sub_id, 0) }}</td>
+{% endfor %}
+{% for sub_id, v in failure_status.items() %}
+<span id="warn-{{ sub_id }}" hx-swap-oob="true"
+      {% if v.flagged %}
+      title="{{ v.consecutive_failures }} consecutive failure(s), last success {{ '%.1f'|format(v.last_success_days_ago) ~ ' day(s) ago' if v.last_success_days_ago is not none else 'never' }}"
+      {% endif %}>{% if v.flagged %}<span class="text-[#ff9d3c]">&#9888;&nbsp;</span>{% endif %}</span>
+{% endfor %}

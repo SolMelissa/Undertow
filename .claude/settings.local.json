@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wmic process *)",
+      "Bash(taskkill *)",
+      "Skill(update-config)",
+      "Read(//c/Users/Matt/HydrusPipeline/hydownloader/hydownloader/**)",
+      "Read(//c/Users/Matt/**)",
+      "WebFetch(domain:www.tumgag.com)",
+      "Read(//tmp/**)",
+      "Bash(find 'C:\\\\Users\\\\Matt/HydrusPipeline' -iname *.json -path *gallery-dl*)",
+      "Bash(python -c \"import gallery_dl\")",
+      "Bash(pip show *)",
+      "Bash(python -m py_compile *)",
+      "Bash(.venv/Scripts/python.exe -m py_compile *)",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(python3 *)",
+      "Bash(powershell -Command \"Get-Process hydrus_client -ErrorAction SilentlyContinue\"*)",
+      "Bash(curl *)"
+    ]
+  }
+}

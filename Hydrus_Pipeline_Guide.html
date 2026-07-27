@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>~*~ Melissa's Hydrus Pipeline Page ~*~ .:*~*:. sparkle sparkle .:*~*:.</title>
+<meta name="generator" content="Notepad (definitely not FrontPage)">
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: "Comic Sans MS", "Comic Sans", cursive, sans-serif;
+    color: #4b0082;
+    background-color: #b3e5fc;
+    background-image:
+      radial-gradient(circle, rgba(255,255,255,0.6) 1px, transparent 1.5px),
+      radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1.5px);
+    background-size: 40px 40px, 25px 25px;
+    background-position: 0 0, 12px 18px;
+    background-attachment: fixed;
+    cursor: default;
+    overflow-x: hidden;
+  }
+
+  a { color: #ff00ff; }
+  a:visited { color: #9900cc; }
+  a:hover { color: #00ccff; background-color: #fff700; }
+
+  /* ---------- TOP TICKER ---------- */
+  .ticker-wrap {
+    width: 100%;
+    background: repeating-linear-gradient(45deg, #ff00ff, #ff00ff 10px, #ffff00 10px, #ffff00 20px);
+    border-bottom: 4px dashed #000080;
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 6px 0;
+  }
+  .ticker {
+    display: inline-block;
+    padding-left: 100%;
+    font-weight: bold;
+    color: #000080;
+    text-shadow: 1px 1px 0 #fff;
+    font-size: 18px;
+    animation: ticker 22s linear infinite;
+  }
+  @keyframes ticker {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
+
+  /* ---------- HEADER ---------- */
+  .masthead {
+    text-align: center;
+    padding: 18px 10px 8px;
+    background: linear-gradient(180deg, #ffccf9 0%, #cdb4ff 50%, #a8e6ff 100%);
+    border-bottom: 6px ridge #ff69b4;
+  }
+  .title-rainbow {
+    font-size: 46px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    background-image: linear-gradient(90deg, #ff0000, #ff9900, #ffee00, #33ff00, #00ccff, #cc00ff, #ff0000);
+    background-size: 400% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: rainbow-slide 6s linear infinite, wiggle 2.4s ease-in-out infinite;
+    text-shadow: none;
+    margin: 0;
+  }
+  @keyframes rainbow-slide {
+    0%   { background-position: 0% 0%; }
+    100% { background-position: 400% 0%; }
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-1.5deg); }
+    50%      { transform: rotate(1.5deg); }
+  }
+  .subtitle {
+    font-size: 18px;
+    font-style: italic;
+    color: #d1006e;
+    margin: 4px 0 10px;
+  }
+  .under-construction {
+    display: inline-block;
+    margin: 6px auto;
+    padding: 4px 14px;
+    background: repeating-linear-gradient(45deg, #ffe600, #ffe600 12px, #111 12px, #111 24px);
+    color: #fff;
+    font-weight: bold;
+    border: 3px solid #000;
+    font-size: 14px;
+    text-shadow: 1px 1px 2px #000;
+  }
+  .blink {
+    animation: blinker 1s step-start infinite;
+  }
+  @keyframes blinker { 50% { opacity: 0; } }
+
+  .music-bar {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #4b0082;
+    background: #fff;
+    display: inline-block;
+    padding: 3px 10px;
+    border: 2px dotted #ff69b4;
+    border-radius: 10px;
+  }
+
+  /* ---------- LAYOUT ---------- */
+  .page {
+    max-width: 900px;
+    margin: 14px auto 40px;
+    padding: 0 12px;
+  }
+
+  /* site map / nav */
+  .sitemap {
+    background: #fff0fb;
+    border: 4px double #ff00cc;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    box-shadow: 4px 4px 0 #ffd700;
+  }
+  .sitemap h2 {
+    text-align: center;
+    color: #ff1493;
+    margin-top: 0;
+  }
+  .sitemap ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+  .sitemap li::before { content: "☆ "; }
+  .sitemap a {
+    text-decoration: none;
+    font-weight: bold;
+  }
+  .sitemap a:hover { text-decoration: underline; }
+
+  /* windows-98-ish dialog windows for sections */
+  .win {
+    background: #f5f0ff;
+    border: 3px solid #6a0dad;
+    border-radius: 4px;
+    margin-bottom: 26px;
+    box-shadow: 5px 5px 0 rgba(0,0,0,0.25);
+  }
+  .win-title {
+    background: linear-gradient(90deg, #ff69b4, #ba55d3, #6a5acd);
+    color: #fff;
+    font-weight: bold;
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 17px;
+    text-shadow: 1px 1px 1px #000;
+  }
+  .win-title .dots { letter-spacing: 2px; opacity: 0.85; font-size: 13px; }
+  .win-body {
+    padding: 14px 18px 18px;
+    background: #fffafd;
+  }
+  .win-body h3 {
+    color: #c2185b;
+    border-bottom: 2px dashed #ffb6c1;
+    padding-bottom: 3px;
+  }
+  .win-body h4 {
+    color: #7b1fa2;
+    margin-bottom: 4px;
+  }
+  .win-body p, .win-body li { line-height: 1.5; }
+  .win-body code, .win-body pre {
+    font-family: "Courier New", monospace;
+    background: #101010;
+    color: #39ff14;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+  .win-body pre {
+    display: block;
+    padding: 10px;
+    overflow-x: auto;
+    border: 2px solid #ff69b4;
+  }
+
+  .starbullets { list-style: none; padding-left: 4px; }
+  .starbullets li { margin-bottom: 8px; padding-left: 22px; position: relative; }
+  .starbullets li::before {
+    content: "💖";
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+
+  .noteBubble {
+    background: #fff9c4;
+    border: 2px dashed #f9a825;
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  .noteBubble b { color: #e65100; }
+
+  .warnBubble {
+    background: #ffe0f0;
+    border: 2px dashed #ff1493;
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  .warnBubble b { color: #ad1457; }
+
+  .statusOk {
+    color: #2e7d32;
+    font-weight: bold;
+  }
+  .statusNo {
+    color: #c62828;
+    font-weight: bold;
+  }
+
+  /* cute tables */
+  table.cute {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 13.5px;
+  }
+  table.cute th {
+    background: #ff69b4;
+    color: #fff;
+    padding: 8px;
+    border: 2px solid #fff;
+    text-shadow: 1px 1px 0 #b0006e;
+  }
+  table.cute td {
+    padding: 8px;
+    border: 2px solid #ffd1ec;
+    background: #fff;
+    vertical-align: top;
+  }
+  table.cute tr:nth-child(even) td { background: #fff0fb; }
+
+  .menuBox {
+    background: #000080;
+    color: #ffff00;
+    font-family: "Courier New", monospace;
+    padding: 12px;
+    border: 3px ridge #c0c0c0;
+    font-size: 14px;
+    white-space: pre-wrap;
+    margin: 10px 0;
+  }
+
+  /* sparkle particle */
+  .sparkle {
+    position: fixed;
+    pointer-events: none;
+    font-size: 16px;
+    z-index: 9999;
+    animation: sparkle-float 900ms ease-out forwards;
+  }
+  @keyframes sparkle-float {
+    0%   { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(-40px) scale(0.4) rotate(90deg); opacity: 0; }
+  }
+
+  /* footer */
+  .footer {
+    text-align: center;
+    background: linear-gradient(180deg, #cdb4ff, #ffccf9);
+    border-top: 6px ridge #ff69b4;
+    padding: 20px 10px 30px;
+    font-size: 12.5px;
+  }
+  .counterBox {
+    display: inline-block;
+    background: #000;
+    color: #00ff00;
+    font-family: "Courier New", monospace;
+    font-size: 20px;
+    letter-spacing: 3px;
+    padding: 6px 12px;
+    border: 3px inset #999;
+    margin: 8px 0;
+  }
+  .badgeRow {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin: 14px 0;
+  }
+  .badge80x15 {
+    width: 130px;
+    height: 30px;
+    background: #000;
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1px solid #fff;
+    font-family: "Courier New", monospace;
+    line-height: 1.1;
+  }
+  .badge2 { background: #ff69b4; color: #fff; }
+  .badge3 { background: #00bcd4; color: #000; }
+  .badge4 { background: #7c4dff; color: #fff700; }
+  .badge5 { background: #ffeb3b; color: #000; }
+
+  .guestbook {
+    max-width: 480px;
+    margin: 14px auto;
+    background: #fff;
+    border: 3px double #6a0dad;
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 13px;
+  }
+  .guestbook .entry { border-bottom: 1px dotted #ccc; padding: 6px 0; }
+  .guestbook .who { color: #d1006e; font-weight: bold; }
+
+  .webring {
+    margin: 16px 0;
+    font-size: 13px;
+  }
+
+  hr.sparkly {
+    border: none;
+    height: 3px;
+    background: repeating-linear-gradient(90deg, #ff69b4, #ff69b4 6px, #ffd700 6px, #ffd700 12px, #00bcd4 12px, #00bcd4 18px);
+    margin: 26px 0;
+  }
+
+  ::selection { background: #ff69b4; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="ticker-wrap">
+  <div class="ticker">
+    ★彡 WELCOME TO MY HYDRUS PIPELINE PAGE 彡★ &nbsp;&nbsp;&nbsp; 💾 UPDATED TODAY!! 💾 &nbsp;&nbsp;&nbsp; ✧･ﾟ: PLEASE SIGN MY GUESTBOOK ﾟ･✧ &nbsp;&nbsp;&nbsp; 🌸 BEST VIEWED AT 800x600 🌸 &nbsp;&nbsp;&nbsp; 👑 REDDIT IS STILL BEING DUMB, NOT MY FAULT 👑 &nbsp;&nbsp;&nbsp; ★彡 WELCOME TO MY HYDRUS PIPELINE PAGE 彡★
+  </div>
+</div>
+
+<div class="masthead">
+  <h1 class="title-rainbow">.:*✧ The Hydrus Pipeline ✧*:.</h1>
+  <div class="subtitle">~*~ my super official setup, care &amp; feeding guide ~*~ <span class="blink">💗</span></div>
+  <span class="under-construction">🚧 ETERNALLY UNDER CONSTRUCTION 🚧</span>
+  <br>
+  <span class="music-bar">🎵 now playing: <i>dial_up_dreams.mid</i> — <a href="#" onclick="return false;">[turn sound ON]</a> 🎵</span>
+</div>
+
+<div class="page">
+
+  <div class="sitemap" id="top">
+    <h2>✎ SITE MAP ✎</h2>
+    <ul>
+      <li><a href="#verification">📋 Verification Summary</a></li>
+      <li><a href="#usage">🌟 Usage (the everyday stuff)</a></li>
+      <li><a href="#importing">📦 Importing an Old Collection</a></li>
+      <li><a href="#extended">🔮 Extended Usage (nerd knobs)</a></li>
+      <li><a href="#maintenance">🛠️ Technical Maintenance</a></li>
+      <li><a href="#footer-stuff">💌 Guestbook &amp; Webring</a></li>
+      <li><a href="#top">⬆️ back to top!!</a></li>
+    </ul>
+  </div>
+
+  <p style="text-align:center; font-size:14px;">
+    hii!! 🌸 this page is about the <b>gallery-dl → hydownloader → Hydrus</b> pipeline
+    installed on this computer — what every piece does, how to drive it day-to-day, and
+    how to fix it when it throws a tantrum. split into two halves: <b>Usage</b>
+    (how to actually use the thing, teehee) and <b>Technical Maintenance</b> (how to fix it).
+  </p>
+
+  <hr class="sparkly">
+
+  <!-- ============ VERIFICATION ============ -->
+  <div class="win" id="verification">
+    <div class="win-title"><span>📋 Verification Summary.exe</span><span class="dots">_ ▢ ✕</span></div>
+    <div class="win-body">
+      <p>as of today, i tested the whole pipeline start to finish and here's the tea:</p>
+      <ul class="starbullets">
+        <li>Hydrus Network, the hydownloader daemon, and hydownloader-systray <span class="statusOk">all start correctly</span> and stay running without spawning annoying duplicate copies of themselves.</li>
+        <li>a single-URL download was queued through the systray, downloaded by gallery-dl, auto-picked-up by the hydownloader daemon, and imported into Hydrus with hydownloader's little provenance tags attached (<code>hydl-import-time</code>, <code>hydl-src-site</code>, <code>hydl-url-id</code>).</li>
+        <li>the imported file was confirmed searchable and viewable inside Hydrus. yay!!</li>
+        <li><span class="statusNo">the one thing NOT fully working</span>: registering our <i>own</i> Reddit app. Reddit's "create an app" page is broken on <i>their</i> side (the CAPTCHA never loads — confirmed across multiple attempts and machines, not us being silly), and the fix needs a manual Reddit support ticket. plot twist though: gallery-dl actually ships with its own built-in shared OAuth client and uses it automatically when we haven't set up our own — so plain ol' public subreddit downloads should mostly Just Work already with zero config (see <code>Configure-ApiKeys.ps1</code>, option 2, to test it!). our own app would just get us a private (non-shared) rate limit and access to quarantined/private subs. Bluesky, Mastodon, Tumblr, Pixiv, and literally every other gallery-dl-supported site are totally unaffected either way. 💅</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ USAGE ============ -->
+  <div class="win" id="usage">
+    <div class="win-title"><span>🌟 Usage.exe — the everyday stuff</span><span class="dots">_ ▢ ✕</span></div>
+    <div class="win-body">
+
+      <h3 id="opening">💿 Opening the Pipeline</h3>
+      <p>double-click the <b>"Hydrus Pipeline"</b> shortcut on the Desktop. this runs <code>Launch-HydrusPipeline.ps1</code>, which:</p>
+      <ul class="starbullets">
+        <li>starts Hydrus, the hydownloader daemon, and hydownloader-systray — but ONLY whichever of these isn't already running. it never opens a second copy of anything, promise.</li>
+        <li>drops you into a cute little text menu in the PowerShell window with four choices:</li>
+      </ul>
+      <div class="menuBox">[1] Search / Discover   - add new subscriptions or single downloads (opens the systray)
+[2] Organize / Tag      - bring Hydrus to the front to tag and sort files
+[3] View / Browse       - bring Hydrus to the front to search and view your library
+[4] Configure API keys  - see/set Reddit and Hydrus credentials
+[Q] Quit - shuts down anything idle, leaves anything busy running</div>
+      <p>picking 1, 2, or 3 just brings the right window to the front — it doesn't relaunch anything. picking <b>Q</b> checks whether the hydownloader daemon is actively mid-download or mid-subscription-check: if it's idle, Q shuts it (and the systray) down cleanly; if it's busy, it leaves that piece running and only closes the systray. just closing the window does the exact same idle-check-then-shutdown automatically, so you never have to remember to pick Q first! Hydrus itself is never auto-closed either way — close it yourself when you're done. re-open the shortcut anytime to get the menu back without disturbing whatever's still running. 🎀</p>
+      <div class="noteBubble"><b>lil note:</b> options 2 and 3 both bring forward the <i>same</i> Hydrus window — Hydrus doesn't have separate tagging and viewing windows, it's one client where search results, thumbnails, and the tag panel all live side by side. the menu split just reflects the two things you're most likely doing there.</div>
+
+      <h3 id="search-discover">🔍 Search / Discover — Adding Downloads</h3>
+      <p>this is what the hydownloader-systray window (menu option 1) is for. two ways to bring content in:</p>
+
+      <h4>✨ Single URL downloads (one-off)</h4>
+      <p>use this for a single post, image, or gallery you want <i>right now</i>.</p>
+      <ul class="starbullets">
+        <li>in the systray, go to the "Single URL queue" tab.</li>
+        <li>click "Add..."</li>
+        <li>paste the URL (one per line if adding several~)</li>
+        <li>uncheck "Start paused" if you want it to download immediately (leave it checked if you wanna review/edit it first — see below!)</li>
+        <li>click OK. the daemon picks it up within a few seconds.</li>
+      </ul>
+      <p>watch the Status column: it goes from queued to either a happy green "ok" or a sad red error. click the "Logs" tab, then "Load single URL log..." and enter the row's ID to see exactly what gallery-dl did — fastest way to diagnose a failed download (see Troubleshooting down below).</p>
+      <div class="warnBubble"><b>important!!</b> successfully imported files are automatically removed from the downloaded folder once Hydrus has them. if you check the downloaded folder and it looks empty, that's <i>expected</i> — it does NOT mean nothing happened. check Hydrus itself, or the systray's "Import history" tab, to confirm an import. don't panic!!</div>
+
+      <h4>💞 Subscriptions (repeated / ongoing)</h4>
+      <p>use this for an artist, account, or search you want to keep getting new content from automatically forever and ever.</p>
+      <ul class="starbullets">
+        <li>in the systray, go to the "Subscriptions" tab and click "Add..."</li>
+        <li>pick a Downloader (the site) and enter Keywords (usually a username, tag, or search term — for sites gallery-dl supports but hydownloader doesn't have a dedicated downloader for, use downloader <b>"raw"</b> and put the full gallery URL in Keywords).</li>
+        <li>set a Check interval (how often to look for new stuff) and leave the other fields at their defaults unless you know you need something specific.</li>
+      </ul>
+      <p>the daemon checks each subscription on its own schedule and pulls in anything new — same auto-import behavior as single URLs.</p>
+
+      <h3 id="tagging">🏷️ Categorizing / Tagging</h3>
+      <p>this happens in Hydrus itself (menu option 2 or 3 — same window, remember!).</p>
+      <ul class="starbullets">
+        <li>open a search page (or use the one already open) and select one or more thumbnails.</li>
+        <li>the tag panel on the right side of the window shows existing tags and an entry box for adding new ones. start typing and Hydrus autocompletes against tags it already knows.</li>
+        <li>files downloaded through hydownloader already carry some automatic tags (<code>hydl-import-time</code>, <code>hydl-src-site</code>, <code>hydl-sub-id</code>, <code>hydl-url-id</code>, and site-specific tags depending on the extractor — artist/character/etc. where the site provides them). add your own tags on top of these freely!</li>
+        <li>to tag many files at once, select them all (Ctrl-click or drag a box) before typing in the tag panel — it applies to the whole selection. so efficient. so cute.</li>
+      </ul>
+      <p>favourite tags, tag namespaces (like <code>creator:</code> or <code>series:</code>), and parent/sibling tag relationships are all standard Hydrus features — see Hydrus's own built-in help (Help menu) for the deeper tagging system if you want to build a more structured tag hierarchy.</p>
+
+      <h3 id="locations">📁 Setting Download Locations</h3>
+      <p>there are two distinct "locations" here and they're super easy to mix up:</p>
+      <ul class="starbullets">
+        <li><b>where gallery-dl drops files before import:</b> the <code>downloaded</code> folder inside the hydownloader data directory. organized into subfolders by site (reddit, bluesky, mastodon, tumblr, pixiv, etc.) as configured in <code>gallery-dl-config.json</code>. files only sit here briefly — once the daemon imports them into Hydrus, poof, they're removed from this folder.</li>
+        <li><b>where Hydrus actually stores your library:</b> Hydrus's own internal file storage, managed entirely by Hydrus (database → manage database → move media files, inside Hydrus). you generally never touch this directly — it's not a normal browsable folder of individual files, Hydrus manages it internally like a lil vault.</li>
+      </ul>
+      <p>to change where gallery-dl saves new site subfolders (renaming/restructuring the reddit/bluesky/etc layout), edit the "directory" block under <code>extractor</code> in <code>gallery-dl-config.json</code>. to change where Hydrus stores its actual file library (e.g. moving to a bigger drive), use Hydrus's own <b>database → manage database → move media files</b> dialog — don't move the folders by hand outside Hydrus!! it gets mad.</p>
+
+      <h3 id="viewing">🖼️ Viewing Images</h3>
+      <ul class="starbullets">
+        <li>bring Hydrus to the front (menu option 2 or 3).</li>
+        <li>type tags into the search box (top left) to filter, or leave it blank, add the <code>system:everything</code> predicate, and hit the search icon to browse your whole library~</li>
+        <li>double-click any thumbnail to open the full media viewer. arrow keys move to next/previous file.</li>
+        <li>use the sort dropdown (top of the results panel) to sort by import time, filesize, etc.</li>
+        <li>the tag panel on the right shows tags for whatever's currently selected/open — also where you can click existing tags to add them to your search.</li>
+      </ul>
+
+      <h3 id="exiting">🌙 Cleanly Exiting</h3>
+      <p>closing everything in the right order avoids interrupted downloads and half-written database state:</p>
+      <ul class="starbullets">
+        <li>close Hydrus first: File → Exit (or the window's X button — Hydrus does its own safe-shutdown/backup routine on close, can take a few seconds, let it finish, don't rush her).</li>
+        <li>close the systray: right-click its window and close it, or use its own exit option from the Menu button.</li>
+        <li>the hydownloader daemon runs minimized with no visible window. totally safe to leave it running in the background even after Hydrus and the systray are closed — it'll just sit idle like a good girl. to stop it too, run <code>Stop-HydrusPipelineServices.ps1</code> (see Technical Maintenance).</li>
+      </ul>
+      <div class="noteBubble">you don't need to shut anything down between sessions if you don't want to — totally fine to leave the whole pipeline running continuously (subscriptions need the daemon running to check on schedule anyway!). the shortcut is safe to double-click anytime regardless of what's running. and remember: the launcher's Q option (and just closing its window) already only shuts down whatever's idle — no need to manually check for in-progress downloads first.</div>
+
+    </div>
+  </div>
+
+  <!-- ============ IMPORTING AN EXISTING COLLECTION ============ -->
+  <div class="win" id="importing">
+    <div class="win-title"><span>📦 Importing an Old Collection.exe</span><span class="dots">_ ▢ ✕</span></div>
+    <div class="win-body">
+      <p>so you've got Years™ of stuff sitting in folders — sorted by artist, by site, by "sorted (final) (final2) (USE THIS ONE)", whatever — and you want it <i>inside</i> Hydrus where you can actually find things again. totally doable!! this is separate from the gallery-dl/hydownloader pipeline above — that pipeline is for <i>new</i> downloads. this section is for the stuff already sitting on your hard drive. 💾💕</p>
+
+      <div class="warnBubble"><b>read this bit first, it matters!!</b> Hydrus <i>copies</i> files into its own internal database — it never edits or deletes your originals during import, and it never touches your original folders. but the second a file goes in, Hydrus <b>throws away its filename and folder path forever</b> and starts tracking it only by a hash (a fingerprint of the file's actual contents). so if your folder structure or filenames mean anything — artist names, series, "good/bad" sorting, whatever — you need to turn that into <i>tags</i> <u>before</u> you import, because there's no getting it back after. this section is all about doing exactly that. 🎀</div>
+
+      <h3 id="import-quick">🎈 The quick way (small folders, casual stuff)</h3>
+      <p>got a folder of a hundred images and don't care about preserving the folder name as a tag? just drag the whole folder and drop it right onto the Hydrus window. a dialog pops up confirming what's about to be imported — click through it, and a new page opens with thumbnails streaming in live. that's it, you're done, teehee.</p>
+      <div class="noteBubble"><b>heads up:</b> this is a <i>copy</i>, not a move — your original folder is completely untouched and safe. you can always delete the originals later once you trust the import, or just leave them be forever as a backup. up to you!!</div>
+
+      <h3 id="import-proper">🗄️ The proper way (an actual collection you care about)</h3>
+      <p>for anything bigger than "a folder or two," use <b>file → import files</b> instead of drag-and-drop — it gives you a real review window instead of just barreling ahead:</p>
+      <ul class="starbullets">
+        <li>add your folder(s) or individual files to the queue. Hydrus will scan and list everything it found.</li>
+        <li>check <b>file import options</b> — this is where you can set min/max file size, min/max resolution, and (importantly) whether to re-import files you'd previously deleted from this same Hydrus install. that last one is OFF by default, so if you're re-importing something you once deleted on purpose, it'll silently skip it unless you flip that toggle on.</li>
+        <li>leave "delete original files after successful import" <b>unchecked</b> your first time through — it's off by default for a reason. only turn it on once you fully trust the process, and never turn it on for a mixed dump you haven't reviewed yet.</li>
+        <li>you've got two buttons: <b>import now</b> (just import as-is), or <b>add tags before import »</b> (set up rules first — this is the one you want, see below!!).</li>
+      </ul>
+
+      <h3 id="import-tags-from-folders">🏷️✨ Turning your folder structure into tags (the important part!!)</h3>
+      <p>this is the actual answer to "I have a collection sorted by folder, how do I not lose that." click <b>add tags before import »</b> in the import files window and you'll get a filename-tagging panel with a few tricks:</p>
+      <ul class="starbullets">
+        <li><b>add folders as tags</b> — perfect for a folder-based organization scheme. if your files live in paths like <code>Collection\Sailor Moon\Usagi\pic043.jpg</code>, you can tell Hydrus to turn each directory level into a tag (or a namespaced tag, like <code>series:sailor moon</code>, <code>character:usagi</code>) automatically for every file under it. set this up once, preview it on a couple test files, then let it rip across the whole folder.</li>
+        <li><b>keep filename as a tag</b> — useful if your filenames actually mean something (like <code>artistname_character_2019.jpg</code>) rather than being camera-roll garbage like <code>IMG_04213.jpg</code>. you can combine this with string-processing rules to strip junk (extensions, underscores-to-spaces, etc) before it becomes a tag.</li>
+        <li><b>add tags manually to this batch</b> — you can also just type in flat tags to slap onto every file in the current import job, e.g. <code>imported-batch:2026-07</code>, so you can always find/filter "stuff I migrated in that one big push" later, separately from stuff coming in through the gallery-dl pipeline.</li>
+      </ul>
+      <div class="noteBubble"><b>lil pro-tip:</b> the panel live-previews exactly what tags a file will get before you commit anything, so play with it on 2-3 files first and check the preview looks right before pointing it at ten thousand files. much less regret that way. 🙏</div>
+      <div class="warnBubble"><b>real talk from the Hydrus dev himself:</b> filenames like <code>image.jpg</code> or <code>04.jpg</code> are useless as tags — don't blanket-enable "keep filename as tag" on a folder full of camera-roll-style names, you'll just fill your tag list with garbage. folder names describing an actual scheme (artist/series/character) are usually worth keeping; meaningless auto-generated filenames are not.</div>
+
+      <h3 id="import-sidecars">📎 Already have tags from another program?</h3>
+      <p>if you used some other tagging tool before Hydrus and it can export tags to plain text — say, one <code>.txt</code> file per image with the same base filename, one tag per line — Hydrus can slurp those in automatically as <b>sidecars</b>:</p>
+      <ul class="starbullets">
+        <li>put the images and their matching <code>.txt</code> (or <code>.json</code>) files in the same folder together.</li>
+        <li>drag the folder onto Hydrus like normal, but do <b>not</b> add the sidecar files themselves to the import list — just the images.</li>
+        <li>click <b>add tags/urls with the import</b> — this opens the sidecar panel. pick a <b>source</b> (which sidecar file to read and how it's separated — newline or comma, etc) and a <b>destination</b> (which tag service to dump the parsed tags into).</li>
+        <li>the panel live-previews what it parsed before you commit, same as the folder-tagging one above. for JSON sidecars it's a bit more involved (you point it at the right key in the JSON structure), but the preview makes it very hard to mess up silently.</li>
+      </ul>
+      <p>this also works for <b>known URLs</b>, not just tags — handy if your old tool saved the original source link per file.</p>
+
+      <h3 id="import-automation">🏭 Genuinely huge collections (tens of thousands of files)</h3>
+      <div class="warnBubble">Hydrus's own docs are blunt about this: don't try to import a giant pile in a single manual job, it can choke the client. for anything really large, use <b>file → import and export folders</b> instead — this is the automated version and handles big jobs way more gracefully by processing them in the background over time rather than all at once.</div>
+      <ul class="starbullets">
+        <li>set up an import folder pointed at your collection (or a subfolder of it), with the same tag-parsing options as manual import (folders-as-tags, filename-as-tag, or sidecars).</li>
+        <li>do a small trial run with manual import first (a few hundred files) to get your tag-parsing rules dialed in and confirm the preview looks right — <i>then</i> point the automated import folder at the full collection.</li>
+        <li>consider splitting a truly massive collection into a few smaller import-folder batches (by top-level folder, say) rather than one giant one — easier to review, easier to pause, easier to fix if one batch's tag rules were wrong.</li>
+      </ul>
+      <div class="noteBubble">the Hydrus dev's actual advice for big migrations: don't rush it. import a subset first (a few thousand files), leave your original folders completely intact, and live with it for a few weeks. see how often you actually go back to the old folders versus just searching Hydrus by tag. most people stop needing the folders pretty fast — but there's no need to nuke your only backup on day one. 🌙</div>
+
+      <h3 id="import-dedup">👯 What happens to duplicate files across folders</h3>
+      <p>if the same exact file exists in multiple folders (a common side effect of "sorted by artist" <i>and</i> "sorted by favorites" copies of the same image), Hydrus dedupes automatically during import based on the file's actual content hash — you'll only end up with one copy in Hydrus no matter how many folders it was sitting in. any tags picked up from either folder's naming scheme still get merged onto that one copy.</p>
+      <p>this only catches byte-for-byte identical files, though. if the "same" picture exists at two different resolutions, or one copy got recompressed/re-saved, those will still both import as separate files since their hashes differ — that's what the <a href="#organizing-scale">duplicate filter</a> (mentioned in Extended Usage) is for. run it after your migration to mop up the near-duplicates the hash check couldn't catch.</p>
+
+      <h3 id="import-backfill">🔮 Getting real tags for a folder dump that has none</h3>
+      <p>if your old collection has no tags at all beyond "which folder it happened to sit in," here's the honest picture: there's no magic button that identifies every image and tags it perfectly. but a few things help a lot over time:</p>
+      <ul class="starbullets">
+        <li>if you ever sync with the <b>PTR</b> (Public Tag Repository, a giant shared tag database other Hydrus users contribute to), any file in your collection that matches a hash the PTR already knows about will retroactively show up with community tags already attached — no work required on your part.</li>
+        <li>simple hash-based lookup tools exist (in <b>manage tags → file lookup scripts</b>) that can check a booru for a file by its hash/md5 and pull its tags if there's a match — fine for the occasional file, but slow and rude to a website's servers if you point it at thousands of files at once, so don't.</li>
+        <li>the sneaky-effective method: just keep using the pipeline above to download from artists/sources you like going forward. if a site happens to have a file you already imported manually, Hydrus recognizes the matching hash and retroactively attaches that site's tags to your existing copy. so a messy untagged backlog slowly tags itself over time just from normal use. ✨</li>
+      </ul>
+
+      <h3 id="import-cleanup">🧹 After the import: sorting the herd</h3>
+      <p>everything you import lands in your <b>inbox</b> first (little envelope icon on the thumbnail) until you decide to keep it. for a big migration dump, this is genuinely the fastest way to weed out the stuff you don't actually want anymore:</p>
+      <ul class="starbullets">
+        <li>select a batch of thumbnails, then <b>right-click → filter → archive/delete</b>, or just hit <code>F12</code>.</li>
+        <li>this drops you into a fullscreen one-at-a-time flow: left-click or <code>F7</code> = keep it (archives, removes inbox flag), right-click or <code>Del</code> = trash it, up arrow = skip/decide later, backspace = undo the last one.</li>
+        <li>nothing is actually committed until you finish the filter pass, so it's very low-stakes to go fast and trust your gut.</li>
+      </ul>
+      <p>this is also the natural moment to set up <a href="#organizing-scale">tag siblings/parents</a> if your old folder-derived tags are messy (e.g. "sailormoon" vs "sailor moon" vs "series:sailor moon" all meaning the same thing) — merge them once and it applies retroactively across everything you just brought in.</p>
+
+      <h3 id="import-examples">💡 Example flows</h3>
+
+      <h4>a folder tree organized like <code>Artist Name\SeriesName\file.jpg</code></h4>
+      <ul class="starbullets">
+        <li>file → import files, add the top-level collection folder.</li>
+        <li>add tags before import » → add folders as tags, map the first directory level to a <code>creator:</code> namespace and the second to a <code>series:</code> namespace.</li>
+        <li>preview on a handful of files, confirm the namespaces look right, then run it.</li>
+        <li>tag the batch with something like <code>imported-batch:2026-07</code> too, so it's easy to find "everything from the big migration" later if you need to fix something in bulk.</li>
+      </ul>
+
+      <h4>a chaotic dump with no consistent folder or filename scheme</h4>
+      <ul class="starbullets">
+        <li>don't bother with folder/filename tag parsing here — there's no signal to extract, and forcing it just creates garbage tags.</li>
+        <li>import as-is with a single batch tag like <code>imported-batch:mystery-dump-2026-07</code> so it's at least findable as a group.</li>
+        <li>run the inbox filter (<code>F12</code>) to cut the obvious junk, then let normal tagging (and future retroactive tag matches from downloading, see above) slowly fill it in over time rather than trying to hand-tag it all at once.</li>
+      </ul>
+
+      <h4>files that came with their own tag export from another program</h4>
+      <ul class="starbullets">
+        <li>confirm the other program can export one <code>.txt</code> (or <code>.json</code>) sidecar per image, same base filename, in the same folder as the images.</li>
+        <li>drag the folder in, choose add tags/urls with the import, set up the sidecar source/destination, and check the live preview matches what you expect.</li>
+        <li>run a small test batch first — a few dozen files — before pointing it at the whole export, since sidecar parsing rules are easy to get subtly wrong on the first try.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ EXTENDED USAGE ============ -->
+  <div class="win" id="extended">
+    <div class="win-title"><span>🔮 Extended Usage.exe — nerd knobs</span><span class="dots">_ ▢ ✕</span></div>
+    <div class="win-body">
+      <p>everything above covers the everyday flow~ this section goes deeper into the properties and features that give you more control once you're past just getting things downloading, plus some concrete example flows. ✧</p>
+
+      <h3 id="properties">🎛️ Per-download properties (single URLs and subscriptions)</h3>
+      <p>every single URL and every subscription has properties you can edit in the systray before (or after!) it runs. the general pattern: add new entries <b>paused</b>, dial in the good stuff to taste, then unpause~</p>
+      <table class="cute">
+        <tr><th>property</th><th>what it does</th></tr>
+        <tr><td>Priority</td><td>higher numbers download first. default is 0. bump up anything you want to jump the queue like it's cutting in line at the concert.</td></tr>
+        <tr><td>Paused</td><td>paused entries are never processed. add something paused, edit its other properties, then unpause it — the safe way to configure a download before it fires.</td></tr>
+        <tr><td>Filter</td><td>a gallery-dl filter expression limiting what's downloaded (file type, extension, size, etc — whatever the site's extractor exposes). see gallery-dl's own filter docs for the expression syntax.</td></tr>
+        <tr><td>Max files</td><td>caps how many files this URL/subscription check will pull. single URLs default to unlimited; subscriptions have separate caps for the very first check vs every check after.</td></tr>
+        <tr><td>Additional data</td><td>freeform text — write comma-separated tags here and they get attached to whatever gets downloaded from this URL/subscription, on top of the automatic <code>hydl-</code> tags.</td></tr>
+        <tr><td>Overwrite existing / Ignore anchor</td><td>force a redownload of files hydownloader already knows about. normally it skips anything already seen — use these two together if you deliberately wanna re-pull something.</td></tr>
+        <tr><td>Abort after <i>(subscriptions only)</i></td><td>stops a subscription check once it's seen this many already-downloaded files in a row. raise this for subscriptions on very active accounts if you're worried about missing older backlog.</td></tr>
+        <tr><td>Worker ID <i>(subscriptions only)</i></td><td>which internal thread a subscription runs on — an advanced multithreading knob. leave this alone unless you specifically need to parallelize checks across many subscriptions.</td></tr>
+      </table>
+
+      <h3 id="raw-downloader">🌐 Downloading from sites hydownloader doesn't have a dedicated integration for</h3>
+      <p>hydownloader recognizes URLs for a specific list of sites and turns them into downloader-plus-keywords subscription pairs. for anything gallery-dl supports but hydownloader doesn't specifically recognize, use the <b>"raw"</b> downloader: set Downloader to <code>raw</code> and put the full gallery/search URL directly in Keywords. everything else — check interval, filters, tags, etc — works exactly the same as a normal subscription. easy peasy.</p>
+
+      <h3 id="defaults">⚙️ Setting defaults so you don't repeat yourself</h3>
+      <p>if you find yourself setting the same Filter, Max files, or other property on every new subscription for a given site (or on everything in general), set defaults once in <code>hydownloader-config.json</code> instead:</p>
+      <ul class="starbullets">
+        <li><code>url-defaults</code> — applies to every new single URL added via the API/systray.</li>
+        <li><code>subscription-defaults-any</code> — applies to every new subscription, regardless of site.</li>
+        <li><code>subscription-defaults-&lt;downloadername&gt;</code> — applies only to new subscriptions for that specific downloader (e.g. <code>subscription-defaults-gelbooru</code>), and takes priority over -any.</li>
+      </ul>
+      <p>use the same lowercase, underscored property names the database uses (e.g. <code>max_files</code>, <code>abort_after</code>, <code>worker_id</code>) — these usually match the GUI label with spaces replaced by underscores. example, in your prettiest json:</p>
+      <pre>"url-defaults": {
+  "max_files": 50
+},
+"subscription-defaults-any": {
+  "abort_after": 2000
+}</pre>
+      <p>these only affect <i>newly-created</i> entries — they won't retroactively change subscriptions or URLs you already added. sowwy, no time travel here.</p>
+
+      <h3 id="quickmode">⚡ Quick mode — for when you need to shut down soon</h3>
+      <p>Quick mode tells the daemon to skip starting subscription checks it estimates will take a while, so you're not stuck waiting on a long gallery scan right when you need your PC free. toggle it on demand from the systray, or schedule it to turn on automatically during recurring time windows via <code>daemon.enable-quick-mode</code> and <code>daemon.quick-mode-time-intervals</code> in <code>hydownloader-config.json</code>. you can also exempt specific subscriptions or downloaders from ever being skipped, via <code>quick-mode-subscription-id-blacklist</code> / <code>quick-mode-downloader-blacklist</code>.</p>
+
+      <h3 id="multi-accounts">👯 Multiple accounts / cookies for the same site</h3>
+      <p>hydownloader supports rotating between different gallery-dl config files, cookies, and cache files based on rules (URL pattern, subscription ID, worker, or downloader) via the <code>cfg-files-rules</code> key in <code>hydownloader-config.json</code>. experimental, advanced feature — meant for cases like running two logged-in accounts on the same booru to spread out rate limits, or using a different cookie jar per site. separately (and automatically!) hydownloader also rotates plain <code>cookies.txt</code> files it receives via its own API (e.g. from Hydrus Companion) without you needing to configure anything, always keeping the newest one active.</p>
+
+      <h3 id="organizing-scale">📚 Organizing at scale in Hydrus</h3>
+      <p>as your library grows past a few thousand files, Hydrus's own organizing tools do most of the heavy lifting:</p>
+      <ul class="starbullets">
+        <li><b>tag namespaces</b> (text before a colon, like <code>creator:</code> or <code>series:</code>) group related tags and let you filter/sort by category instead of one flat tag soup.</li>
+        <li><b>tag siblings and parents</b> (tags → manage tag siblings/parents in Hydrus) let you merge alternate spellings into one canonical tag, or make one tag automatically imply another (e.g. a character tag implying its series). set these up once and they apply retroactively across your whole library!</li>
+        <li>the <b>duplicate filter</b> (built-in Hydrus feature for comparing and resolving near-identical/duplicate files) is worth running periodically on anything downloaded from multiple sources, since the same piece of art often gets re-uploaded across sites at different resolutions. see Hydrus's own Help menu for a full walkthrough — big enough feature to have its own docs there.</li>
+      </ul>
+
+      <h3 id="example-flows">💡 Example flows</h3>
+
+      <h4>following a new artist across several sites</h4>
+      <ul class="starbullets">
+        <li>add one subscription per site the artist posts to (systray → Subscriptions → Add), using their username/handle as Keywords.</li>
+        <li>if they're on a platform without dedicated hydownloader support, use downloader <code>raw</code> with the full profile/gallery URL as Keywords instead.</li>
+        <li>set Additional data on each to something like <code>artist:theirname</code> so every file from any of these subscriptions gets that tag automatically, regardless of what the site itself provides natively.</li>
+        <li>leave Check interval at a sensible default (a few hours to a day) unless they post unusually often.</li>
+      </ul>
+
+      <h4>one-off archiving a whole gallery or thread</h4>
+      <ul class="starbullets">
+        <li>add it as a single URL, left paused.</li>
+        <li>set Max files to 0/blank for no limit (or a specific number if you only want the first N).</li>
+        <li>add any tags you want in Additional data, then unpause.</li>
+        <li>if you need to re-grab it later (new pages were added), re-add the same URL with Overwrite existing and Ignore anchor both on — otherwise hydownloader just skips everything it already has.</li>
+      </ul>
+
+      <h4>a subscription keeps erroring / redownloading the same files</h4>
+      <ul class="starbullets">
+        <li>check the subscription's log (systray Logs tab → "Load subscription log...") for the actual error — a persistent per-post error on one site is the classic cause (see archive-mode in Technical Maintenance → Common Issues &amp; Fixes).</li>
+        <li>if it's rate-limiting (HTTP 429), lower how aggressively it's checked: increase Check interval, or reduce Max files (regular check) so each run pulls less.</li>
+        <li>if one very noisy subscription is affecting everything else, consider raising its Abort after so it stops scanning sooner once it hits already-seen files.</li>
+      </ul>
+
+      <h4>getting through a busy week without missing subscriptions</h4>
+      <ul class="starbullets">
+        <li>turn on Quick mode from the systray before a stretch where you might need to shut your PC down on short notice — the daemon will skip starting subscription checks estimated to run long, but will still run quick ones.</li>
+        <li>anything skipped this way isn't lost — it'll simply be picked up on its next scheduled check once Quick mode is off. phew!</li>
+      </ul>
+
+      <h4>cleaning up a library with a lot of cross-posted duplicates</h4>
+      <ul class="starbullets">
+        <li>set up tag siblings/parents first (Hydrus → tags → manage tag siblings/parents) so re-tagging survives the dedup pass.</li>
+        <li>run Hydrus's duplicate filter (see its Help menu) periodically to compare visually similar files and pick which copy — usually the highest quality one — to keep.</li>
+        <li>favor keeping the copy with the most complete tags/source info if quality is otherwise equal — Hydrus can merge tags from the discarded duplicate onto the keeper as part of resolving the pair.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ TECHNICAL MAINTENANCE ============ -->
+  <div class="win" id="maintenance">
+    <div class="win-title"><span>🛠️ Technical Maintenance.exe</span><span class="dots">_ ▢ ✕</span></div>
+    <div class="win-body">
+
+      <h3 id="file-folder-reference">🗂️ File &amp; Folder Reference</h3>
+      <table class="cute">
+        <tr><th>path</th><th>what it is</th></tr>
+        <tr><td><code>C:\Users\Matt\HydrusPipeline\hydrus\</code></td><td>Hydrus Network install (<code>hydrus_client.exe</code>)</td></tr>
+        <tr><td><code>C:\Users\Matt\HydrusPipeline\hydownloader\</code></td><td>hydownloader source clone (poetry project — daemon runs from here)</td></tr>
+        <tr><td><code>C:\Users\Matt\HydrusPipeline\hydownloader-data\</code></td><td>the hydownloader database folder — config, queues, logs</td></tr>
+        <tr><td>&nbsp;&nbsp;└ <code>hydownloader-config.json</code></td><td>hydownloader's own settings (daemon host/port/access-key, quick mode, etc)</td></tr>
+        <tr><td>&nbsp;&nbsp;└ <code>hydownloader-import-jobs.py</code></td><td>Hydrus API URL + access key live here (<code>defAPIURL</code> / <code>defAPIKey</code>)</td></tr>
+        <tr><td>&nbsp;&nbsp;└ <code>downloaded\</code></td><td>where gallery-dl drops files before import (emptied automatically after import)</td></tr>
+        <tr><td>&nbsp;&nbsp;└ <code>logs\</code></td><td>daemon/systray stdout+stderr logs and per-URL gallery-dl logs</td></tr>
+        <tr><td><code>C:\Users\Matt\HydrusPipeline\hydownloader-systray\</code></td><td>the separate, prebuilt native systray app + its <code>settings.ini</code></td></tr>
+        <tr><td><code>C:\Users\Matt\gallery-dl\config.json</code></td><td>base gallery-dl config (directory layout, site extractor settings)</td></tr>
+        <tr><td><code>Desktop\Hydrus Pipeline.lnk</code></td><td>the shortcut — runs <code>Launch-HydrusPipeline.ps1</code></td></tr>
+      </table>
+
+      <h3 id="scripts">📜 The Scripts</h3>
+      <p>all scripts live in the same folder this page was generated in. they're all safe to re-run any time~ pinky promise.</p>
+      <ul class="starbullets">
+        <li><code>Setup-HydrusPipeline.ps1</code> — full install/repair script. installs prerequisites via winget if missing, clones/updates hydownloader, initializes the database, patches any missing config keys, downloads the systray if needed, and starts everything. use this for first-time setup or if something needs reinstalling.</li>
+        <li><code>Launch-HydrusPipeline.ps1</code> — the lightweight day-to-day launcher (what the Desktop shortcut runs). starts only what isn't already running, then shows the menu.</li>
+        <li><code>Configure-ApiKeys.ps1</code> — shows current Reddit/Hydrus credential status (masked) and lets you set or replace either one. also reachable as option 4 from the launcher menu.</li>
+        <li><code>Stop-HydrusPipelineServices.ps1</code> — stops the hydownloader daemon and systray only (leaves Hydrus itself running). use this before re-running Setup if you've changed <code>hydownloader-config.json</code> by hand and need the daemon to pick up the new values, since editing the file doesn't affect an already-running process.</li>
+        <li><code>Create-DesktopShortcut.ps1</code> — (re)creates the Desktop shortcut. only needed if the shortcut gets deleted. 😱</li>
+      </ul>
+
+      <h3 id="credentials">🔑 Credential Management</h3>
+      <p>two completely separate secrets are involved here, and they're easy to mix up:</p>
+      <table class="cute">
+        <tr><th>secret</th><th>purpose / where it lives</th></tr>
+        <tr><td>hydownloader's <code>daemon.access-key</code></td><td>auto-generated by hydownloader itself. used by the systray to authenticate to the hydownloader daemon's own API. lives in <code>hydownloader-config.json</code>. never set this by hand — if it's ever missing, <code>Setup-HydrusPipeline.ps1</code> generates a fresh one automatically.</td></tr>
+        <tr><td>Hydrus Client API key</td><td>generated inside Hydrus (services → review services → Client API → generate access key). used by hydownloader's importer to push downloaded files into Hydrus. lives in <code>hydownloader-import-jobs.py</code> (<code>defAPIKey</code>). set/changed via <code>Configure-ApiKeys.ps1</code>, option 2.</td></tr>
+      </table>
+      <p>Reddit OAuth (client ID, user-agent, refresh token) lives in gallery-dl's <code>config.json</code> and is set via <code>Configure-ApiKeys.ps1</code>, option 1 — but honestly? it's optional. gallery-dl comes with its own built-in shared OAuth client and quietly uses it whenever we haven't configured one ourselves, which is normally plenty for downloading public subreddits/galleries. our own app is only worth chasing for a private (non-shared) rate limit and access to quarantined/private subs — run <code>Configure-ApiKeys.ps1</code>, option 2, to test whether we actually need it before doing battle with Reddit's app-creation page again.</p>
+      <div class="noteBubble"><b>why the app-creation page is broken, probably:</b> as of mid-2026 Reddit rolled out a "Responsible Builder Policy" requiring manual approval before any <i>new</i> app gets real API access, on top of the plain ol' CAPTCHA bug on the <code>reddit.com/prefs/apps</code> page itself. the support-ticket route mentioned above (Reddit's help center, category Developer Platform &amp; Data API Usage) is the documented way around both — no published turnaround time though, and small personal-use requests get rejected a lot, so it's worth describing ours as personal/non-commercial archival (not scraping, not resale) when filing it. 🎫</div>
+      <div class="noteBubble">credentials are never re-prompted automatically. <code>Setup-HydrusPipeline.ps1</code> only reports status (configured / not configured) on each run — it will NOT nag you to re-enter something you've already skipped. use <code>Configure-ApiKeys.ps1</code> (or menu option 4) whenever you actually want to add or change a credential.</div>
+
+      <h3 id="issues">🚑 Common Issues &amp; Fixes</h3>
+
+      <h4>"the client is already running" dialog in Hydrus</h4>
+      <p>this happens if Hydrus is launched a second time while already running (e.g. double-clicking <code>hydrus_client.exe</code> directly, or calling a generic "open app" action instead of focusing the existing window). click "wait a bit, then try again" and close the dialog — do NOT click "force it" unless you're sure the old copy is actually stuck, since that can kill a healthy running instance. always use the Desktop shortcut / launcher menu to reach Hydrus rather than launching <code>hydrus_client.exe</code> directly — the launcher checks for a running copy first and just brings its window forward instead of starting a new one.</p>
+
+      <h4>hydownloader daemon won't start / crashes immediately</h4>
+      <p>usually caused by a config key hydownloader expects being missing from <code>hydownloader-config.json</code> (this happened once during setup — a KeyError on <code>shared-db-override</code>). re-run <code>Setup-HydrusPipeline.ps1</code>: it scans the config for a known set of default keys and adds any that are missing, without touching existing values (safe to re-run, won't regenerate the real access-key or overwrite anything you've configured). check the daemon's stderr log afterward if it still won't start:</p>
+      <pre>C:\Users\Matt\HydrusPipeline\hydownloader-data\logs\daemon-launch-stderr.log</pre>
+
+      <h4>systray shows "Network error (status 0). Host not found"</h4>
+      <p>means the systray's <code>settings.ini</code> has a blank or mismatched apiURL — usually because it was generated before the daemon's host/port/access-key were correctly written to <code>hydownloader-config.json</code>. re-running <code>Setup-HydrusPipeline.ps1</code> regenerates <code>settings.ini</code> from whatever's currently in the config. if the daemon was already running with a stale config when this happens, run <code>Stop-HydrusPipelineServices.ps1</code> first, then <code>Setup-HydrusPipeline.ps1</code>, so the daemon actually restarts with the corrected values instead of continuing to run with what it loaded at its last start.</p>
+      <div class="noteBubble">note: hydownloader only actually serves HTTPS if <code>daemon.ssl</code> is true AND a <code>server.pem</code> file exists in the data folder — otherwise it silently falls back to plain HTTP regardless of the config flag. <code>Setup-HydrusPipeline.ps1</code> checks for the actual file before deciding whether to write <code>https://</code> or <code>http://</code> into the systray's apiURL, so this should self-correct~</div>
+
+      <h4>a single URL or subscription shows a red "http error"</h4>
+      <p>open the systray's Logs tab → "Load single URL log..." (or "Load subscription log...") and enter the row's ID to see gallery-dl's actual request/response trail. a common cause is the source site rate-limiting (HTTP 429) — this happened during testing against a Wikimedia file with an unusually large revision history, where gallery-dl tried to fetch every historical revision and got rate-limited partway through. retrying with a more specific/direct URL, or just waiting and retrying later, usually resolves it. this is a source-site behavior, not a pipeline bug — not our fault, pinky swear!</p>
+
+      <h4>a subscription keeps redownloading files it already has</h4>
+      <p>hydownloader only marks a downloaded file as "seen" once a subscription check finishes cleanly. if a site has some persistent error on a specific post that a subscription hits every time it runs (or the daemon is interrupted mid-check), the check never fully finishes cleanly, so those files never get marked as seen — and the next check downloads them all over again (it won't re-save a file already on disk, but it does re-request it, wasting time and bandwidth). this is deliberate: hydownloader defaults to never marking files as downloaded on an errored check (gallery-dl's <code>archive-mode: memory</code>), because the alternative (<code>archive-mode: file</code>) risks silently skipping older backlog files instead. if one specific site is consistently affected, you can opt just that site into the faster-but-riskier behavior by adding <code>"archive-mode": "file"</code> to its block in <code>gallery-dl-user-config.json</code>. either way, the systray's "missed subscription checks" list is the place to check for anything that might have been skipped, so you can go back and manually grab it.</p>
+
+      <h4>Reddit downloads don't work</h4>
+      <p>first, double check this is actually true! gallery-dl's built-in shared OAuth client (see Credential Management above) should handle public subreddit/gallery downloads with zero setup. run <code>Configure-ApiKeys.ps1</code>, option 2, to test a public subreddit with <code>--simulate</code> (doesn't save anything) and see what actually happens.</p>
+      <ul class="starbullets">
+        <li><b>test succeeds:</b> yay, Reddit downloading already works! the only remaining blocker is registering our own app (for a private rate limit + quarantined/private sub access), which is still stuck behind Reddit's broken CAPTCHA / approval process — see Verification Summary and Credential Management above.</li>
+        <li><b>test fails with rate-limiting or a "blocked by network security" message:</b> the shared default client is getting throttled (it's shared across literally every gallery-dl user, so this gets worse the busier Reddit is). this is exactly what our own app's private client-id would fix — worth actually pushing through registration or the support ticket for Reddit specifically, even though nothing else needs it.</li>
+        <li><b>test fails with an outright auth error:</b> something in <code>gallery-dl-config.json</code>'s reddit block might be malformed — check <code>extractor.reddit</code> for a leftover placeholder like <code>"client-id": "PLACEHOLDER_SET_BELOW"</code> and remove it so gallery-dl falls back to its own default.</li>
+      </ul>
+
+      <h4>need to fully restart everything from a clean state</h4>
+      <ul class="starbullets">
+        <li>run <code>Stop-HydrusPipelineServices.ps1</code> (stops daemon + systray, leaves Hydrus running).</li>
+        <li>close Hydrus normally (File → Exit).</li>
+        <li>re-run <code>Setup-HydrusPipeline.ps1</code>, which will start all three fresh and re-verify the config on the way.</li>
+      </ul>
+
+      <h3 id="logs">🔎 Logs &amp; Diagnostics</h3>
+      <p>the systray's Status tab ("Request status update") shows a live one-line summary per worker (single URLs, autoimporter, each subscription) — this is the fastest first check when something seems stuck.</p>
+      <table class="cute">
+        <tr><th>file (under <code>hydownloader-data\logs</code>)</th><th>what it shows</th></tr>
+        <tr><td><code>daemon-launch-stdout.log</code> / <code>-stderr.log</code></td><td>hydownloader daemon's own console output</td></tr>
+        <tr><td><code>systray-launch-stdout.log</code> / <code>-stderr.log</code></td><td>systray's own console output</td></tr>
+        <tr><td><code>single-urls-&lt;ID&gt;-gallery-dl-latest.txt</code></td><td>full gallery-dl request/response trail for one single-URL download (also viewable via the systray's Logs tab)</td></tr>
+      </table>
+
+      <h3 id="updating">🔄 Updating hydownloader</h3>
+      <p>hydownloader is an actively developed project on GitLab (not GitHub! — upstream is <code>gitgud.io/thatfuckingbird/hydownloader</code>). to update to the latest version:</p>
+      <ul class="starbullets">
+        <li>run <code>Stop-HydrusPipelineServices.ps1</code> first.</li>
+      </ul>
+      <pre>cd C:\Users\Matt\HydrusPipeline\hydownloader
+git pull
+python -m poetry install</pre>
+      <ul class="starbullets">
+        <li>then re-run <code>Setup-HydrusPipeline.ps1</code> to restart everything and re-check the config for any new keys the update might have introduced.</li>
+      </ul>
+      <p>hydownloader-systray is a separate repository with its own prebuilt binary releases. <code>Setup-HydrusPipeline.ps1</code> currently downloads a specific pinned build; check <code>gitgud.io/thatfuckingbird/hydownloader-assets</code> for newer builds if you want to update it independently.</p>
+
+      <h3 id="backup">💾 Backing Up</h3>
+      <p>the two things worth backing up regularly, bc data loss is NOT cute:</p>
+      <ul class="starbullets">
+        <li><code>hydownloader-data\</code> — contains your subscriptions, download history/queue, and config. losing this loses your subscription list and dedup history (though not your actual downloaded files, which live in Hydrus).</li>
+        <li>Hydrus's own database — this is your actual media library plus all tags. use Hydrus's built-in <b>database → backup database</b> feature rather than copying files by hand, since Hydrus's storage isn't a simple flat folder structure.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="sparkly">
+
+</div><!-- /.page -->
+
+<div class="footer" id="footer-stuff">
+  <div class="counterBox" id="hitCounter">000000</div>
+  <div>you are visitor number <span class="blink">✦</span> since i got my first Hydrus install ✦</div>
+
+  <div class="guestbook">
+    <h3 style="text-align:center; color:#ff1493;">💌 Guestbook 💌</h3>
+    <div class="entry"><span class="who">Danica ٩( ᐛ )و:</span> teehee your subscriptions page has more tabs open than my brain rn 🐱💕</div>
+    <div class="entry"><span class="who">Bri 🩺:</span> if the daemon ever "codes" just shock it back into rhythm like i do at work lol jk please back up your database</div>
+    <div class="entry"><span class="who">xXPixivFanXx:</span> omg reddit really said "no" huh. relatable fr</div>
+    <p style="text-align:center;"><a href="#" onclick="return false;">✍️ sign my guestbook!</a></p>
+  </div>
+
+  <div class="webring">
+    <b>⋆｡°✩ WEBRING ✩°｡⋆</b><br>
+    « <a href="#" onclick="return false;">prev</a> —
+    <a href="#top" onclick="return false;">random Hydrus site</a> —
+    <a href="#" onclick="return false;">next</a> »
+  </div>
+
+  <div class="badgeRow">
+    <div class="badge80x15">MADE WITH<br>100% NOTEPAD</div>
+    <div class="badge80x15 badge2">BEST VIEWED IN<br>NETSCAPE @ 800x600</div>
+    <div class="badge80x15 badge3">HYDRUS<br>POWERED</div>
+    <div class="badge80x15 badge4">NO FRAMES?<br>NO PROBLEM</div>
+    <div class="badge80x15 badge5">Y2K<br>COMPLIANT</div>
+  </div>
+
+  <p style="margin-top:14px;">© forever, Melissa's Pipeline Corner 🌐 — <a href="#top">back to top</a> — thx for visiting bye!! 👋✨</p>
+</div>
+
+<script>
+  // sparkle cursor trail
+  const sparkles = ["✨","💖","⭐","💫","🌸"];
+  let lastSpawn = 0;
+  document.addEventListener('mousemove', function(e) {
+    const now = Date.now();
+    if (now - lastSpawn < 60) return;
+    lastSpawn = now;
+    const s = document.createElement('span');
+    s.className = 'sparkle';
+    s.textContent = sparkles[Math.floor(Math.random() * sparkles.length)];
+    s.style.left = (e.clientX - 8) + 'px';
+    s.style.top = (e.clientY - 8) + 'px';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 950);
+  });
+
+  // fake but persistent hit counter
+  (function() {
+    let n = parseInt(localStorage.getItem('hydrusPipelineHits') || '4212', 10);
+    n += 1;
+    localStorage.setItem('hydrusPipelineHits', String(n));
+    document.getElementById('hitCounter').textContent = String(n).padStart(6, '0');
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+<div class="hud-panel">
+  <div class="hud-titlebar">API_TRAFFIC :: daemon<div class="rule"></div></div>
+  <div class="p-2 text-[11px] flex flex-col gap-1">
+    <div class="grid grid-cols-2 gap-1">
+      <div><span class="text-[#5a8a6c]">calls</span> <span class="text-[#39ff88]">{{ stats.total }}</span></div>
+      <div><span class="text-[#5a8a6c]">/min</span> <span class="text-[#39ff88]">{{ stats.calls_per_min }}</span></div>
+      <div><span class="text-[#5a8a6c]">avg</span> <span class="text-[#39d3ff]">{{ stats.avg_ms }}ms</span></div>
+      <div><span class="text-[#5a8a6c]">errs</span> <span class="{{ 'tag-fail' if stats.errors else 'text-[#1c6b3e]' }}">{{ stats.errors }}</span></div>
+    </div>
+    {% if stats.top_routes %}
+    <div class="flex flex-col gap-0.5 mt-1 border-t border-[#0d2416] pt-1">
+      {% for route, count in stats.top_routes %}
+      <div class="flex justify-between gap-2">
+        <span class="truncate text-[#5a8a6c]">{{ route }}</span>
+        <span class="tabular-nums text-[#39ff88]">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-[#5a8a6c] mt-1">no calls logged yet</div>
+    {% endif %}
+  </div>
+</div>

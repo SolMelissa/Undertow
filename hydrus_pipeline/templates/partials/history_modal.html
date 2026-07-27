@@ -1,0 +1,35 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">CHECK HISTORY — #{{ sub.id }} {{ sub.downloader }}</div>
+  <div class="text-sm text-[#8aa0a8] mb-1">{{ sub.keywords }}</div>
+  {% if error %}
+  <div class="alert alert-error py-2 text-sm">Failed to load history: {{ error }}</div>
+  {% elif not rows %}
+  <div class="text-sm text-[#8aa0a8]">no recorded checks yet</div>
+  {% else %}
+  <div class="overflow-y-auto max-h-80 border border-[#17323a] rounded text-xs font-mono">
+    <table class="table table-xs">
+      <thead><tr class="text-[#39ff88]"><th>When</th><th>Duration</th><th>New</th><th>Already seen</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr class="{{ 'text-[#39ff88]' if r.ok else 'text-[#ff4f6d]' }}">
+          <td>{{ r.when }}</td>
+          <td>{{ r.duration }}</td>
+          <td>{{ r.new_files if r.new_files is not none else '-' }}</td>
+          <td>{{ r.already_seen_files if r.already_seen_files is not none else '-' }}</td>
+          <td>{{ r.status or 'ok' }}</td>
+        </tr>
+        {% if r.error_detail %}
+        <tr class="text-[#8aa0a8]">
+          <td colspan="5" class="whitespace-normal">↳ {{ r.error_detail }}</td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  <div class="flex justify-end mt-2 gap-2">
+    <button class="btn btn-sm" hx-get="/subscriptions/{{ sub.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML">Back</button>
+    <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+  </div>
+</div>
