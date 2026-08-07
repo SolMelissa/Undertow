@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from . import api_client, config, services
+from . import api_client, config, services, settings, tags
 
 # hydownloader's own schema (constants.py: CREATE_SUBS_STATEMENT) defaults
 # "max_files_initial" to 10000 and leaves "max_files_regular" NULL (unlimited) for any
@@ -23,6 +23,8 @@ from . import api_client, config, services
 # will try to pull up to 10,000 files by default. That's the "downloading the whole backstock"
 # behavior - not a bug in this package, just a very generous upstream default that's rarely
 # what anyone actually wants. These get applied to every new subscription unless overridden.
+# Baseline values only now - settings.py's DEFAULTS mirrors these as the actual fallback used at
+# runtime (see _USE_SETTING below), so a change here should be mirrored there too.
 DEFAULT_MAX_FILES_INITIAL = 100
 DEFAULT_MAX_FILES_REGULAR = 100
 
@@ -52,8 +54,17 @@ BLOCKED_VIDEO_EXTENSIONS = (
 DEFAULT_FILE_FILTER = f"extension not in {BLOCKED_VIDEO_EXTENSIONS!r}"
 
 
+# Sentinel distinct from None (which several functions below already use to mean "clear this
+# field back to hydownloader's own default") - marks a parameter as "resolve from settings.json
+# at call time" rather than binding to a hardcoded constant at function-definition time (which
+# is what a plain `= DEFAULT_MAX_FILES_INITIAL` default argument would do, and would then never
+# pick up a later Settings-page change without an app restart).
+_USE_SETTING = object()
+
+
 def default_check_interval_hours() -> float:
-    return random.uniform(DEFAULT_CHECK_INTERVAL_HOURS_MIN, DEFAULT_CHECK_INTERVAL_HOURS_MAX)
+    s = settings.load_settings()
+    return random.uniform(s["check_interval_hours_min"], s["check_interval_hours_max"])
 
 
 @dataclass
@@ -70,8 +81,8 @@ def add_single_subscription(
     hours: float | None,
     additional_data: str | None = None,
     allow_duplicate: bool = False,
-    max_files_initial: int | None = DEFAULT_MAX_FILES_INITIAL,
-    max_files_regular: int | None = DEFAULT_MAX_FILES_REGULAR,
+    max_files_initial: int | None = _USE_SETTING,  # type: ignore[assignment]
+    max_files_regular: int | None = _USE_SETTING,  # type: ignore[assignment]
     file_filter: str | None = DEFAULT_FILE_FILTER,
 ) -> SubResult:
     """Shared by every entry point that adds subscriptions (a single URL, or looped once per
@@ -104,6 +115,12 @@ def add_single_subscription(
     slips through here on the next app startup."""
     if hours is None:
         hours = default_check_interval_hours()
+    if max_files_initial is _USE_SETTING or max_files_regular is _USE_SETTING:
+        s = settings.load_settings()
+        if max_files_initial is _USE_SETTING:
+            max_files_initial = s["max_files_initial"]
+        if max_files_regular is _USE_SETTING:
+            max_files_regular = s["max_files_regular"]
 
     info_resp = api_client.url_info([url])
     if not info_resp.success:
@@ -120,6 +137,33 @@ def add_single_subscription(
         downloader = "raw"
         keywords = url
 
+    return _submit_resolved_subscription(
+        downloader, keywords, int(hours * 3600),
+        additional_data=additional_data, max_files_initial=max_files_initial,
+        max_files_regular=max_files_regular, file_filter=file_filter,
+    )
+
+
+def _submit_resolved_subscription(
+    downloader: str,
+    keywords: str,
+    check_interval_seconds: int,
+    *,
+    additional_data: str | None = None,
+    max_files_initial: int | None = None,
+    max_files_regular: int | None = None,
+    file_filter: str | None = None,
+    worker_id: str | None = None,
+) -> SubResult:
+    """Shared tail end of add_single_subscription and import_subscriptions: submits an
+    already-resolved (downloader, keywords) pair, verifies it actually landed, and restarts
+    the daemon if its worker thread isn't live yet. Callers own their own duplicate check
+    beforehand - add_single_subscription's comes from url_info's existing_subscriptions field
+    (URL-based detection, only meaningful for a real URL), import_subscriptions' is a plain
+    downloader+keywords scan against the current list (an already-exported entry has no URL to
+    re-detect from) - different enough inputs that folding duplicate-detection itself into this
+    shared tail wouldn't actually simplify either caller."""
+    worker_id = worker_id or downloader
     # hydownloader's actual subscriptions table column is "check_interval" (seconds, despite
     # the bare name). Ported straight from the PS1 fix - a prior version of this used
     # "check_interval_seconds", which doesn't exist as a column and made the daemon 500 on
@@ -127,8 +171,8 @@ def add_single_subscription(
     sub_entry = {
         "downloader": downloader,
         "keywords": keywords,
-        "check_interval": int(hours * 3600),
-        "worker_id": downloader,
+        "check_interval": check_interval_seconds,
+        "worker_id": worker_id,
     }
     if additional_data:
         sub_entry["additional_data"] = additional_data
@@ -160,7 +204,7 @@ def add_single_subscription(
     restarted_daemon = False
     restart_error = None
     active = services.get_active_worker_ids()
-    if active is not None and downloader not in active:
+    if active is not None and worker_id not in active:
         restart = services.restart_daemon()
         restarted_daemon = restart.success
         if not restart.success:
@@ -172,6 +216,69 @@ def add_single_subscription(
         restarted_daemon=restarted_daemon,
         restart_error=restart_error,
     )
+
+
+# ------------------------------------------------------------------------- export/import
+# JSON backup/restore of the subscription list - "definition" fields only (downloader,
+# keywords, the file caps/filter/interval/worker_id), deliberately dropping server-generated
+# fields (id, last_check, priority, last_result_status, is_due, ...) so a re-import always
+# creates clean new rows rather than fighting the daemon over stale ids or resurrecting
+# server-side state that doesn't belong in a portable backup file.
+_EXPORT_FIELDS = (
+    "downloader", "keywords", "check_interval", "max_files_initial", "max_files_regular",
+    "filter", "worker_id", "additional_data",
+)
+
+
+def export_subscriptions() -> list[dict]:
+    """Returns every subscription's definition fields, ready to json.dumps() straight into a
+    downloadable backup file. Returns [] (not an error) if the daemon's unreachable - an empty
+    export is a safe, honest result; the caller's route is responsible for surfacing daemon
+    unreachability separately if it matters there."""
+    resp = api_client.get_subscriptions()
+    if not resp.success:
+        return []
+    return [{k: s[k] for k in _EXPORT_FIELDS if s.get(k) is not None} for s in (resp.data or [])]
+
+
+def import_subscriptions(entries: list[dict], allow_duplicate: bool = False) -> list[SubResult]:
+    """Re-creates subscriptions from export_subscriptions()-shaped dicts (or hand-edited ones -
+    only "downloader" and "keywords" are required, everything else falls back sensibly).
+    Duplicate-detection is a plain downloader+keywords scan against the subscriptions already
+    on the daemon (refreshed once up front, then updated in-memory as each entry succeeds, so
+    two identical entries in the same import batch don't both land) - there's no URL to run
+    through url_info() the way add_single_subscription does, since an already-exported entry
+    is already fully resolved. Returns one SubResult per entry, same order as `entries`, so
+    the caller can render per-row Added/Skipped/Failed status exactly like a batch URL add."""
+    resp = api_client.get_subscriptions()
+    if not resp.success:
+        return [SubResult("Failed", f"couldn't reach the daemon: {resp.error}") for _ in entries]
+    existing_pairs = {(s.get("downloader"), s.get("keywords")) for s in (resp.data or [])}
+
+    results = []
+    for entry in entries:
+        downloader = str(entry.get("downloader") or "").strip()
+        keywords = entry.get("keywords")
+        if not downloader or not keywords:
+            results.append(SubResult("Failed", "import entry is missing downloader/keywords"))
+            continue
+        if not allow_duplicate and (downloader, keywords) in existing_pairs:
+            results.append(SubResult("Skipped", f"already subscribed ({downloader} / {keywords})"))
+            continue
+
+        check_interval = entry.get("check_interval") or int(default_check_interval_hours() * 3600)
+        result = _submit_resolved_subscription(
+            downloader, keywords, int(check_interval),
+            additional_data=entry.get("additional_data"),
+            max_files_initial=entry.get("max_files_initial"),
+            max_files_regular=entry.get("max_files_regular"),
+            file_filter=entry.get("filter"),
+            worker_id=entry.get("worker_id") or downloader,
+        )
+        results.append(result)
+        if result.status == "Added":
+            existing_pairs.add((downloader, keywords))
+    return results
 
 
 def get_subscription_by_id(sub_id: int) -> dict | None:
@@ -251,14 +358,21 @@ def _bulk_update(compute_update: Callable[[dict], dict | None]) -> tuple[int, in
 
 
 def cap_existing_subscription_file_limits(
-    max_files_initial: int = DEFAULT_MAX_FILES_INITIAL,
-    max_files_regular: int = DEFAULT_MAX_FILES_REGULAR,
+    max_files_initial: int | None = _USE_SETTING,  # type: ignore[assignment]
+    max_files_regular: int | None = _USE_SETTING,  # type: ignore[assignment]
 ) -> tuple[int, int, str | None]:
     """Retroactively applies max_files_initial/max_files_regular to every existing
     subscription that doesn't already have a limit at or below the target (subscriptions
     added before this default existed are sitting on hydownloader's own defaults - 10000
     initial, unlimited regular). Takes effect on each subscription's *next* check - no daemon
     restart needed, unlike worker_id reassignment. Returns (updated_count, total_count, error)."""
+    if max_files_initial is _USE_SETTING or max_files_regular is _USE_SETTING:
+        loaded = settings.load_settings()
+        if max_files_initial is _USE_SETTING:
+            max_files_initial = loaded["max_files_initial"]
+        if max_files_regular is _USE_SETTING:
+            max_files_regular = loaded["max_files_regular"]
+
     def compute(s: dict) -> dict | None:
         current_initial = s.get("max_files_initial")
         current_regular = s.get("max_files_regular")
@@ -300,8 +414,9 @@ def fuzz_existing_intervals(force_all: bool = False) -> tuple[int, int, str | No
     presumed intentional and left alone unless force_all=True re-randomizes every subscription
     regardless of its current interval. Takes effect on each subscription's *next* check - no
     daemon restart needed. Returns (updated_count, total_count, error)."""
-    lo = int(DEFAULT_CHECK_INTERVAL_HOURS_MIN * 3600)
-    hi = int(DEFAULT_CHECK_INTERVAL_HOURS_MAX * 3600)
+    s = settings.load_settings()
+    lo = int(s["check_interval_hours_min"] * 3600)
+    hi = int(s["check_interval_hours_max"] * 3600)
 
     def compute(s: dict) -> dict | None:
         current = s.get("check_interval")
@@ -413,6 +528,45 @@ def ensure_all_subscriptions_parallel() -> tuple[int, int, bool, str | None]:
 # helpers are what let the TUI show more than that one-word summary: a live "files downloaded
 # last run" column on the main table, a force-check action, and a per-subscription history view.
 
+def bulk_pause(ids: list[int], paused: bool) -> tuple[bool, str | None]:
+    """Pauses or resumes every subscription in `ids` in one batched request - the bulk
+    counterpart to webui.py's single-row toggle_pause route (which stays inlined there; this
+    lives here instead so new bulk logic doesn't compound that existing inconsistency). Returns
+    (ok, error)."""
+    if not ids:
+        return True, None
+    resp = api_client.add_or_update_subscriptions([{"id": sid, "paused": paused} for sid in ids])
+    if not resp.accepted:
+        return False, resp.error or "daemon rejected the request"
+    return True, None
+
+
+def bulk_force_recheck(ids: list[int]) -> tuple[bool, str | None]:
+    """Marks every subscription in `ids` as immediately due (see force_recheck) in one batched
+    request. Returns (ok, error)."""
+    if not ids:
+        return True, None
+    resp = api_client.add_or_update_subscriptions([{"id": sid, "last_check": 0} for sid in ids])
+    if not resp.accepted:
+        return False, resp.error or "daemon rejected the request"
+    return True, None
+
+
+def bulk_delete(ids: list[int]) -> tuple[bool, str | None]:
+    """Deletes every subscription in `ids` in one batched request - a thin wrapper over
+    api_client.delete_subscriptions (which already accepts a list), plus cleanup of each
+    deleted id's tags.py sidecar entry so that file doesn't accumulate orphaned entries for
+    subscriptions that no longer exist. Returns (ok, error)."""
+    if not ids:
+        return True, None
+    resp = api_client.delete_subscriptions(ids)
+    if not resp.accepted:
+        return False, resp.error or "daemon rejected the request"
+    for sid in ids:
+        tags.remove(sid)
+    return True, None
+
+
 def force_recheck(sub_id: int) -> tuple[bool, str | None]:
     """Marks a subscription as immediately due for its next check, without resetting it to a
     from-scratch "initial" check (that's setting last_check to None instead of 0, which also
@@ -459,6 +613,60 @@ def recheck_stale_subscriptions(older_than_hours: float = 1.0) -> tuple[int, int
     if not add_resp.accepted:
         return 0, len(subs), add_resp.error or "daemon rejected the request"
     return len(stale_ids), len(subs), None
+
+
+# ------------------------------------------------------------------------- sort/paginate
+# Single source of truth for "what does column X sort by", shared by webui.py's
+# /partials/subscriptions route and the TUI's DataTable header-click handler, so the two UIs
+# can never quietly disagree on what e.g. "sort by NEXT CHECK" means. Sort keys operate on raw
+# values (timestamps, seconds, bools) rather than the "14h ago"/"in 3h" display strings each UI
+# formats separately - those sort wrong as text (e.g. "2h ago" would sort before "14h ago").
+
+def _sort_key_next_check(s: dict):
+    if s.get("paused"):
+        return float("inf")  # paused subscriptions have no pending next check - sort last
+    return (s.get("last_check") or 0) + (s.get("check_interval") or 0)
+
+
+SORT_KEYS: dict[str, Callable[[dict], object]] = {
+    "id": lambda s: s.get("id") or 0,
+    "downloader": lambda s: str(s.get("downloader") or "").lower(),
+    "keywords": lambda s: str(s.get("keywords") or "").lower(),
+    "paused": lambda s: bool(s.get("paused")),
+    "due": lambda s: bool(s.get("is_due")),
+    "last_check": lambda s: s.get("last_check") if s.get("last_check") is not None else -1,
+    "interval": lambda s: s.get("check_interval") or 0,
+    "next_check": _sort_key_next_check,
+}
+
+
+def sort_subscriptions(subs: list[dict], sort_by: str = "id", sort_dir: str = "asc", totals: dict[int, int] | None = None) -> list[dict]:
+    """Returns `subs` sorted by the given column - `sort_by="total_dls"` needs a pre-fetched
+    {sub_id: total} map (see get_total_downloads) since that figure isn't on the subscription
+    dict itself; every other column is a plain SORT_KEYS lookup. Falls back to "id" for an
+    unrecognized sort_by rather than raising, so a stale/tampered query param degrades to the
+    original default ordering instead of erroring the whole table out."""
+    if sort_by == "total_dls":
+        totals = totals or {}
+        key_fn = lambda s: totals.get(s.get("id"), 0)  # noqa: E731
+    else:
+        key_fn = SORT_KEYS.get(sort_by, SORT_KEYS["id"])
+    return sorted(subs, key=key_fn, reverse=(sort_dir == "desc"))
+
+
+def paginate(items: list, page: int = 1, page_size: int = 25) -> tuple[list, dict]:
+    """Slices an already-sorted list into one page, clamping `page` into range rather than
+    returning empty results for an out-of-range value (e.g. the list shrank after a delete
+    while a client was still sitting on page 3). Returns (page_items, meta) where meta has
+    page/page_size/total/total_pages - everything both UIs' pager controls need to render
+    "page X of Y" and disable prev/next at the edges."""
+    page_size = max(1, page_size)
+    total = len(items)
+    total_pages = max(1, -(-total // page_size))  # ceil division without importing math
+    page = min(max(1, page), total_pages)
+    start = (page - 1) * page_size
+    meta = {"page": page, "page_size": page_size, "total": total, "total_pages": total_pages}
+    return items[start:start + page_size], meta
 
 
 def fleet_counts(subs: list[dict]) -> dict[str, int]:

@@ -1,0 +1,63 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">SETTINGS</div>
+  <p class="text-xs text-[#8aa0a8]">
+    Changes here take effect on the watchdog's next cycle / the next subscription add - no
+    restart needed. Leave a file-cap field blank for hydownloader's own (uncapped) default.
+  </p>
+  <form hx-post="/settings/save" hx-target="#modal-content" hx-swap="innerHTML" class="flex flex-col gap-2">
+    <label class="text-xs text-[#8aa0a8]">Watchdog check interval (seconds)
+      <input type="number" name="watchdog_interval_seconds" min="10" step="1" value="{{ s.watchdog_interval_seconds }}"
+             class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-40">
+    </label>
+    <label class="text-xs text-[#8aa0a8]">Hydrus Client API URL
+      <input type="text" name="hydrus_api_url" value="{{ s.hydrus_api_url }}"
+             class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full font-mono">
+    </label>
+    <div class="flex gap-2">
+      <label class="text-xs text-[#8aa0a8]">Default max files (initial check)
+        <input type="number" name="max_files_initial" min="1" value="{{ s.max_files_initial if s.max_files_initial is not none else '' }}" placeholder="unlimited"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-40">
+      </label>
+      <label class="text-xs text-[#8aa0a8]">Default max files (regular check)
+        <input type="number" name="max_files_regular" min="1" value="{{ s.max_files_regular if s.max_files_regular is not none else '' }}" placeholder="unlimited"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-40">
+      </label>
+    </div>
+    <div class="flex gap-2">
+      <label class="text-xs text-[#8aa0a8]">New-subscription interval fuzz range: min hours
+        <input type="number" name="check_interval_hours_min" min="0.1" step="0.5" value="{{ s.check_interval_hours_min }}"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-36">
+      </label>
+      <label class="text-xs text-[#8aa0a8]">max hours
+        <input type="number" name="check_interval_hours_max" min="0.1" step="0.5" value="{{ s.check_interval_hours_max }}"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-36">
+      </label>
+    </div>
+
+    <div class="text-xs text-[#8aa0a8] mt-1">Resource alert thresholds (% used - the watchdog notifies once usage crosses these)</div>
+    <div class="flex gap-2">
+      <label class="text-xs text-[#8aa0a8]">Disk
+        <input type="number" name="threshold_disk_pct" min="1" max="100" step="1" value="{{ s.resource_alert_thresholds.disk_pct }}"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-24">
+      </label>
+      <label class="text-xs text-[#8aa0a8]">RAM
+        <input type="number" name="threshold_ram_pct" min="1" max="100" step="1" value="{{ s.resource_alert_thresholds.ram_pct }}"
+               class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-24">
+      </label>
+    </div>
+
+    <label class="text-xs text-[#8aa0a8] flex items-center gap-2 mt-1">
+      <input type="checkbox" name="windows_toast_enabled" class="checkbox checkbox-xs" {{ 'checked' if s.windows_toast_enabled else '' }}>
+      Windows toast notifications for failures / service-down / resource alerts
+    </label>
+
+    {% if message %}
+    <div class="alert {{ 'alert-error' if message_error else 'alert-success' }} py-2 text-sm">{{ message }}</div>
+    {% endif %}
+
+    <div class="flex justify-end gap-2 mt-1">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+      <button type="submit" class="btn btn-sm btn-primary">Save</button>
+    </div>
+  </form>
+</div>

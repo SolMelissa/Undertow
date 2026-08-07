@@ -33,7 +33,7 @@ from textual.reactive import reactive
 from textual.theme import Theme
 from textual.widgets import DataTable, Footer, Header, RichLog, Static
 
-from .. import api_client, api_keys, hydrus_client, logtail, services, subscriptions, webui
+from .. import api_client, api_keys, hydrus_client, logtail, services, subscriptions, tags, webui
 from ..subscriptions import add_single_subscription
 from .modals import (
     AddDownloadModal,
@@ -289,6 +289,8 @@ class PipelineApp(App):
         Binding("c", "health_check", "Diagnostics"),
         Binding("k", "api_keys", "API keys"),
         Binding("r", "refresh_now", "Refresh"),
+        Binding("[", "prev_page", "Prev page", show=False),
+        Binding("]", "next_page", "Next page", show=False),
         Binding("?", "show_help", "Help"),
         Binding("q", "quit_app", "Quit"),
     ]
@@ -301,6 +303,15 @@ class PipelineApp(App):
         self._failure_status: dict[int, dict] = {}
         self._log_offset: int | None = None
         self._filter_text: str = ""
+        # Sort/page state for the subs table - column headers toggle sort_by/reverse (see
+        # _on_header_selected), [ and ] page through the (already-fetched) subs cache. Fixed
+        # page size for now rather than reading Settings, per the Phase 2 note that the TUI
+        # doesn't get its own settings form for v1.
+        self._sort_by: str = "id"
+        self._sort_reverse: bool = False
+        self._page: int = 1
+        self._page_size: int = 25
+        self._page_meta: dict = {"page": 1, "page_size": self._page_size, "total": 0, "total_pages": 1}
         self._activity_history: deque[int] = deque(maxlen=48)
         self._start_time = time.monotonic()
         self._frame = 0
@@ -328,7 +339,17 @@ class PipelineApp(App):
         self.theme = "hydrus-spaceship"
 
         table = self.query_one("#subs-table", DataTable)
-        table.add_columns("ID", "Downloader", "Keywords", "Paused", "Due", "Last result", "New Files")
+        # Explicit keys (matching subscriptions.SORT_KEYS names where a sort exists) rather
+        # than relying on Textual's label-derived default keys - "Last result"/"New Files"
+        # deliberately get no matching SORT_KEYS entry, so clicking those headers is a no-op
+        # in _on_header_selected rather than sorting by something that doesn't exist.
+        table.add_column("ID", key="id")
+        table.add_column("Downloader", key="downloader")
+        table.add_column("Keywords", key="keywords")
+        table.add_column("Paused", key="paused")
+        table.add_column("Due", key="due")
+        table.add_column("Last result", key="last_result")
+        table.add_column("New Files", key="new_files")
         table.focus()
 
         self.query_one("#subs-panel", Vertical).border_title = "SUBSCRIPTIONS"
@@ -496,11 +517,16 @@ class PipelineApp(App):
         spinner = _SCAN_FRAMES[self._frame % len(_SCAN_FRAMES)]
         pulse = "#39ff88" if self._frame % 2 == 0 else "#0d3a24"
 
+        pm = self._page_meta
+        sort_arrow = "▼" if self._sort_reverse else "▲"
         text = (
             f"[#4dfff0]TOTAL[/]    {total}\n"
             f"[#39ff88]ACTIVE[/]   {active}\n"
             f"[#ffd166]PAUSED[/]   {paused}\n"
             f"[#39d3ff]DUE NOW[/]  {due}\n"
+            f"\n"
+            f"[#4dfff0]SORT[/]     {self._sort_by} {sort_arrow}\n"
+            f"[#4dfff0]PAGE[/]     {pm['page']}/{pm['total_pages']}  ([ / ])\n"
             f"\n"
             f"[#ff9d3c]{spinner}[/] SCANNING...\n"
             f"[{pulse}]●[/] UPLINK  {h:02}:{m:02}:{s:02}"
@@ -565,21 +591,45 @@ class PipelineApp(App):
         active_id = self._active_sub_id()
         filt = self._filter_text.lower()
 
+        # Filtered before sorting/paginating (unlike the web dashboard's client-side substring
+        # filter, which only searches the currently-fetched page) - the TUI already holds the
+        # full subs list locally, so there's no reason to let a filter miss matches sitting on
+        # another page.
+        candidates = self._subs_cache
+        tags_by_id = tags.load_tags()
+        if filt.startswith("tag:"):
+            tag_query = filt[4:].strip()
+            candidates = [
+                s for s in candidates
+                if any(tag_query in t.lower() for t in tags_by_id.get(s.get("id"), []))
+            ] if tag_query else candidates
+        elif filt:
+            candidates = [
+                s for s in candidates
+                if filt in str(s.get("keywords") or "").lower()
+                or filt in str(s.get("downloader") or "").lower()
+                or filt in str(s.get("id"))
+            ]
+        ordered = subscriptions.sort_subscriptions(candidates, self._sort_by, "desc" if self._sort_reverse else "asc")
+        page_items, page_meta = subscriptions.paginate(ordered, self._page, self._page_size)
+        self._page = page_meta["page"]  # clamped back into range if the list shrank underneath it
+        self._page_meta = page_meta
+
         table.clear()
-        for s in self._subs_cache:
+        for s in page_items:
             sid = str(s.get("id"))
             keywords = str(s.get("keywords") or "")
             downloader = str(s.get("downloader") or "")
-            if filt and filt not in keywords.lower() and filt not in downloader.lower() and filt not in sid:
-                continue
 
             is_active = sid == active_id
             flagged = bool((self._failure_status.get(s.get("id")) or {}).get("flagged"))
             warn_prefix = "[#ff9d3c]![/] " if flagged else ""
+            sub_tags = tags_by_id.get(s.get("id"), [])
+            tag_suffix = "  " + " ".join(f"[#ff9d3c]#{escape(t)}[/]" for t in sub_tags) if sub_tags else ""
             if is_active:
-                kw_cell: object = Text.from_markup(f"{warn_prefix}[#ffe08a]▶ {escape(keywords)}[/]")
-            elif flagged:
-                kw_cell = Text.from_markup(f"{warn_prefix}{escape(keywords)}")
+                kw_cell: object = Text.from_markup(f"{warn_prefix}[#ffe08a]▶ {escape(keywords)}[/]{tag_suffix}")
+            elif flagged or sub_tags:
+                kw_cell = Text.from_markup(f"{warn_prefix}{escape(keywords)}{tag_suffix}")
             else:
                 kw_cell = keywords
             paused_cell = Text.from_markup("[#ffd166]yes[/]") if s.get("paused") else "no"
@@ -641,6 +691,29 @@ class PipelineApp(App):
         else:
             self.notify(f"Failed: {result.detail}", severity="error")
         quick_input.focus()
+
+    @on(DataTable.HeaderSelected, "#subs-table")
+    def _on_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        col = event.column_key.value if event.column_key else None
+        if col not in subscriptions.SORT_KEYS:
+            return  # "Last result"/"New Files" have no matching sort key - no-op, not an error
+        self._sort_reverse = (col == self._sort_by) and not self._sort_reverse
+        self._sort_by = col
+        self._page = 1
+        self._render_table()
+        self._render_fleet_instruments()
+
+    def action_prev_page(self) -> None:
+        if self._page > 1:
+            self._page -= 1
+            self._render_table()
+            self._render_fleet_instruments()
+
+    def action_next_page(self) -> None:
+        if self._page < self._page_meta.get("total_pages", 1):
+            self._page += 1
+            self._render_table()
+            self._render_fleet_instruments()
 
     @on(DataTable.RowSelected, "#subs-table")
     def _on_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -735,12 +808,12 @@ class PipelineApp(App):
         )
         if not confirmed:
             return
-        resp = await asyncio.to_thread(api_client.delete_subscriptions, [sub_id])
-        if resp.accepted:
+        ok, error = await asyncio.to_thread(subscriptions.bulk_delete, [sub_id])
+        if ok:
             self.notify(f"TARGET NEUTRALIZED — subscription #{sub_id} purged")
             await self._tick()
         else:
-            self.notify(f"Failed: {resp.error or 'daemon rejected the request'}", severity="error")
+            self.notify(f"Failed: {error}", severity="error")
 
     def action_filter_table(self) -> None:
         filter_input = self.query_one("#filter-input", Input)

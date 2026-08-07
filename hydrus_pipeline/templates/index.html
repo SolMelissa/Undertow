@@ -4,12 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hydrus Pipeline</title>
-<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" type="text/css">
+<script>
+// Applied before any CSS loads so a previously-chosen kawaii theme doesn't flash the default
+// terminal theme first - see the fuller applyPipelineTheme()/togglePipelineTheme() pair at the
+// bottom of this file, which this initial value stays in sync with.
+(function () {
+  var saved = localStorage.getItem('pipeline-theme');
+  if (saved === 'kawaii') document.documentElement.setAttribute('data-theme', 'kawaii');
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"
+        integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"
+        integrity="sha384-9Ax3MmS9AClxJyd5/zafcXXjxmwFhZCdsT6HJoJjarvCaAkJlk5QDzjLJm+Wdx5F" crossorigin="anonymous"></script>
+<!-- Play CDN: pinned to a specific version for reproducibility. No SRI here - the script
+     itself compiles the utility CSS from this page's actual class list at runtime (that's
+     what lets arbitrary-value utilities like bg-[#030805] work with zero build step), so its
+     served bytes are the same for a given version+content but SRI can't cover the JIT output. -->
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.24/dist/full.min.css" rel="stylesheet" type="text/css"
+      integrity="sha384-2V5uSMIWpBK7suX6yRDZH6ll7ktPJF2O58y0HSz+HiFCBCsmqZpxX1AZB4qAHuYI" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&family=Baloo+2:wght@500;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='kawaii/css/kawaii.css') }}" rel="stylesheet">
 <style>
   :root { --term-green: #39ff88; --term-dim: #1c6b3e; }
   body {
@@ -18,6 +35,7 @@
     font-family: 'Share Tech Mono', 'Consolas', monospace;
     font-size: 12.5px;
   }
+  [x-cloak] { display: none !important; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--term-dim); }
   ::-webkit-scrollbar-track { background: #010302; }
@@ -148,7 +166,7 @@
 <div class="crt-vignette"></div>
 
 <div class="app-layer">
-  <div class="px-4 py-1 text-[10px] text-[var(--term-dim)] border-b border-[#0d2416] bg-[#010805] whitespace-nowrap overflow-x-auto">
+  <div id="term-banner" class="px-4 py-1 text-[10px] text-[var(--term-dim)] border-b border-[#0d2416] bg-[#010805] whitespace-nowrap overflow-x-auto">
     root@hydrus-pipeline:~# tail -f /var/log/hydrus_pipeline.webui &nbsp;·&nbsp;
     [ OK ] bound 127.0.0.1:8765 &nbsp;·&nbsp; [ OK ] htmx/alpine runtime attached &nbsp;·&nbsp;
     [ OK ] daemon api client ready<span class="cursor-blink">&nbsp;</span>
@@ -156,11 +174,23 @@
 
   <div class="navbar bg-[#030805] border-b border-[var(--term-dim)] px-4 py-1 min-h-0">
     <div class="flex-1 flex items-baseline gap-3">
+      <img id="mascot-header" class="kawaii-mascot" src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="">
       <span class="glitch vt text-2xl font-bold text-[var(--term-green)]" data-text="HYDRUS//PIPELINE">HYDRUS//PIPELINE</span>
-      <span class="text-[10px] text-[#ff9d3c] hidden sm:inline tracking-widest">::UPLINK_ESTABLISHED::</span>
+      <span class="text-[10px] text-[#ff9d3c] hidden sm:inline tracking-widest kawaii-hide">::UPLINK_ESTABLISHED::</span>
     </div>
     <span id="clock" class="text-xs text-[var(--term-dim)] tabular-nums hidden md:inline"></span>
+    <button id="theme-toggle" type="button" onclick="togglePipelineTheme()"
+            class="ml-3 text-[10px] px-2 py-1 border border-[var(--term-dim)] text-[var(--term-dim)] hover:text-[var(--term-green)] hover:border-[var(--term-green)]">
+      <span id="theme-toggle-label">GIRLY MODE</span>
+    </button>
   </div>
+
+  <!-- #hacker-view / #girly-view: the two dashboards are fully separate DOM subtrees from here
+       down (see static/kawaii/css/kawaii.css's top-level view switch) - only one is ever shown,
+       purely via CSS, keyed off data-theme="kawaii" on <html>. Both keep polling in the
+       background regardless of which is visible, same as the existing .kawaii-mascot pattern,
+       so the toggle is instant with no re-fetch needed. -->
+  <div id="hacker-view">
 
   <!-- STATUS WALL: dedicated dense status band - real service/worker status on the left,
        decorative signal-noise readouts on the right so this reads as a proper NOC status wall
@@ -178,24 +208,30 @@
   <div class="flex flex-wrap items-center gap-1.5 px-4 py-2 bg-[#020604] border-b border-[#0d2416]">
     <button class="bracket-btn" hx-get="/subscriptions/add-modal" hx-target="#modal-content" hx-swap="innerHTML">SUBSCRIBE</button>
     <button class="bracket-btn" hx-get="/downloads/add-modal" hx-target="#modal-content" hx-swap="innerHTML">ONE-OFF</button>
+    <a class="bracket-btn" href="/subscriptions/export">EXPORT</a>
+    <button class="bracket-btn" hx-get="/subscriptions/import-modal" hx-target="#modal-content" hx-swap="innerHTML">IMPORT</button>
     <button class="bracket-btn" hx-get="/diagnostics" hx-target="#modal-content" hx-swap="innerHTML">DIAG</button>
     <button class="bracket-btn" hx-get="/api-keys" hx-target="#modal-content" hx-swap="innerHTML">KEYS</button>
-    <button class="bracket-btn" hx-post="/focus/hydrus" hx-target="#toast" hx-swap="innerHTML">HYDRUS^</button>
-    <button class="bracket-btn" hx-post="/focus/systray" hx-target="#toast" hx-swap="innerHTML">TRAY^</button>
+    <button class="bracket-btn" hx-get="/settings" hx-target="#modal-content" hx-swap="innerHTML">SETTINGS</button>
+    <button class="bracket-btn" hx-post="/focus/hydrus" hx-target="#toast-stack" hx-swap="beforeend">HYDRUS^</button>
+    <button class="bracket-btn" hx-post="/focus/systray" hx-target="#toast-stack" hx-swap="beforeend">TRAY^</button>
     <button class="bracket-btn" onclick="htmx.trigger(document.body, 'refreshSubs')">SYNC</button>
-    <button class="bracket-btn" hx-post="/launch-tui" hx-target="#toast" hx-swap="innerHTML">CONSOLE UI</button>
+    <button class="bracket-btn" hx-post="/launch-tui" hx-target="#toast-stack" hx-swap="beforeend">CONSOLE UI</button>
     <span class="flex-1"></span>
     <button class="bracket-btn bracket-btn-danger" hx-get="/shutdown-confirm" hx-target="#modal-content" hx-swap="innerHTML">SHUTDOWN</button>
     <span class="htmx-indicator loading loading-spinner loading-xs text-[var(--term-green)] self-center"></span>
   </div>
 
-  <div id="toast" class="px-4 pt-2"></div>
+  <div id="toast-stack" class="fixed top-14 right-3 z-50 flex flex-col gap-1 w-80 max-w-[90vw]"></div>
+  <div id="resource-banner"></div>
 
   <div class="cockpit-grid p-3">
 
-    <!-- LEFT: graphical/chaos sidebar - fixed width, see .cockpit-left -->
-    <div class="cockpit-left flex flex-col gap-3">
-      <div id="queue-graph" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+    <!-- LEFT: graphical/chaos sidebar - fixed width, see .cockpit-left. Also treated as one
+         kawaii-group (see CONNECTIONS/etc above) - the SIGNAL/SCOPE/MEM hacker-only gadgets in
+         here are hidden entirely in kawaii mode, so grouping the rest costs nothing extra. -->
+    <div class="cockpit-left flex flex-col gap-3 kawaii-group">
+      <div id="queue-graph" class="kawaii-group-first" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
 
       <div class="hud-panel">
         <div class="hud-titlebar">SIGNAL<div class="rule"></div></div>
@@ -223,29 +259,43 @@
       <div id="sparkline-panel" hx-get="/partials/sparkline" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
     </div>
 
-    <!-- RIGHT: fleet/process/sector/host/network instruments -->
+    <!-- RIGHT: fleet/process/sector/host/network instruments. The kawaii-group/kawaii-group-*
+         classes are no-ops in the terminal theme (each child keeps its own independent
+         .hud-panel card there) - in kawaii mode they visually fuse each cluster of related,
+         independently-polled htmx fragments into one card instead of a stack of small ones;
+         see the "kawaii panel grouping" rules in static/kawaii/css/kawaii.css. -->
     <div class="cockpit-right flex flex-col gap-3">
-      <div id="fleet-panel" hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
-      <div id="hydrus-panel" hx-get="/partials/hydrus" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
-      <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
-      <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
-      <div id="netstat" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+      <div class="kawaii-group">
+        <div id="fleet-panel" class="kawaii-group-first" hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+        <div id="hydrus-panel" hx-get="/partials/hydrus" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+        <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+        <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+      </div>
 
-      <div class="hud-panel">
-        <div class="hud-titlebar">NET_CONNECTIONS :: per-proc<div class="rule"></div></div>
-        <!-- Same stable-scroll-container fix as the subscriptions table: this wrapper lives
-             in the static shell so htmx only ever replaces the rows inside it, never the
-             scrollable element itself - scrollTop survives every poll instead of resetting. -->
-        <div class="h-40 overflow-y-auto p-2 text-[10.5px]">
-          <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 3s" hx-swap="innerHTML">
-            loading...
+      <div class="kawaii-group">
+        <div id="netstat" class="kawaii-group-first" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+
+        <div class="hud-panel">
+          <div class="hud-titlebar">CONNECTIONS<div class="rule"></div></div>
+          <!-- Same stable-scroll-container fix as the subscriptions table: this wrapper lives
+               in the static shell so htmx only ever replaces the rows inside it, never the
+               scrollable element itself - scrollTop survives every poll instead of resetting. -->
+          <div class="h-40 overflow-y-auto p-2 text-[10.5px]">
+            <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 3s" hx-swap="innerHTML">
+              loading...
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- MAIN: the actual functional cockpit -->
-    <div class="cockpit-main flex flex-col gap-3" x-data="{ filter: '' }">
+    <div class="cockpit-main flex flex-col gap-3" x-data="{ filter: '', selected: [], _lastTagQuery: '' }"
+         @subs-selection-cleared.window="selected = []"
+         x-effect="
+           const q = filter.toLowerCase().startsWith('tag:') ? filter.slice(4).trim() : '';
+           if (q !== _lastTagQuery) { _lastTagQuery = q; window.subsTableState.tag = q; window.subsTableState.page = 1; htmx.trigger(document.body, 'subsTableNav'); }
+         ">
 
       <div class="flex items-center gap-2">
         <form hx-post="/subscriptions/quick-add" hx-target="#quick-add-result" hx-swap="innerHTML"
@@ -257,10 +307,26 @@
           <input type="hidden" name="hours" value="">
           <button type="submit" class="bracket-btn">EXEC</button>
         </form>
-        <input type="text" x-model.debounce.150ms="filter" placeholder="grep..."
-               class="input input-sm input-bordered w-32 bg-[#020604] border-[#ff9d3c66] text-[var(--term-green)] rounded-none font-mono">
+        <input type="text" x-model.debounce.150ms="filter" placeholder="grep... (or tag:foo)"
+               title="Plain text searches only the subscriptions currently on-screen (this page) - not the whole list. Prefix with tag: (e.g. tag:favorites) to search by tag across every page instead."
+               class="input input-sm input-bordered w-40 bg-[#020604] border-[#ff9d3c66] text-[var(--term-green)] rounded-none font-mono">
       </div>
       <div id="quick-add-result" class="text-xs -mt-2"></div>
+
+      <div class="flex items-center gap-1.5 px-2 py-1 bg-[#04140a] border border-[var(--term-dim)]"
+           x-show="selected.length > 0" x-cloak>
+        <span class="text-[10px] text-[#8aa0a8]" x-text="selected.length + ' selected'"></span>
+        <span class="flex-1"></span>
+        <button class="bracket-btn" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
+                :hx-vals="JSON.stringify({action: 'resume', ids: selected.join(',')})" hx-trigger="click">RESUME</button>
+        <button class="bracket-btn" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
+                :hx-vals="JSON.stringify({action: 'pause', ids: selected.join(',')})" hx-trigger="click">PAUSE</button>
+        <button class="bracket-btn" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
+                :hx-vals="JSON.stringify({action: 'force-check', ids: selected.join(',')})" hx-trigger="click">FORCE-CHECK</button>
+        <button class="bracket-btn bracket-btn-danger" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
+                :hx-vals="JSON.stringify({action: 'delete', ids: selected.join(',')})" hx-trigger="click">DELETE</button>
+        <button class="bracket-btn" @click="selected = []">CLEAR</button>
+      </div>
 
       <div class="hud-panel">
         <div class="hud-titlebar">SUBSCRIPTIONS<div class="rule"></div></div>
@@ -269,7 +335,8 @@
              this ancestor's scrollTop survives every refresh instead of snapping to 0. -->
         <div class="overflow-y-auto max-h-[26rem]">
           <div id="subs-panel"
-               hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+               hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
+               hx-vals="js:{...window.subsTableState}" hx-swap="innerHTML">
             loading subscriptions...
           </div>
         </div>
@@ -277,21 +344,147 @@
       <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
 
       <div class="hud-panel">
-        <div class="hud-titlebar">/var/log/daemon.txt :: tail -f<div class="rule"></div></div>
+        <div class="hud-titlebar">ACTIVITY LOG<div class="rule"></div></div>
         <div id="log-box" class="h-64 overflow-y-auto text-[11px] leading-snug whitespace-pre-wrap break-words font-mono text-[#8fffb8] p-2">
           loading log...
         </div>
       </div>
     </div>
   </div>
+  </div><!-- /#hacker-view -->
+
+  <!-- ============================================================================ #girly-view
+       A completely independent layout - its own hero, stat-card grid, labelled chart,
+       friendly subscriptions list and activity feed - built from templates/partials/girly/*.html
+       (rendered by the same Flask routes as the hacker view; see _themed_template() in
+       webui.py) rather than a recolored copy of the cockpit-grid/hud-panel markup above. -->
+  <div id="girly-view">
+
+    <div class="kawaii-hero">
+      <div class="kawaii-hero-art">
+        <img src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="" style="width:96px;height:96px;">
+      </div>
+      <div>
+        <p class="kawaii-hero-title">Hydrus Pipeline</p>
+        <p class="kawaii-hero-sub">Your subscriptions and downloads, at a glance &#10024;</p>
+      </div>
+      <div class="kawaii-hero-spacer"></div>
+      <div class="kawaii-art-slot" style="width:120px; height:96px;">
+        <span style="font-size:1.6rem;">&#127912;</span>
+        <span>character art here</span>
+      </div>
+    </div>
+
+    <div class="kawaii-btn-row">
+      <button class="kawaii-btn kawaii-btn-primary" hx-get="/subscriptions/add-modal" hx-target="#modal-content" hx-swap="innerHTML">+ Subscribe</button>
+      <button class="kawaii-btn" hx-get="/downloads/add-modal" hx-target="#modal-content" hx-swap="innerHTML">One-off Download</button>
+      <a class="kawaii-btn" href="/subscriptions/export">Export</a>
+      <button class="kawaii-btn" hx-get="/subscriptions/import-modal" hx-target="#modal-content" hx-swap="innerHTML">Import</button>
+      <button class="kawaii-btn" hx-get="/diagnostics" hx-target="#modal-content" hx-swap="innerHTML">Diagnostics</button>
+      <button class="kawaii-btn" hx-get="/api-keys" hx-target="#modal-content" hx-swap="innerHTML">Keys</button>
+      <button class="kawaii-btn" hx-get="/settings" hx-target="#modal-content" hx-swap="innerHTML">Settings</button>
+      <button class="kawaii-btn" onclick="htmx.trigger(document.body, 'refreshSubs')">Sync Now</button>
+      <button class="kawaii-btn" hx-post="/launch-tui" hx-target="#toast-stack" hx-swap="beforeend">Console UI</button>
+      <button class="kawaii-btn kawaii-btn-danger" hx-get="/shutdown-confirm" hx-target="#modal-content" hx-swap="innerHTML">Shutdown</button>
+    </div>
+    <div id="girly-quick-add-result" style="margin-bottom:0.5rem;"></div>
+    <form hx-post="/subscriptions/quick-add" hx-target="#girly-quick-add-result" hx-swap="innerHTML"
+          hx-on::after-request="if(event.detail.successful) this.reset()"
+          style="display:flex; gap:0.6rem; margin-bottom:1rem;">
+      <input type="text" name="url" required placeholder="Paste a subscription URL to add it&hellip;"
+             class="kawaii-input" style="flex:1;">
+      <input type="hidden" name="hours" value="">
+      <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
+    </form>
+
+    <div id="girly-status-badges" class="kawaii-card" style="margin-bottom:0.25rem;"
+         hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+      loading&hellip;
+    </div>
+
+    <p class="kawaii-section-title">&#128200; Overview</p>
+    <div id="girly-fleet-panel" class="kawaii-stat-grid"
+         hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+
+    <p class="kawaii-section-title">&#128187; System</p>
+    <div class="kawaii-stat-grid">
+      <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+      <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+    </div>
+
+    <p class="kawaii-section-title">&#128202; Queue &amp; Throughput</p>
+    <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+
+    <p class="kawaii-section-title">&#128150; Subscriptions</p>
+    <div id="girly-subs-panel"
+         hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
+         hx-vals="js:{...window.subsTableState}" hx-swap="innerHTML">
+      loading subscriptions&hellip;
+    </div>
+    <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
+
+    <p class="kawaii-section-title">&#128172; Activity Feed</p>
+    <div class="kawaii-card">
+      <div id="girly-log-box">loading activity&hellip;</div>
+    </div>
+
+    <div class="kawaii-art-slot" style="max-width:220px; margin: 2rem auto 0; padding: 1.5rem;">
+      <span style="font-size:2rem;">&#127908;</span>
+      <span>companion illustration slot<br>(swap in real art anytime)</span>
+    </div>
+  </div><!-- /#girly-view -->
 
   <dialog id="modal" class="modal">
     <div class="modal-box max-w-2xl bg-[#030805] border border-[var(--term-dim)] text-[var(--term-green)] rounded-none font-mono" id="modal-content"></div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
+
+  <img id="mascot-corner" class="kawaii-mascot" src="{{ url_for('static', filename='kawaii/mascots/corner-companion.svg') }}" alt="">
 </div>
 
 <script>
+// Theme toggle: "night" (the default terminal/CRT look) vs "kawaii" (pastel re-skin, see
+// static/kawaii/css/kawaii.css). Persisted in localStorage so it survives reloads/restarts of
+// the dashboard; applied immediately on load rather than waiting for DOMContentLoaded so there
+// is no visible flash of the other theme.
+function applyPipelineTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const label = document.getElementById('theme-toggle-label');
+  if (label) label.textContent = theme === 'kawaii' ? 'HACKER MODE' : 'GIRLY MODE';
+  // Theme signal for themed partial routes (see _themed_template() in webui.py): htmx re-reads
+  // an ancestor's hx-headers attribute fresh on every request, so setting it once here on
+  // <body> makes every existing hx-get/hx-post in the page - hacker view AND girly view alike -
+  // automatically carry the current theme, with zero per-element plumbing changes needed.
+  document.body.setAttribute('hx-headers', JSON.stringify({ 'X-Pipeline-Theme': theme }));
+}
+function togglePipelineTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'kawaii' ? 'night' : 'kawaii';
+  localStorage.setItem('pipeline-theme', next);
+  applyPipelineTheme(next);
+}
+applyPipelineTheme(localStorage.getItem('pipeline-theme') || 'night');
+
+// Sort/page state for the subscriptions table - a plain JS object (not Alpine) so htmx's
+// `hx-vals="js:..."` re-reads it fresh on every trigger, including the automatic 2s poll -
+// that's what lets a chosen sort column/page survive each re-poll instead of resetting.
+window.subsTableState = { sort_by: 'id', sort_dir: 'asc', page: 1, page_size: 25, tag: '' };
+function subsSortBy(col) {
+  const st = window.subsTableState;
+  st.sort_dir = (st.sort_by === col && st.sort_dir === 'asc') ? 'desc' : 'asc';
+  st.sort_by = col;
+  st.page = 1;
+  htmx.trigger(document.body, 'subsTableNav');
+}
+function subsGoPage(delta) {
+  window.subsTableState.page = Math.max(1, (window.subsTableState.page || 1) + delta);
+  htmx.trigger(document.body, 'subsTableNav');
+}
+function subsSetPageSize(size) {
+  window.subsTableState.page_size = parseInt(size, 10) || 25;
+  window.subsTableState.page = 1;
+  htmx.trigger(document.body, 'subsTableNav');
+}
+
 document.body.addEventListener('htmx:afterSwap', (e) => {
   if (e.detail.target && e.detail.target.id === 'modal-content') {
     document.getElementById('modal').showModal();
@@ -315,16 +508,35 @@ async function refreshLog() {
     logOffset = d.offset;
     const box = document.getElementById('log-box');
     if (box.dataset.loaded !== '1') { box.textContent = ''; box.dataset.loaded = '1'; }
+    const gbox = document.getElementById('girly-log-box');
+    if (gbox && gbox.dataset.loaded !== '1') { gbox.textContent = ''; gbox.dataset.loaded = '1'; }
     if (d.lines && d.lines.length) {
       const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 10;
+      const gAtBottom = gbox ? (gbox.scrollTop + gbox.clientHeight >= gbox.scrollHeight - 10) : false;
       for (const line of d.lines) {
         const div = document.createElement('div');
         div.textContent = '> ' + line;
         div.className = logLineClass(line);
         box.appendChild(div);
+        if (gbox) {
+          const row = document.createElement('div');
+          row.className = 'kawaii-log-line';
+          const dot = document.createElement('span');
+          dot.className = 'kawaii-log-dot ' + girlyLogDotClass(line);
+          const text = document.createElement('span');
+          text.className = 'kawaii-log-text';
+          text.textContent = line;
+          row.appendChild(dot);
+          row.appendChild(text);
+          gbox.appendChild(row);
+        }
       }
       while (box.childNodes.length > 500) box.removeChild(box.firstChild);
       if (atBottom) box.scrollTop = box.scrollHeight;
+      if (gbox) {
+        while (gbox.childNodes.length > 500) gbox.removeChild(gbox.firstChild);
+        if (gAtBottom) gbox.scrollTop = gbox.scrollHeight;
+      }
     }
   } catch (e) {
     // transient failure - leave whatever's already shown, next poll will catch up
@@ -337,6 +549,14 @@ function logLineClass(line) {
   if (/new file|downloading|downloaded/.test(l)) return 'text-[#39ff88]';
   if (/checking subscription|starting/.test(l)) return 'text-[#39d3ff]';
   return 'text-[#5a8a6c]';
+}
+function girlyLogDotClass(line) {
+  const l = line.toLowerCase();
+  if (/error|traceback|failed|exception/.test(l)) return 'err';
+  if (/warning/.test(l)) return 'warn';
+  if (/new file|downloading|downloaded/.test(l)) return 'new';
+  if (/checking subscription|starting/.test(l)) return 'info';
+  return '';
 }
 refreshLog();
 setInterval(refreshLog, 1500);
@@ -457,7 +677,7 @@ setInterval(refreshLog, 1500);
   }
 
   function draw() {
-    const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2, R = w / 2 - 3;
+    const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2, R = Math.max(0, w / 2 - 3);
     ctx.shadowBlur = 0;
     ctx.clearRect(0, 0, w, h);
 

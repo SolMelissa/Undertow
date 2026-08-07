@@ -1,0 +1,49 @@
+{% if error %}
+<div class="kawaii-empty" style="color: var(--k-danger-text);">daemon unreachable: {{ error }}</div>
+{% endif %}
+<div class="kawaii-subs-list">
+  {% if not subs %}
+  <div class="kawaii-empty">
+    No subscriptions yet &mdash; use Subscribe above, or paste a URL into the quick-add box.
+  </div>
+  {% endif %}
+  {% for s in subs %}
+  <div class="kawaii-sub-row {{ 'active' if s.id == active_id else '' }}"
+       hx-get="/subscriptions/{{ s.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML">
+    <div class="kawaii-sub-main">
+      <div class="kawaii-sub-name">
+        {% if s.id == active_id %}&#9654; {% endif %}{{ s.keywords }}
+      </div>
+      <div class="kawaii-sub-meta">
+        <span>{{ s.downloader }}</span>
+        {% if s.paused %}<span class="kawaii-pill warn"><span class="dot"></span>paused</span>
+        {% elif s.is_due %}<span class="kawaii-pill info"><span class="dot"></span>due now</span>
+        {% else %}<span class="kawaii-pill ok"><span class="dot"></span>active</span>{% endif %}
+        {% if (s.last_result_status or '')|lower == 'ok' %}<span class="kawaii-pill ok"><span class="dot"></span>last check ok</span>
+        {% elif s.last_result_status %}<span class="kawaii-pill bad"><span class="dot"></span>{{ s.last_result_status }}</span>{% endif %}
+        <span>last check {{ s.last_check_display }}</span>
+        <span>next {{ s.next_check_display }}</span>
+        {%- for t in (s.tags or []) %} <span class="kawaii-sub-tag">{{ t }}</span>{% endfor -%}
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div class="kawaii-sub-newfiles" id="g-nf-{{ s.id }}" hx-preserve="true">&hellip;</div>
+      <div class="kawaii-stat-note">new files</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% if meta and meta.total > 0 %}
+<div class="kawaii-pagebar">
+  <div>{{ meta.total }} subscription(s) &middot; page {{ meta.page }} of {{ meta.total_pages }}</div>
+  <div style="display:flex; align-items:center; gap:0.5rem;">
+    <select onchange="subsSetPageSize(this.value)" class="kawaii-select">
+      {% for size in (10, 25, 50, 100) %}
+      <option value="{{ size }}" {{ 'selected' if meta.page_size == size else '' }}>{{ size }}/page</option>
+      {% endfor %}
+    </select>
+    <button class="kawaii-btn" {{ 'disabled' if meta.page <= 1 else '' }} onclick="subsGoPage(-1)">&larr; Prev</button>
+    <button class="kawaii-btn" {{ 'disabled' if meta.page >= meta.total_pages else '' }} onclick="subsGoPage(1)">Next &rarr;</button>
+  </div>
+</div>
+{% endif %}

@@ -10,7 +10,7 @@ import json
 import threading
 from datetime import datetime
 
-from . import api_client, config, services, subscriptions
+from . import alerts, api_client, config, services, settings, subscriptions
 
 
 class Watchdog:
@@ -22,6 +22,14 @@ class Watchdog:
         # id gets logged. Reset (not persisted across app restarts) since the visible watchdog
         # log is itself only ever shown for the current session anyway.
         self._alerted_ids: set[int] = set()
+        # Separate dedup set, keyed by metric name (not subscription id) - a resource breach
+        # clears out of here once usage drops back under threshold, so it can re-alert on a
+        # later re-breach rather than staying silenced forever after the first time.
+        self._alerted_resource_metrics: set[str] = set()
+        # Counts history writes so _maybe_truncate_history only stat()s the file every 50th
+        # write instead of every single cycle - a rolling read-modify-write on every 90s tick
+        # forever is wasted work for a file that only grows a line or two at a time.
+        self._history_write_count = 0
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, name="hydrus-pipeline-watchdog", daemon=True)
@@ -33,7 +41,7 @@ class Watchdog:
     def _run(self) -> None:
         # .wait() with a timeout doubles as the sleep - it returns True immediately if
         # stop() is called, so shutdown doesn't have to wait out a full 90s interval.
-        while not self._stop_event.wait(config.WATCHDOG_INTERVAL_SECONDS):
+        while not self._stop_event.wait(config.get_watchdog_interval_seconds()):
             try:
                 self._check_once()
             except Exception:
@@ -89,6 +97,19 @@ class Watchdog:
             except Exception:
                 pass
 
+        # Resource thresholds - independent of daemon/Hydrus status, so this runs every cycle
+        # regardless of what the blocks above found.
+        try:
+            host_stats = services.get_host_stats()
+            thresholds = settings.load_settings().get("resource_alert_thresholds", {})
+            breaches = services.check_resource_thresholds(host_stats, thresholds)
+            breached_now = set(breaches.keys())
+            for metric in sorted(breached_now - self._alerted_resource_metrics):
+                actions.append(breaches[metric])
+            self._alerted_resource_metrics = breached_now
+        except Exception:
+            pass
+
         status_obj = {
             "LastCheckLocal": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "HydrusRunning": services.get_service_status().hydrus_running,
@@ -105,3 +126,56 @@ class Watchdog:
             print()
             for a in actions:
                 print(f"[watchdog {ts}] {a}")
+            # One batched toast per cycle (not one per action) - see alerts.notify's own
+            # docstring for why a cycle where several things break at once shouldn't spam a
+            # burst of separate balloons.
+            alerts.notify(actions)
+            self._append_history(actions)
+
+    def _append_history(self, actions: list[str]) -> None:
+        """Appends one JSON-Lines entry to WATCHDOG_HISTORY_FILE - unlike WATCHDOG_STATUS_FILE
+        (overwritten every cycle, so it only ever shows the most recent run), this accumulates
+        across cycles so Diagnostics can show a "recent incidents" list, not just a single
+        snapshot."""
+        entry = {"ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "actions": actions}
+        try:
+            config.WATCHDOG_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(config.WATCHDOG_HISTORY_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+        except OSError:
+            return
+        self._history_write_count += 1
+        if self._history_write_count % 50 == 0:
+            self._maybe_truncate_history()
+
+    @staticmethod
+    def _maybe_truncate_history(max_bytes: int = 256 * 1024, keep_lines: int = 500) -> None:
+        try:
+            if config.WATCHDOG_HISTORY_FILE.stat().st_size <= max_bytes:
+                return
+            lines = config.WATCHDOG_HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+            trimmed = lines[-keep_lines:]
+            with open(config.WATCHDOG_HISTORY_FILE, "w", encoding="utf-8") as f:
+                f.write("\n".join(trimmed) + ("\n" if trimmed else ""))
+        except OSError:
+            pass
+
+
+def get_incident_history(limit: int = 20) -> list[dict]:
+    """Returns up to `limit` most recent watchdog incident entries, newest first - each one the
+    same {"ts", "actions"} shape Watchdog._append_history writes. Supplementary display data,
+    same "degrade rather than raise" contract as subscriptions.py's get_latest_checks etc. -
+    returns [] on any read/parse failure (missing file, a corrupt line) instead of erroring
+    Diagnostics out over what's ultimately just a nice-to-have incident log."""
+    try:
+        lines = config.WATCHDOG_HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    entries = []
+    for line in lines[-limit:]:
+        try:
+            entries.append(json.loads(line))
+        except ValueError:
+            continue
+    entries.reverse()
+    return entries

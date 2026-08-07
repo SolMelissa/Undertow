@@ -1,10 +1,10 @@
 <div class="hud-panel">
-  <div class="hud-titlebar">FLEET_STATUS<div class="rule"></div></div>
+  <div class="hud-titlebar">SUBSCRIPTIONS<div class="rule"></div></div>
   <div class="grid grid-cols-2 gap-2 p-2 text-sm">
     <div><div class="text-[10px] tracking-widest text-[#39ff88]">TOTAL</div><div class="text-xl">{{ total }}</div></div>
     <div><div class="text-[10px] tracking-widest text-[#39ff88]">ACTIVE</div><div class="text-xl">{{ active }}</div></div>
     <div><div class="text-[10px] tracking-widest text-[#ffd166]">PAUSED</div><div class="text-xl">{{ paused }}</div></div>
-    <div><div class="text-[10px] tracking-widest text-[#39d3ff]">DUE_NOW</div><div class="text-xl">{{ due }}</div></div>
+    <div><div class="text-[10px] tracking-widest text-[#39d3ff]">DUE NOW</div><div class="text-xl">{{ due }}</div></div>
   </div>
   <div class="flex items-center justify-between px-2 pb-2 pt-1 text-[11px] text-[#ff9d3c] border-t border-[#0d2416]">
     <span class="radar-spin inline-block"></span>
@@ -14,7 +14,7 @@
 </div>
 
 <div class="hud-panel">
-  <div class="hud-titlebar">/proc :: ps -ef<div class="rule"></div></div>
+  <div class="hud-titlebar">SERVICES<div class="rule"></div></div>
   <div class="p-2 text-[11px] flex flex-col gap-0.5">
     {% for p in procs %}
     <div class="flex justify-between gap-2">

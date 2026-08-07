@@ -46,13 +46,20 @@ port it or route setup questions to the Python package.
     "Console UI" button, which runs `tui/__main__.py` directly and skips the startup sequence
     since services are already up by then)
   - `services.py` — start/stop/status/health-check for Hydrus, the hydownloader daemon,
-    systray; host CPU/RAM/disk stats and GPU stats (via `nvidia-smi`, best-effort); hiding/
+    systray; host RAM/disk stats and GPU stats (via `nvidia-smi`, best-effort); hiding/
     showing this process's own console window
   - `subscriptions.py` — add/pause/resume/delete subscriptions, batch import, force-checking a
     subscription now (`force_recheck`) and reading its per-run history (`get_check_history`,
     `get_latest_checks` - the latter also backs the subs table's "New Files" column)
   - `watchdog.py` — background thread that restarts the daemon/systray if they crash (Hydrus
-    itself is never auto-restarted — closing it is assumed deliberate)
+    itself is never auto-restarted — closing it is assumed deliberate); on any restart/alert
+    action it also calls `alerts.notify()`
+  - `alerts.py` — native Windows toast (balloon-tip) notifications for watchdog-detected
+    events, gated by `settings.json`'s `windows_toast_enabled`
+  - `settings.py` — load/save `settings.json` (user-configurable overrides layered on top of
+    `config.py`'s hardcoded defaults — resource alert thresholds, toast toggle, etc.)
+  - `tags.py` — free-form tags on subscriptions (separate from Hydrus's own tagging), used by
+    the subscriptions table's tag column/filter and `tag:` search prefix
   - `api_client.py` — talks to the Hydrus/hydownloader daemon APIs
   - `api_keys.py` — Reddit OAuth + Hydrus Client API key setup
   - `config.py` — all install paths/constants (equivalent of the top of the old PS1)
@@ -62,8 +69,10 @@ port it or route setup questions to the Python package.
   This is user-facing documentation, separate from `PYTHON_PORT_SETUP.md` (which is
   dev-facing: what changed in the port, TUI keybindings, default file caps).
 - **Setup/dev-facing docs for the Python port itself** → `PYTHON_PORT_SETUP.md`.
-- **Dependencies**: `requirements.txt` (`requests`, `psutil`, `pywin32`, `rich`, `flask`,
-  `textual`). Install into `.venv` per `PYTHON_PORT_SETUP.md`, not system Python.
+- **Dependencies**: `requirements.txt`/`pyproject.toml`, both pinned to exact versions
+  (`requests`, `psutil`, `pywin32`, `rich`, `flask`, `textual`) since there's no CI to catch a
+  breaking upstream release. Install into `.venv` per `PYTHON_PORT_SETUP.md`, not system
+  Python.
 - **No automated test suite.** There used to be a pytest suite in `tests/` (plus `pytest.ini`,
   `run_tests.bat`, `requirements-dev.txt`) - it was deliberately removed since it wasn't
   pulling its weight. Verify changes by running the app directly.

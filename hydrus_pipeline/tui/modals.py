@@ -18,7 +18,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, RichLog, Static
 
-from .. import api_client, services, subscriptions
+from .. import api_client, services, subscriptions, watchdog
 from ..subscriptions import add_single_subscription
 from .widgets import ClipboardInput as Input
 
@@ -194,12 +194,12 @@ class RowActionsModal(ModalScreen[bool]):
         )
         if not confirmed:
             return
-        resp = await asyncio.to_thread(api_client.delete_subscriptions, [sub_id])
-        if resp.accepted:
+        ok, error = await asyncio.to_thread(subscriptions.bulk_delete, [sub_id])
+        if ok:
             self.app.notify(f"Subscription #{sub_id} deleted.")
             self.dismiss(True)
         else:
-            self.app.notify(f"Failed: {resp.error or 'daemon rejected the request'}", severity="error")
+            self.app.notify(f"Failed: {error}", severity="error")
 
     def on_key(self, event: events.Key) -> None:
         if event.key == "escape":
@@ -626,6 +626,16 @@ class HealthCheckModal(ModalScreen[None]):
                 lines.append("Its last check took action:")
                 for a in report.watchdog_actions:
                     lines.append(f"  - {escape(a)}")
+
+        incidents = await asyncio.to_thread(watchdog.get_incident_history)
+        lines.append("\nRecent incidents (watchdog):")
+        if not incidents:
+            lines.append("  none recorded yet this install")
+        else:
+            for inc in incidents:
+                lines.append(f"  [dim]{escape(inc.get('ts', ''))}[/]")
+                for a in inc.get("actions", []):
+                    lines.append(f"    - {escape(a)}")
 
         self.query_one("#report", Static).update("\n".join(lines))
         needs_restart = not (s.hydrus_running and s.daemon_running and s.systray_running)

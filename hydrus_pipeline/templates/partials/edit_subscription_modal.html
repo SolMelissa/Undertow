@@ -27,6 +27,10 @@
       <input type="text" name="filter" value="{{ sub.filter or '' }}"
              class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full font-mono">
     </label>
+    <label class="text-xs text-[#8aa0a8]">Tags (comma-separated, local to this dashboard only - not stored in hydownloader)
+      <input type="text" name="tags" value="{{ tags_value or '' }}" placeholder="e.g. favorites, nsfw, low-priority"
+             class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full">
+    </label>
 
     {% if message %}
     <div class="alert {{ 'alert-error' if message_error else 'alert-success' }} py-2 text-sm">{{ message }}</div>

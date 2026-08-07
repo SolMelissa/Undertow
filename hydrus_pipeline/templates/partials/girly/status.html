@@ -1,0 +1,16 @@
+{% macro pill(name, up) %}
+<span class="kawaii-pill {{ 'ok' if up else 'bad' }}">
+  <span class="dot"></span>{{ name }} {{ 'online' if up else 'offline' }}
+</span>
+{% endmacro %}
+<div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
+  {{ pill('Hydrus', status.hydrus_running) }}
+  {{ pill('Downloader', status.daemon_running) }}
+  {{ pill('Tray', status.systray_running) }}
+  {% if not api_ok %}
+  <span class="kawaii-pill bad"><span class="dot"></span>API unreachable</span>
+  {% else %}
+  <span class="kawaii-pill info"><span class="dot"></span>{{ urls_queued }} queued</span>
+  <span class="kawaii-pill info"><span class="dot"></span>{{ subs_due }} due now</span>
+  {% endif %}
+</div>

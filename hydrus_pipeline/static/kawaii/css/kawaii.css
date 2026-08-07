@@ -1,0 +1,372 @@
+/*
+  Kawaii theme - a fully independent "girly mode" dashboard, NOT a recolor of the terminal/CRT
+  cockpit. index.html contains two complete, separate sections in the DOM at all times:
+
+    #hacker-view  - the original terminal cockpit (cockpit-grid / hud-panel / hud-titlebar),
+                    completely untouched by this file.
+    #girly-view   - its own layout: a hero header, a stat-card grid, a labelled SVG chart, a
+                    friendly subscriptions list and activity feed, built from its own markup and
+                    its own component classes (.kawaii-card, .kawaii-stat, .kawaii-pill, etc),
+                    fed by templates/partials/girly/*.html (rendered server-side by the same
+                    Flask routes - see _themed_template() in webui.py) rather than by reskinning
+                    templates/partials/*.html's markup.
+
+  Only one of the two is ever visible - which one is purely a CSS `display` toggle keyed off
+  data-theme="kawaii" on <html> (see applyPipelineTheme() in index.html). Both sections poll in
+  the background regardless of which is visible (same as the existing .kawaii-mascot pattern),
+  which is harmless for a local single-user dashboard and keeps the toggle instant with no
+  re-fetch needed.
+
+  Token system (same palette as before):
+    --k-bg          #fff5f9  page background
+    --k-panel       #fffafc  card background
+    --k-panel-alt   #ffeaf2  inset surfaces / titlebars
+    --k-border      #ffc2dd  hairline borders
+    --k-text        #6b3f57  primary text (deep mauve - AA-contrast on the pinks above)
+    --k-text-dim    #b98aa8  secondary/muted text
+    --k-accent      #ff6fa5  primary accent (buttons, active state, brand)
+    --k-accent-2    #7dd8e0  secondary accent (info values, secondary data)
+    --k-accent-3    #ffb84d  tertiary accent (warnings, disk/orange-role values)
+    --k-danger      #ff5c8a  destructive actions
+    --k-good        #6fd88a  success state
+  Type: display headings in "Baloo 2" (rounded, friendly), body/UI in "Quicksand".
+*/
+
+:root[data-theme="kawaii"] {
+  --k-bg: #fff5f9;
+  --k-panel: #fffafc;
+  --k-panel-alt: #ffeaf2;
+  --k-border: #ffc2dd;
+  --k-text: #6b3f57;
+  --k-text-dim: #b98aa8;
+  --k-accent: #ff6fa5;
+  --k-accent-2: #7dd8e0;
+  --k-accent-3: #ffb84d;
+  --k-danger: #ff5c8a;
+  --k-good: #6fd88a;
+
+  /* Darker "-text" variants of the pastels above, used any time a pastel needs to be legible
+     text/border rather than a large decorative fill (raw --k-accent-2 on --k-panel is ~1.6:1,
+     well under WCAG AA's 4.5:1 body-text minimum - these keep the same hue so it still reads as
+     "the pink one" / "the mint one" at a glance, just deep enough to stay legible). */
+  --k-text-dim-text: #8a5c78;
+  --k-accent-text: #c8377e;
+  --k-accent-2-text: #0f7a82;
+  --k-accent-3-text: #a15e00;
+  --k-danger-text: #d1315e;
+}
+
+[data-theme="kawaii"] body {
+  background: var(--k-bg) !important;
+  color: var(--k-text) !important;
+  font-family: 'Quicksand', 'Segoe UI', sans-serif !important;
+  font-size: 15px !important;
+}
+
+/* --------------------------------------------------------------- top-level view switch
+   Both #hacker-view and #girly-view are always in the DOM (see index.html); only one is
+   ever shown. #hacker-view gets ZERO other rules in this file - it stays pixel-identical to
+   the terminal theme when it's the one visible. */
+#girly-view { display: none; }
+[data-theme="kawaii"] #hacker-view { display: none !important; }
+[data-theme="kawaii"] #girly-view { display: block; }
+
+/* Decorative CRT/matrix-rain chrome lives outside #hacker-view (it's full-viewport background
+   dressing painted behind the whole page), so it needs its own hide rule here rather than
+   riding along with the #hacker-view switch above. #term-banner is likewise outside the view
+   split (it sits above the navbar, shared chrome-wise) but is unambiguously terminal-flavored. */
+[data-theme="kawaii"] #matrix-rain,
+[data-theme="kawaii"] .scanlines,
+[data-theme="kawaii"] .crt-vignette,
+[data-theme="kawaii"] #term-banner {
+  display: none !important;
+}
+
+/* Chrome shared by both themes (navbar/theme-toggle) still gets a light touch so it doesn't
+   look out of place sitting above the girly view. */
+[data-theme="kawaii"] .navbar {
+  background: var(--k-panel) !important;
+  border-bottom: 1px solid var(--k-border) !important;
+}
+[data-theme="kawaii"] #theme-toggle {
+  border-radius: 999px !important;
+  border-color: var(--k-border) !important;
+  color: var(--k-text-dim-text) !important;
+  font-family: 'Quicksand', sans-serif !important;
+}
+[data-theme="kawaii"] #clock { color: var(--k-text-dim-text) !important; }
+
+.kawaii-only { display: none; }
+[data-theme="kawaii"] .kawaii-only { display: inline; }
+[data-theme="kawaii"] .kawaii-hide { display: none !important; }
+
+.kawaii-mascot { display: none; }
+[data-theme="kawaii"] .kawaii-mascot { display: block; }
+[data-theme="kawaii"] #mascot-header { height: 34px; width: 34px; }
+[data-theme="kawaii"] #mascot-corner {
+  position: fixed; right: 18px; bottom: 18px; height: 132px; width: 132px; z-index: 40;
+  filter: drop-shadow(0 6px 14px rgba(255, 111, 165, 0.35));
+  animation: kawaii-bob 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes kawaii-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="kawaii"] #mascot-corner { animation: none; }
+}
+
+/* ==================================================================== #girly-view: layout */
+#girly-view {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 8rem;
+  font-family: 'Quicksand', 'Segoe UI', sans-serif;
+}
+
+.kawaii-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background: linear-gradient(135deg, var(--k-panel-alt), var(--k-panel));
+  border: 1px solid var(--k-border);
+  border-radius: 24px;
+  padding: 1.75rem 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 18px rgba(255, 111, 165, 0.12);
+}
+.kawaii-hero-art {
+  flex: 0 0 auto;
+  width: 96px; height: 96px;
+  display: flex; align-items: center; justify-content: center;
+}
+.kawaii-hero-art img { width: 96px; height: 96px; }
+.kawaii-hero-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: 2rem;
+  color: var(--k-accent-text);
+  margin: 0;
+}
+.kawaii-hero-sub {
+  color: var(--k-text-dim-text);
+  font-size: 1rem;
+  margin-top: 0.15rem;
+}
+.kawaii-hero-spacer { flex: 1; }
+
+/* Placeholder art slot - deliberately obvious, not pretending real art exists yet. Used for the
+   corner-companion enlargement and any future empty-state illustration slots. */
+.kawaii-art-slot {
+  border: 2px dashed var(--k-border);
+  border-radius: 18px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--k-text-dim-text);
+  font-size: 0.85rem;
+  text-align: center;
+  gap: 0.35rem;
+  padding: 1rem;
+}
+
+.kawaii-section-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--k-text);
+  margin: 1.75rem 0 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ------------------------------------------------------------------------- action button row */
+.kawaii-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.kawaii-btn {
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: #fff;
+  border: 1.5px solid var(--k-accent-text);
+  color: var(--k-accent-text);
+  padding: 0.55rem 1.15rem;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(255, 111, 165, 0.15);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.kawaii-btn:hover { background: var(--k-accent-text); color: #fff; transform: translateY(-1px); }
+.kawaii-btn-danger { border-color: var(--k-danger-text); color: var(--k-danger-text); }
+.kawaii-btn-danger:hover { background: var(--k-danger-text); color: #fff; }
+.kawaii-btn-primary { background: var(--k-accent-text); color: #fff; }
+.kawaii-btn-primary:hover { background: var(--k-accent); }
+
+.kawaii-input {
+  font-family: 'Quicksand', sans-serif;
+  background: #fff;
+  border: 1.5px solid var(--k-border);
+  color: var(--k-text);
+  border-radius: 999px;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.95rem;
+}
+.kawaii-input:focus { outline: none; border-color: var(--k-accent-text); }
+
+/* -------------------------------------------------------------------------------- stat cards */
+.kawaii-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1rem;
+}
+.kawaii-card {
+  background: var(--k-panel);
+  border: 1px solid var(--k-border);
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(255, 111, 165, 0.10);
+  padding: 1.25rem 1.4rem;
+}
+.kawaii-stat-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--k-text-dim-text);
+  margin-bottom: 0.3rem;
+}
+.kawaii-stat-value {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: 2.1rem;
+  line-height: 1.1;
+  color: var(--k-text);
+}
+.kawaii-stat-value.accent { color: var(--k-accent-text); }
+.kawaii-stat-value.info { color: var(--k-accent-2-text); }
+.kawaii-stat-value.warn { color: var(--k-accent-3-text); }
+.kawaii-stat-value.danger { color: var(--k-danger-text); }
+.kawaii-stat-note { font-size: 0.82rem; color: var(--k-text-dim-text); margin-top: 0.15rem; }
+
+/* progress bars (RAM/disk/GPU) */
+.kawaii-bar-track {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--k-panel-alt);
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+.kawaii-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--k-accent), var(--k-accent-2));
+}
+.kawaii-bar-fill.warn { background: linear-gradient(90deg, var(--k-accent-3), var(--k-danger)); }
+
+/* pills (status, service up/down) */
+.kawaii-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid var(--k-border);
+}
+.kawaii-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.kawaii-pill.ok { color: #2f7d4d; border-color: #bdeecb; background: #eefcf1; }
+.kawaii-pill.bad { color: var(--k-danger-text); border-color: #ffcdd9; background: #fff0f4; }
+.kawaii-pill.warn { color: var(--k-accent-3-text); border-color: #ffe2b3; background: #fff8ec; }
+.kawaii-pill.info { color: var(--k-accent-2-text); border-color: #c9eff2; background: #f0fbfc; }
+
+/* ------------------------------------------------------------------------------------- chart */
+.kawaii-chart-card { padding: 1.4rem 1.6rem; }
+.kawaii-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--k-text-dim-text);
+}
+.kawaii-chart-legend .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 0.35rem; }
+.kawaii-axis-label {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 9px;
+  fill: var(--k-text-dim-text);
+}
+
+/* --------------------------------------------------------------------------- subscriptions */
+.kawaii-subs-list { display: flex; flex-direction: column; gap: 0.65rem; }
+.kawaii-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--k-panel);
+  border: 1px solid var(--k-border);
+  border-radius: 16px;
+  padding: 0.85rem 1.2rem;
+  cursor: pointer;
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+.kawaii-sub-row:hover { box-shadow: 0 4px 14px rgba(255, 111, 165, 0.18); transform: translateY(-1px); }
+.kawaii-sub-row.active { border-color: var(--k-accent); background: #fff5fa; }
+.kawaii-sub-main { flex: 1; min-width: 0; }
+.kawaii-sub-name {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: 1.02rem;
+  color: var(--k-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kawaii-sub-meta { font-size: 0.8rem; color: var(--k-text-dim-text); margin-top: 0.15rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.kawaii-sub-tag {
+  font-size: 0.7rem; font-weight: 600; padding: 0.1rem 0.55rem; border-radius: 999px;
+  background: var(--k-panel-alt); color: var(--k-accent-text); border: 1px solid var(--k-border);
+}
+.kawaii-sub-newfiles { font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 1.3rem; color: var(--k-accent-text); min-width: 2.5rem; text-align: right; }
+.kawaii-empty { text-align: center; color: var(--k-text-dim-text); padding: 2rem 1rem; }
+
+.kawaii-pagebar {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  margin-top: 0.85rem; font-size: 0.85rem; color: var(--k-text-dim-text);
+}
+.kawaii-select {
+  font-family: 'Quicksand', sans-serif; border-radius: 999px; border: 1.5px solid var(--k-border);
+  background: #fff; color: var(--k-text); padding: 0.3rem 0.8rem; font-size: 0.85rem;
+}
+
+/* ------------------------------------------------------------------------------ activity feed */
+#girly-log-box {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  max-height: 20rem; overflow-y: auto;
+  font-family: 'Quicksand', sans-serif; font-size: 0.88rem;
+}
+.kawaii-log-line {
+  display: flex; align-items: flex-start; gap: 0.55rem;
+  padding: 0.5rem 0.75rem; border-radius: 12px; background: var(--k-panel-alt);
+}
+.kawaii-log-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; margin-top: 0.4rem; background: var(--k-text-dim-text); }
+.kawaii-log-dot.err { background: var(--k-danger-text); }
+.kawaii-log-dot.warn { background: var(--k-accent-3-text); }
+.kawaii-log-dot.new { background: var(--k-good); }
+.kawaii-log-dot.info { background: var(--k-accent-2-text); }
+.kawaii-log-text { flex: 1; word-break: break-word; color: var(--k-text); }
+
+/* scrollbars inside the girly view */
+[data-theme="kawaii"] #girly-view ::-webkit-scrollbar-thumb { background: var(--k-border); }
+[data-theme="kawaii"] #girly-view ::-webkit-scrollbar-track { background: var(--k-bg); }
+
+@media (max-width: 640px) {
+  .kawaii-hero { flex-wrap: wrap; text-align: center; justify-content: center; }
+  .kawaii-hero-spacer { display: none; }
+}

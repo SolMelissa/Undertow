@@ -2,3 +2,15 @@ __pycache__/
 *.pyc
 *.stackdump
 .venv/
+
+# IDE
+.vscode/
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Build output / packaged binaries
+*.exe
+*.exe.WebView2/
+launcher/bin/
+launcher/obj/

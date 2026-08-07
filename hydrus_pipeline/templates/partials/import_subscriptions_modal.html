@@ -1,0 +1,36 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">IMPORT SUBSCRIPTIONS</div>
+  <p class="text-xs text-[#8aa0a8]">
+    Upload a JSON file produced by EXPORT (or hand-written, with at least "downloader" and
+    "keywords" per entry). Already-subscribed downloader/keywords pairs are skipped by default.
+  </p>
+  <form hx-post="/subscriptions/import" hx-target="#modal-content" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex flex-col gap-2">
+    <input type="file" name="file" required accept="application/json,.json"
+           class="file-input file-input-sm bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
+    <label class="text-xs text-[#8aa0a8] flex items-center gap-2">
+      <input type="checkbox" name="allow_duplicate" value="true" class="checkbox checkbox-xs">
+      Import anyway even if already subscribed (adds a second, separate subscription)
+    </label>
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('modal').close()">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Import</button>
+    </div>
+  </form>
+
+  {% if message %}
+  <div class="alert {{ 'alert-error' if message_error else 'alert-success' }} py-2 text-sm">{{ message }}</div>
+  {% endif %}
+
+  {% if results %}
+  <div class="mt-2 border border-[#17323a] rounded p-2 max-h-56 overflow-y-auto text-xs font-mono flex flex-col gap-1">
+    {% for r in results %}
+    <div class="{{ {'Added': 'text-[#39ff88]', 'Skipped': 'text-[#ffd166]', 'Failed': 'text-[#ff4f6d]'}.get(r.status, 'text-[#d8f6ff]') }}">
+      {{ r.status }} — {{ r.label }}<br>
+      <span class="text-[#8aa0a8]">{{ r.detail }}</span>
+      {% if r.restarted_daemon %}<br><span class="text-[#39ff88]">new site - daemon restarted automatically to activate its worker thread</span>{% endif %}
+      {% if r.restart_error %}<br><span class="text-[#ffd166]">added, but the automatic restart failed: {{ r.restart_error }} - check Diagnostics</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>

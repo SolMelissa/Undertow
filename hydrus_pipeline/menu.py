@@ -17,6 +17,7 @@ in scope for this port).
 
 from __future__ import annotations
 
+import os
 import threading
 
 from . import services, subscriptions
@@ -93,7 +94,10 @@ def main() -> None:
 
     from . import webui
 
-    port = webui.run_webui(open_browser=True)
+    # Set by HydrusPipelineLauncher.cs when it's about to show the dashboard in its own
+    # WebView2 frame - skips opening a redundant browser tab alongside the app window.
+    open_browser = os.environ.get("HYDRUS_PIPELINE_NO_BROWSER") != "1"
+    port = webui.run_webui(open_browser=open_browser)
     if port is None:
         print("  'flask' isn't installed (pip install -r requirements.txt) - falling back to the console UI.")
         from .tui.app import PipelineApp

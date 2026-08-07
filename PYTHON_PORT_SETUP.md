@@ -15,18 +15,28 @@ we hit actually lived.
 
 ## One-time setup
 
-Open a terminal (PowerShell or Command Prompt) in this folder (`C:\0Docs\AI\Claude\The Pipeline`)
-and run:
+This folder lives at `F:\Apple\iCloudDrive\0Docs\AI\Claude\The Pipeline` (it used to be
+`C:\0Docs\AI\Claude\The Pipeline`). Only this app moved - the Hydrus install, the
+hydownloader clone, and all databases and media stay at `%USERPROFILE%\HydrusPipeline`,
+which is what `hydrus_pipeline/config.py` still points at.
+
+Because the folder is now cloud-synced, the venv lives **outside** it. Open a terminal
+(PowerShell or Command Prompt) in this folder and run:
 
 ```
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+python -m venv "%LOCALAPPDATA%\HydrusPipeline\venv"
+"%LOCALAPPDATA%\HydrusPipeline\venv\Scripts\pip" install -r requirements.txt
 ```
+
+A venv is thousands of small files plus native binaries - kept inside an iCloud folder it
+causes constant sync churn, and the sync client can evict or half-write `python.exe`/`*.pyd`
+and break the launcher in confusing ways. `run.bat` still checks for an in-folder `.venv`
+first, so the old layout keeps working if you'd rather go back to it.
 
 Then recreate the Desktop shortcut so it points at the new launcher instead of PowerShell:
 
 ```
-.venv\Scripts\python -m hydrus_pipeline.shortcut
+"%LOCALAPPDATA%\HydrusPipeline\venv\Scripts\python" -m hydrus_pipeline.shortcut
 ```
 
 This overwrites the existing "Hydrus Pipeline" Desktop shortcut in place - same name, same
@@ -88,7 +98,7 @@ palette):
 | `q` | Quit - shuts down anything idle, leaves anything busy running (same as before) |
 
 The web dashboard now has considerably more than the TUI ever exposed directly in a browser -
-the same subscription table/actions/diagnostics/API-key setup, plus host CPU/RAM/disk/GPU
+the same subscription table/actions/diagnostics/API-key setup, plus host RAM/disk/GPU
 stats, a daemon API call-traffic widget, and per-process network connections - see the
 dashboard's own UI or [`README.md`](README.md) rather than this doc for what's current there.
 

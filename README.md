@@ -55,7 +55,7 @@ The last command (re)creates the "Hydrus Pipeline" Desktop shortcut pointing at 
 `http://127.0.0.1:8765` in your browser: real-time Hydrus/daemon/systray status, the
 subscriptions table (click a row to pause/resume/delete/force-check/view history), a
 quick-subscribe bar, a live-colorized tail of hydownloader's log, and a column of instrument
-panels (fleet counts, per-site activity, host CPU/RAM/disk/GPU, daemon API call stats).
+panels (fleet counts, per-site activity, host RAM/disk/GPU, daemon API call stats).
 
 Command bar buttons (top of the page): **Subscribe**, **One-off** URL download,
 **Diag**nostics, API **Keys**, bring **Hydrus**/**Tray** to the front, **Sync** (refresh now),
@@ -109,7 +109,7 @@ hydrus_pipeline/
                      dashboard and hide the console (falls back to the TUI if flask is missing)
   config.py         all install paths/constants (equivalent of the old PS1's path variables)
   services.py       start/stop/status/health-check for Hydrus, the daemon, the systray;
-                     host CPU/RAM/disk/GPU + top-process stats; hide/show this process's console
+                     host RAM/disk/GPU + top-process CPU stats; hide/show this process's console
   subscriptions.py  add/pause/resume/delete subscriptions, batch import, force-recheck, history
   api_client.py     thin HTTP client for the hydownloader daemon's own API (tracks call stats)
   watchdog.py       background thread that restarts the daemon/systray if either crashes

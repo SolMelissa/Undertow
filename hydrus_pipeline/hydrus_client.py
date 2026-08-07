@@ -42,7 +42,7 @@ def get_hydrus_api_info() -> tuple[HydrusApiInfo | None, str | None]:
     ok, key = api_keys.get_hydrus_key_status()
     if not ok or not key:
         return None, "no Hydrus Client API key configured yet - see the API Keys panel"
-    return HydrusApiInfo(base_url=config.HYDRUS_API_URL, access_key=key), None
+    return HydrusApiInfo(base_url=config.get_hydrus_api_url(), access_key=key), None
 
 
 def invoke_hydrus_api(route: str, params: dict | None = None, timeout: float = 8) -> ApiResult:

@@ -230,7 +230,125 @@ def get_active_worker_ids() -> set[str] | None:
     return set(separate.keys())
 
 
+def ensure_veracrypt_drive_mounted(timeout: float = 45.0) -> bool:
+    """Makes sure the VeraCrypt volume holding the Hydrus media library is mounted at
+    config.HYDRUS_VOLUME_DRIVE (A:) before anything tries to use it. Doesn't know or need the
+    volume's path or password - it just asks VeraCrypt to mount its own configured "System
+    Favorite Volumes" (/a favorites), which is what /q background does silently; VeraCrypt
+    itself pops its password prompt if the volume isn't already cached. Returns True once the
+    drive is confirmed accessible (including if it already was), False if it's still missing
+    after `timeout` seconds."""
+    drive_root = Path(config.HYDRUS_VOLUME_DRIVE + "\\")
+    if drive_root.exists():
+        return True
+
+    veracrypt_exe = config.find_veracrypt_exe()
+    if not veracrypt_exe:
+        print(f"  {config.HYDRUS_VOLUME_DRIVE} isn't mounted and VeraCrypt wasn't found - mount it manually.")
+        return False
+
+    print(f"  {config.HYDRUS_VOLUME_DRIVE} isn't mounted - asking VeraCrypt to mount its favorite volumes...")
+    subprocess.Popen([str(veracrypt_exe), "/q", "background", "/a", "favorites"])
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if drive_root.exists():
+            print(f"  {config.HYDRUS_VOLUME_DRIVE} is mounted.")
+            return True
+        time.sleep(2)
+
+    print(f"  {config.HYDRUS_VOLUME_DRIVE} still isn't mounted after {timeout:.0f}s - "
+          "check VeraCrypt for a password prompt or mount it manually.")
+    return False
+
+
+def dismount_veracrypt_drive(timeout: float = 20.0) -> bool:
+    """Dismounts config.HYDRUS_VOLUME_DRIVE (A:) via `VeraCrypt.exe /q /dismount /force`.
+    Used by the "close the app window" flow below, not by the dashboard's regular Shutdown
+    button - that one deliberately leaves Hydrus and the volume alone. Returns True once the
+    drive is confirmed gone (including if it was never mounted), False if it's still there
+    after `timeout` seconds."""
+    drive_root = Path(config.HYDRUS_VOLUME_DRIVE + "\\")
+    if not drive_root.exists():
+        return True
+
+    veracrypt_exe = config.find_veracrypt_exe()
+    if not veracrypt_exe:
+        print(f"  VeraCrypt wasn't found - can't dismount {config.HYDRUS_VOLUME_DRIVE} automatically.")
+        return False
+
+    print(f"  Dismounting {config.HYDRUS_VOLUME_DRIVE}...")
+    subprocess.Popen([str(veracrypt_exe), "/q", "/dismount", config.HYDRUS_VOLUME_DRIVE, "/force"])
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not drive_root.exists():
+            print(f"  {config.HYDRUS_VOLUME_DRIVE} dismounted.")
+            return True
+        time.sleep(1)
+
+    print(f"  {config.HYDRUS_VOLUME_DRIVE} still mounted after {timeout:.0f}s - dismount it manually.")
+    return False
+
+
+def stop_everything() -> None:
+    """Unlike stop_idle_components (which leaves a busy daemon and Hydrus itself running -
+    Hydrus is never auto-closed there since that's meant to be a deliberate, separate choice),
+    this stops the daemon unconditionally, closes the systray, force-closes Hydrus itself, and
+    dismounts the VeraCrypt volume. Used only when the WebView2 app frame's window is closed -
+    that's a stronger "I'm done for the day" signal than the dashboard's own Shutdown button."""
+    print()
+    print("Closing everything down...")
+
+    daemon = find_hydownloader_daemon_proc()
+    if daemon:
+        print("  stopping hydownloader daemon (including any in-progress downloads)...")
+        api_shutdown()  # Best-effort graceful request; force-killed below regardless of result.
+        try:
+            children = daemon.children(recursive=True)  # gallery-dl etc. worker subprocesses
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            children = []
+        try:
+            daemon.wait(timeout=5)
+        except (psutil.NoSuchProcess, psutil.TimeoutExpired):
+            for proc in [daemon, *children]:
+                try:
+                    proc.terminate()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            _, alive = psutil.wait_procs([daemon, *children], timeout=5)
+            for proc in alive:
+                try:
+                    proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+    systray = find_process_by_name("hydownloader-systray.exe")
+    if systray:
+        print("  closing hydownloader systray...")
+        try:
+            systray.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    hydrus = find_process_by_name("hydrus_client.exe")
+    if hydrus:
+        print("  closing Hydrus...")
+        try:
+            hydrus.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+        try:
+            hydrus.wait(timeout=15)
+        except (psutil.NoSuchProcess, psutil.TimeoutExpired):
+            pass
+
+    dismount_veracrypt_drive()
+
+
 def start_required_services() -> None:
+    ensure_veracrypt_drive_mounted()
+
     status = get_service_status()
 
     if not status.hydrus_running:
@@ -481,29 +599,75 @@ def get_health_report() -> HealthReport:
     )
 
 
-def get_host_stats() -> dict:
-    """CPU/RAM/disk for the machine this pipeline runs on - real numbers straight from
-    psutil, for the web dashboard's HOST widget.
+def get_hydrus_storage_disk_usage() -> dict | None:
+    """Real free/used/total space across every drive Hydrus actually stores files on, not just
+    the drive this app happens to be installed on. Hydrus supports splitting client_files
+    across multiple locations (see /get_files/local_file_storage_locations), each of which can
+    be its own physical drive - psutil.disk_usage() on a single fixed path (the old behavior,
+    checking config.INSTALL_ROOT's drive) told you nothing about where the actual media
+    library lives once that's the case. Dedupes by drive anchor (e.g. "A:\\") before summing so
+    two Hydrus storage locations on the same physical drive aren't double-counted. Returns None
+    if Hydrus's API isn't reachable (no key configured, Hydrus not running, ...) - callers
+    should fall back to not showing a disk widget rather than a wrong one."""
+    result = hydrus_client.invoke_hydrus_api("/get_files/local_file_storage_locations")
+    if not result.success or not result.data:
+        return None
+    locations = result.data.get("locations") or []
+    drives = {Path(loc["path"]).anchor for loc in locations if loc.get("path")}
+    if not drives:
+        return None
+    used = total = 0
+    for drive in drives:
+        try:
+            du = psutil.disk_usage(drive)
+        except OSError:
+            continue  # drive not currently reachable (unplugged external, disconnected share, ...)
+        used += du.used
+        total += du.total
+    if total == 0:
+        return None
+    return {"disk_pct": used / total * 100, "disk_used_gb": used / 1e9, "disk_total_gb": total / 1e9}
 
-    cpu_percent(interval=None) (the "compare against whenever this was last called anywhere"
-    mode) is what the previous version of this function used, and it's exactly why CPU% sat
-    pinned at 0% or 100%: several different endpoints (hoststats, top-procs priming, and any
-    other code that happens to call a psutil cpu function) all share that one global last-call
-    timestamp, so with multiple browser tabs/widgets polling concurrently the gap between calls
-    could shrink to a few milliseconds - and a percentage computed over a few milliseconds is
-    essentially just "was a core busy in this instant", i.e. 0 or 100, not a meaningful average.
-    Passing a real interval makes this call take its own independent before/after measurement
-    over that window regardless of what anything else is doing, which is what actually fixes it
-    - at the cost of blocking this request for that long, which is fine at a several-second
-    poll cadence."""
-    cpu_pct = psutil.cpu_percent(interval=0.2)
+
+def get_host_stats() -> dict:
+    """RAM + real Hydrus-storage disk usage for the web dashboard's HOST widget. Deliberately
+    does not include CPU% - on this machine CPU sits elevated most of the time regardless of
+    what the pipeline is doing, so it was never a useful signal here and just added visual
+    noise/false alarms to the resource-alert thresholds below."""
     vm = psutil.virtual_memory()
-    disk = psutil.disk_usage(config.INSTALL_ROOT.anchor)
-    return {
-        "cpu_pct": cpu_pct,
+    stats = {
         "mem_pct": vm.percent, "mem_used_gb": vm.used / 1e9, "mem_total_gb": vm.total / 1e9,
-        "disk_pct": disk.percent, "disk_used_gb": disk.used / 1e9, "disk_total_gb": disk.total / 1e9,
+        "disk_pct": None, "disk_used_gb": None, "disk_total_gb": None,
     }
+    disk = get_hydrus_storage_disk_usage()
+    if disk is not None:
+        stats.update(disk)
+    return stats
+
+
+# get_host_stats() calls the RAM metric "mem_pct" (matching psutil's own virtual_memory().percent
+# naming), but settings.py/the Settings page call the user-facing threshold "ram_pct" (reads
+# better in a form label) - this is the one place that mapping has to be spelled out.
+_THRESHOLD_TO_HOST_KEY = {"disk_pct": "disk_pct", "ram_pct": "mem_pct"}
+
+
+def check_resource_thresholds(host_stats: dict, thresholds: dict) -> dict[str, str]:
+    """Returns {metric_name: message} for every metric in `thresholds` currently at or above
+    its configured percentage - pure logic over the already-existing get_host_stats() output,
+    no new data-gathering. `metric_name` matches settings.json's resource_alert_thresholds keys
+    (disk_pct/ram_pct), which is what watchdog.py's own per-metric dedup set keys on.
+    A metric missing from `thresholds` or `host_stats` (e.g. GPU-only stats, which this doesn't
+    cover) is silently skipped rather than treated as a breach."""
+    breaches: dict[str, str] = {}
+    for metric, host_key in _THRESHOLD_TO_HOST_KEY.items():
+        threshold = thresholds.get(metric)
+        value = host_stats.get(host_key)
+        if threshold is None or value is None:
+            continue
+        if value >= threshold:
+            label = metric.replace("_pct", "").upper()
+            breaches[metric] = f"{label} usage at {value:.1f}% (threshold {threshold:.0f}%)"
+    return breaches
 
 
 _GPU_UNAVAILABLE_LOGGED = False

@@ -19,6 +19,8 @@ route here returns a Jinja2-rendered template fragment straight from hydrus_pipe
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
 import os
 import re
 import subprocess
@@ -30,13 +32,13 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-from . import api_client, api_keys, hydrus_client, logtail, services, subscriptions
+from . import api_client, api_keys, hydrus_client, logtail, services, settings, subscriptions, tags, watchdog
 from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 try:
-    from flask import Flask, jsonify, render_template, request
+    from flask import Flask, Response, jsonify, render_template, request
     HAVE_FLASK = True
 except ImportError:
     HAVE_FLASK = False
@@ -210,6 +212,25 @@ def _build_dual_line(pairs: list[tuple[int, int]]) -> dict | None:
     }
 
 
+def _girly_theme() -> bool:
+    """Theme signal for partial routes that render differently per-theme. The girly layout in
+    index.html sets `document.body`'s hx-headers to {"X-Pipeline-Theme": "kawaii"} whenever the
+    user switches themes (see applyPipelineTheme() in index.html) - htmx re-reads an ancestor's
+    hx-headers attribute fresh on every request, so every existing hx-get/hx-post in the page
+    automatically carries the current theme with zero per-element plumbing. Terminal mode never
+    sets this header (or clears it back to "night"), so its polling is completely unaffected."""
+    return (request.headers.get("X-Pipeline-Theme") or "") == "kawaii"
+
+
+def _themed_template(name: str) -> str:
+    """`name` like "fleet.html" -> "partials/girly/fleet.html" in kawaii mode, else
+    "partials/name" - the one place that picks which of the two independent partial sets (see
+    templates/partials/ vs templates/partials/girly/) a themed route renders from."""
+    if _girly_theme():
+        return f"partials/girly/{name}"
+    return f"partials/{name}"
+
+
 if HAVE_FLASK:
     # Routes are only registered when Flask actually imported - `app` is None otherwise, and
     # @app.route on None would blow up at import time for every other module in this package
@@ -245,7 +266,7 @@ if HAVE_FLASK:
         # ticking pointlessly every poll. Pure flavor, but grounded in real state.
         sig_input = f"{ctx['sub_status']}{ctx['url_status']}{ctx['urls_queued']}{ctx['subs_due']}{svc.hydrus_pid}{svc.daemon_pid}"
         ctx["sig"] = hashlib.sha1(sig_input.encode()).hexdigest()[:8]
-        return render_template("partials/status.html", **ctx)
+        return render_template(_themed_template("status.html"), **ctx)
 
     @app.route("/partials/fleet")
     def partial_fleet():
@@ -264,7 +285,7 @@ if HAVE_FLASK:
         ]
 
         return render_template(
-            "partials/fleet.html",
+            _themed_template("fleet.html"),
             total=counts["total"], active=counts["active"], paused=counts["paused"], due=counts["due"],
             uptime=f"{h:02}:{m:02}:{sec:02}", procs=procs,
         )
@@ -284,15 +305,19 @@ if HAVE_FLASK:
 
     @app.route("/partials/queue-graph")
     def partial_queue_graph():
-        return render_template("partials/queue_graph.html", graph=_build_dual_line(list(_activity_history)))
+        return render_template(_themed_template("queue_graph.html"), graph=_build_dual_line(list(_activity_history)))
 
     @app.route("/partials/netstat")
     def partial_netstat():
-        return render_template("partials/netstat.html", stats=api_client.get_call_stats())
+        return render_template(_themed_template("netstat.html"), stats=api_client.get_call_stats())
 
     @app.route("/partials/hoststats")
     def partial_hoststats():
-        return render_template("partials/hoststats.html", host=services.get_host_stats(), gpu=services.get_gpu_stats())
+        host = services.get_host_stats()
+        thresholds = settings.load_settings().get("resource_alert_thresholds", {})
+        breaches = services.check_resource_thresholds(host, thresholds)
+        banner = "; ".join(breaches.values()) if breaches else None
+        return render_template(_themed_template("hoststats.html"), host=host, gpu=services.get_gpu_stats(), banner=banner)
 
     @app.route("/partials/topprocs")
     def partial_topprocs():
@@ -308,17 +333,34 @@ if HAVE_FLASK:
 
     @app.route("/partials/subscriptions")
     def partial_subscriptions():
+        sort_by = request.args.get("sort_by") or "id"
+        sort_dir = request.args.get("sort_dir") or "asc"
+        page = request.args.get("page", 1, type=int) or 1
+        page_size = request.args.get("page_size", 25, type=int) or 25
+        tag_query = (request.args.get("tag") or "").strip().lower()
+
         subs_resp = api_client.get_subscriptions()
         status_resp = api_client.get_status_info()
         active_id = _active_sub_id(status_resp.data if status_resp.success else None)
         if subs_resp.success:
-            subs = sorted(subs_resp.data or [], key=lambda s: s.get("id", 0))
+            all_subs = subs_resp.data or []
+            tags_by_id = tags.load_tags()
+            if tag_query:
+                all_subs = [s for s in all_subs if any(tag_query in t.lower() for t in tags_by_id.get(s.get("id"), []))]
+            totals = None
+            if sort_by == "total_dls":
+                ids = [s.get("id") for s in all_subs if s.get("id") is not None]
+                totals = subscriptions.get_total_downloads(ids) if ids else {}
+            ordered = subscriptions.sort_subscriptions(all_subs, sort_by, sort_dir, totals=totals)
+            subs, meta = subscriptions.paginate(ordered, page, page_size)
+            meta["sort_by"], meta["sort_dir"] = sort_by, sort_dir
             for s in subs:
                 s["last_check_display"] = _format_last_check_column(s)
                 s["check_interval_display"] = _format_check_interval_column(s)
                 s["next_check_display"] = _format_next_check(s)
-            return render_template("partials/subs_table.html", subs=subs, active_id=active_id, error=None)
-        return render_template("partials/subs_table.html", subs=[], active_id=None, error=subs_resp.error)
+                s["tags"] = tags_by_id.get(s.get("id"), [])
+            return render_template(_themed_template("subs_table.html"), subs=subs, active_id=active_id, error=None, meta=meta)
+        return render_template(_themed_template("subs_table.html"), subs=[], active_id=None, error=subs_resp.error, meta=None)
 
     @app.route("/partials/new-files")
     def partial_new_files():
@@ -389,6 +431,46 @@ if HAVE_FLASK:
         headers = {"HX-Trigger": "refreshSubs"} if added_any else {}
         return render_template("partials/add_subscription_modal.html", results=results, urls_value="", hours_value=hours), 200, headers
 
+    # ---------------------------------------------------------------- subscriptions: export/import
+
+    @app.route("/subscriptions/export")
+    def export_subscriptions():
+        payload = json.dumps(subscriptions.export_subscriptions(), indent=2)
+        filename = f"hydrus-pipeline-subscriptions-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+        return Response(
+            payload, mimetype="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    @app.route("/subscriptions/import-modal")
+    def import_subscriptions_modal():
+        return render_template("partials/import_subscriptions_modal.html", results=None)
+
+    @app.route("/subscriptions/import", methods=["POST"])
+    def import_subscriptions_route():
+        upload = request.files.get("file")
+        if not upload or not upload.filename:
+            return render_template("partials/import_subscriptions_modal.html", results=None, message="Choose a file to import.", message_error=True)
+        try:
+            entries = json.loads(upload.read().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            return render_template("partials/import_subscriptions_modal.html", results=None, message=f"Not a valid export file: {e}", message_error=True)
+        if not isinstance(entries, list):
+            return render_template("partials/import_subscriptions_modal.html", results=None, message="Not a valid export file: expected a JSON list.", message_error=True)
+
+        allow_duplicate = (request.form.get("allow_duplicate") or "") == "true"
+        results = subscriptions.import_subscriptions(entries, allow_duplicate=allow_duplicate)
+        rows = [
+            {
+                "label": f"{e.get('downloader', '?')} / {e.get('keywords', '?')}",
+                "status": r.status, "detail": r.detail,
+                "restarted_daemon": r.restarted_daemon, "restart_error": r.restart_error,
+            }
+            for e, r in zip(entries, results)
+        ]
+        headers = {"HX-Trigger": "refreshSubs"} if any(r.status == "Added" for r in results) else {}
+        return render_template("partials/import_subscriptions_modal.html", results=rows), 200, headers
+
     # ---------------------------------------------------------------- one-off downloads
 
     @app.route("/downloads/add-modal")
@@ -437,7 +519,10 @@ if HAVE_FLASK:
         sub, error_resp = _require_sub(sub_id)
         if error_resp:
             return error_resp
-        return render_template("partials/edit_subscription_modal.html", sub=sub, message=None)
+        return render_template(
+            "partials/edit_subscription_modal.html", sub=sub, message=None,
+            tags_value=", ".join(tags.get_tags_for(sub_id)),
+        )
 
     @app.route("/subscriptions/<int:sub_id>/edit", methods=["POST"])
     def edit_subscription(sub_id: int):
@@ -445,9 +530,12 @@ if HAVE_FLASK:
         if error_resp:
             return error_resp
 
+        def _tags_value() -> str:
+            return ", ".join(tags.get_tags_for(sub_id))
+
         keywords = (request.form.get("keywords") or "").strip()
         if not keywords:
-            return render_template("partials/edit_subscription_modal.html", sub=sub, message="Keywords can't be empty.", message_error=True)
+            return render_template("partials/edit_subscription_modal.html", sub=sub, message="Keywords can't be empty.", message_error=True, tags_value=_tags_value())
 
         hours_raw = (request.form.get("hours") or "").strip()
         try:
@@ -455,7 +543,7 @@ if HAVE_FLASK:
             if hours <= 0:
                 raise ValueError
         except ValueError:
-            return render_template("partials/edit_subscription_modal.html", sub=sub, message="Check interval must be a positive number of hours.", message_error=True)
+            return render_template("partials/edit_subscription_modal.html", sub=sub, message="Check interval must be a positive number of hours.", message_error=True, tags_value=_tags_value())
 
         def parse_cap(field: str) -> int | None:
             raw = (request.form.get(field) or "").strip()
@@ -469,12 +557,47 @@ if HAVE_FLASK:
             file_filter=file_filter,
         )
         if not ok:
-            return render_template("partials/edit_subscription_modal.html", sub=sub, message=f"Failed: {error}", message_error=True)
+            return render_template("partials/edit_subscription_modal.html", sub=sub, message=f"Failed: {error}", message_error=True, tags_value=_tags_value())
+
+        # Not transactional with the update_subscription() call above (one's a hydownloader API
+        # write, the other's a local JSON write) - acceptable since tags are low-stakes local
+        # metadata, not something hydownloader itself needs to stay in sync with.
+        tags_raw = (request.form.get("tags") or "").strip()
+        tags.set_tags_for(sub_id, [t.strip() for t in tags_raw.split(",") if t.strip()])
 
         updated_sub = subscriptions.get_subscription_by_id(sub_id) or sub
         return _render_actions_modal(
             updated_sub, sub_id, message=f"Subscription #{sub_id} updated.",
             headers={"HX-Trigger": "refreshSubs"},
+        )
+
+    @app.route("/subscriptions/<int:sub_id>/confirm-pause")
+    def confirm_pause(sub_id: int):
+        sub, error_resp = _require_sub(sub_id)
+        if error_resp:
+            return error_resp
+        verb = "Resume" if sub.get("paused") else "Pause"
+        return render_template(
+            "partials/confirm_action_modal.html",
+            title=f"{verb} subscription #{sub_id}?",
+            body=f"{sub.get('downloader')} / {sub.get('keywords')}",
+            confirm_label=verb, confirm_variant="primary",
+            post_url=f"/subscriptions/{sub_id}/toggle-pause",
+            cancel_url=f"/subscriptions/{sub_id}/actions",
+        )
+
+    @app.route("/subscriptions/<int:sub_id>/confirm-force-check")
+    def confirm_force_check(sub_id: int):
+        sub, error_resp = _require_sub(sub_id)
+        if error_resp:
+            return error_resp
+        return render_template(
+            "partials/confirm_action_modal.html",
+            title=f"Force-check subscription #{sub_id}?",
+            body=f"{sub.get('downloader')} / {sub.get('keywords')}\nMarks it due now - its worker thread picks it up within a few seconds.",
+            confirm_label="Force check", confirm_variant="primary",
+            post_url=f"/subscriptions/{sub_id}/force-check",
+            cancel_url=f"/subscriptions/{sub_id}/actions",
         )
 
     @app.route("/subscriptions/<int:sub_id>/toggle-pause", methods=["POST"])
@@ -532,14 +655,70 @@ if HAVE_FLASK:
         resp = api_client.delete_subscriptions([sub_id])
         headers = {"HX-Trigger": "refreshSubs, closeModal"}
         if resp.accepted:
+            tags.remove(sub_id)
             return "", 200, headers
         return render_template("partials/message.html", message=f"Failed: {resp.error or 'daemon rejected the request'}", error=True), 200, headers
+
+    # ---------------------------------------------------------------- subscriptions: bulk actions
+
+    # (button label, confirm-modal variant, past-tense verb for the success toast, executor)
+    _BULK_ACTIONS = {
+        "pause": ("Pause", "danger", "Paused", lambda ids: subscriptions.bulk_pause(ids, True)),
+        "resume": ("Resume", "primary", "Resumed", lambda ids: subscriptions.bulk_pause(ids, False)),
+        "force-check": ("Force-check", "primary", "Force-checked", subscriptions.bulk_force_recheck),
+        "delete": ("Delete", "danger", "Deleted", subscriptions.bulk_delete),
+    }
+
+    def _parse_bulk_ids(raw: str) -> list[int]:
+        ids = []
+        for part in raw.split(","):
+            part = part.strip()
+            if part.isdigit():
+                ids.append(int(part))
+        return ids
+
+    @app.route("/subscriptions/bulk/confirm")
+    def bulk_confirm():
+        action = request.args.get("action") or ""
+        ids = _parse_bulk_ids(request.args.get("ids") or "")
+        entry = _BULK_ACTIONS.get(action)
+        if not entry or not ids:
+            return render_template("partials/message.html", message="Nothing selected.", error=True)
+        label, variant, _, _ = entry
+        return render_template(
+            "partials/confirm_action_modal.html",
+            title=f"{label} {len(ids)} subscription(s)?",
+            body=f"This will {label.lower()} the {len(ids)} currently-selected subscription(s).",
+            confirm_label=label, confirm_variant=variant,
+            post_url=f"/subscriptions/bulk/execute?action={action}&ids={','.join(str(i) for i in ids)}",
+            cancel_url=None,
+        )
+
+    @app.route("/subscriptions/bulk/execute", methods=["POST"])
+    def bulk_execute():
+        action = request.args.get("action") or ""
+        ids = _parse_bulk_ids(request.args.get("ids") or "")
+        entry = _BULK_ACTIONS.get(action)
+        # "subs-selection-cleared" (not camelCase) - Alpine's @eventname.window directive is an
+        # HTML attribute *name*, which browsers lowercase on parse, so a camelCase custom event
+        # dispatched by htmx would silently never match a camelCase Alpine listener.
+        headers = {"HX-Trigger": "refreshSubs, closeModal, subs-selection-cleared"}
+        if not entry or not ids:
+            return render_template("partials/message.html", message="Nothing selected.", error=True), 200, headers
+        _, _, past_tense, run = entry
+        ok, error = run(ids)
+        if ok:
+            return render_template("partials/message.html", message=f"{past_tense} {len(ids)} subscription(s).", error=False), 200, headers
+        return render_template("partials/message.html", message=f"Failed: {error}", error=True), 200, headers
 
     # ---------------------------------------------------------------- diagnostics
 
     def _diagnostics_ctx() -> dict:
         flagged_count, flagged_error = subscriptions.get_flagged_subscription_count()
-        return dict(report=services.get_health_report(), flagged_count=flagged_count, flagged_error=flagged_error)
+        return dict(
+            report=services.get_health_report(), flagged_count=flagged_count, flagged_error=flagged_error,
+            incidents=watchdog.get_incident_history(),
+        )
 
     @app.route("/diagnostics")
     def diagnostics():
@@ -588,6 +767,72 @@ if HAVE_FLASK:
             f"next check - no daemon restart needed.",
         )
 
+    # ---------------------------------------------------------------- settings
+
+    @app.route("/settings")
+    def settings_view():
+        return render_template("partials/settings_modal.html", s=settings.load_settings(), message=None)
+
+    @app.route("/settings/save", methods=["POST"])
+    def settings_save():
+        form = request.form
+
+        def bad(message: str):
+            return render_template("partials/settings_modal.html", s=settings.load_settings(), message=message, message_error=True)
+
+        def parse_int_or_none(field: str) -> int | None:
+            raw = (form.get(field) or "").strip()
+            return int(raw) if raw else None
+
+        try:
+            watchdog_interval = int((form.get("watchdog_interval_seconds") or "").strip())
+            if watchdog_interval < 10:
+                raise ValueError
+        except ValueError:
+            return bad("Watchdog interval must be a whole number of seconds (at least 10).")
+
+        hydrus_api_url = (form.get("hydrus_api_url") or "").strip()
+        if not hydrus_api_url.startswith(("http://", "https://")):
+            return bad("Hydrus API URL must start with http:// or https://.")
+
+        try:
+            max_files_initial = parse_int_or_none("max_files_initial")
+            max_files_regular = parse_int_or_none("max_files_regular")
+            if (max_files_initial is not None and max_files_initial < 1) or (max_files_regular is not None and max_files_regular < 1):
+                raise ValueError
+        except ValueError:
+            return bad("Default file caps must be positive whole numbers, or blank for hydownloader's own (uncapped) default.")
+
+        try:
+            interval_min = float(form.get("check_interval_hours_min") or "")
+            interval_max = float(form.get("check_interval_hours_max") or "")
+            if interval_min <= 0 or interval_max <= interval_min:
+                raise ValueError
+        except ValueError:
+            return bad("Check interval range must be positive numbers with min < max.")
+
+        try:
+            thresholds = {}
+            for key in ("disk_pct", "ram_pct"):
+                v = float(form.get(f"threshold_{key}") or "")
+                if not (0 < v <= 100):
+                    raise ValueError
+                thresholds[key] = v
+        except ValueError:
+            return bad("Resource alert thresholds must be percentages between 0 and 100.")
+
+        settings.save_settings({
+            "watchdog_interval_seconds": watchdog_interval,
+            "hydrus_api_url": hydrus_api_url,
+            "max_files_initial": max_files_initial,
+            "max_files_regular": max_files_regular,
+            "check_interval_hours_min": interval_min,
+            "check_interval_hours_max": interval_max,
+            "resource_alert_thresholds": thresholds,
+            "windows_toast_enabled": form.get("windows_toast_enabled") == "on",
+        })
+        return render_template("partials/settings_modal.html", s=settings.load_settings(), message="Settings saved.", message_error=False)
+
     # ---------------------------------------------------------------- API keys
 
     @app.route("/api-keys")
@@ -622,7 +867,26 @@ if HAVE_FLASK:
     @app.route("/api-keys/hydrus", methods=["POST"])
     def api_keys_hydrus():
         ok, msg = api_keys.apply_hydrus_key((request.form.get("api_key") or "").strip())
+        if ok:
+            # Round-trips the just-saved key against Hydrus itself right now, rather than only
+            # finding out it was mistyped later via the Diagnostics health report - called from
+            # here (not inside api_keys.apply_hydrus_key) since hydrus_client.py already imports
+            # api_keys at module scope, so importing hydrus_client back into api_keys.py would
+            # be a circular import.
+            verify = hydrus_client.verify_access_key()
+            if verify.success:
+                msg += " Verified - Hydrus accepted the key."
+            else:
+                msg += f" Warning: saved, but Hydrus didn't accept it when tested just now ({verify.error})."
+                ok = False
         return render_template("partials/api_keys_modal.html", **_api_keys_ctx(message=msg, message_error=not ok, default_tab="hydrus"))
+
+    @app.route("/api-keys/service/<service_id>/test", methods=["POST"])
+    def api_keys_service_test(service_id: str):
+        ok, output = api_keys.test_service_key(service_id)
+        return render_template("partials/api_keys_modal.html", **_api_keys_ctx(
+            tested_service_id=service_id, service_test_ok=ok, service_test_output=output, default_tab="services",
+        ))
 
     @app.route("/api-keys/reddit/test-shared", methods=["POST"])
     def api_keys_reddit_test():
@@ -694,7 +958,9 @@ if HAVE_FLASK:
             try:
                 services.stop_idle_components()
             except Exception:
-                pass
+                # Still exit even if the idle-stop failed (nothing left to shut down cleanly
+                # otherwise) - log it so a failed stop isn't silently lost.
+                logging.getLogger(__name__).exception("stop_idle_components failed during shutdown")
             sys.stdout.flush()  # os._exit() skips normal interpreter cleanup, flush included
             os._exit(0)
 
@@ -702,6 +968,27 @@ if HAVE_FLASK:
         return render_template(
             "partials/message.html",
             message="Shutting down - this dashboard will stop responding in a moment.", error=False,
+        )
+
+    @app.route("/shutdown-full", methods=["POST"])
+    def shutdown_full():
+        """Stronger version of /shutdown-app for the WebView2 app frame's window-close handler
+        (HydrusPipelineLauncher.cs) - unconditionally stops the daemon, systray, and Hydrus
+        itself, then dismounts the VeraCrypt volume, then exits this process. The frame POSTs
+        here synchronously before closing so the work has a moment to start; it doesn't wait
+        for the full response since dismounting can take a few seconds."""
+        def _do_shutdown():
+            try:
+                services.stop_everything()
+            except Exception:
+                logging.getLogger(__name__).exception("stop_everything failed during full shutdown")
+            sys.stdout.flush()
+            os._exit(0)
+
+        threading.Thread(target=_do_shutdown, daemon=True).start()
+        return render_template(
+            "partials/message.html",
+            message="Shutting down everything...", error=False,
         )
 
 
@@ -734,7 +1021,6 @@ def run_webui(port: int = 8765, open_browser: bool = True) -> int | None:
         # default - since this runs in a background thread of the same console process as the
         # menu, that's every poll from the page's 2s auto-refresh interleaving with menu
         # prompts. Silence it; actual errors still raise/propagate normally.
-        import logging
         logging.getLogger("werkzeug").setLevel(logging.ERROR)
         app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True)
 

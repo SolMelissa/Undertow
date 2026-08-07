@@ -1,0 +1,30 @@
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Subscriptions Total</div>
+  <div class="kawaii-stat-value">{{ total }}</div>
+  <div class="kawaii-stat-note">running for {{ uptime }}</div>
+</div>
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Active</div>
+  <div class="kawaii-stat-value accent">{{ active }}</div>
+  <div class="kawaii-stat-note">currently unpaused</div>
+</div>
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Paused</div>
+  <div class="kawaii-stat-value warn">{{ paused }}</div>
+  <div class="kawaii-stat-note">not being checked</div>
+</div>
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Due Now</div>
+  <div class="kawaii-stat-value info">{{ due }}</div>
+  <div class="kawaii-stat-note">waiting on a check</div>
+</div>
+<div class="kawaii-card" style="grid-column: 1 / -1;">
+  <div class="kawaii-stat-label" style="margin-bottom:0.6rem;">Services</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.6rem;">
+    {% for p in procs %}
+    <span class="kawaii-pill {{ 'ok' if p.up else 'bad' }}">
+      <span class="dot"></span>{{ p.name }}{% if p.up and p.pid %} &middot; pid {{ p.pid }}{% endif %}
+    </span>
+    {% endfor %}
+  </div>
+</div>

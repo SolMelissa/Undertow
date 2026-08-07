@@ -30,6 +30,22 @@
     {% endif %}
   </div>
 
+  <div class="text-sm font-mono">
+    <div class="text-[#8aa0a8] mt-1">Recent incidents (watchdog):</div>
+    {% if not incidents %}
+    <div class="text-[#5a8a6c] text-xs">none recorded yet this install</div>
+    {% else %}
+    <div class="flex flex-col gap-1 max-h-40 overflow-y-auto text-xs mt-1">
+      {% for inc in incidents %}
+      <div class="border-l-2 border-[#17323a] pl-2">
+        <div class="text-[#5a8a6c]">{{ inc.ts }}</div>
+        <ul class="list-disc list-inside text-[#8aa0a8]">{% for a in inc.actions %}<li>{{ a }}</li>{% endfor %}</ul>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
   {% if cap_message %}
   <div class="alert {{ 'alert-error' if cap_error else 'alert-success' }} py-2 text-sm">{{ cap_message }}</div>
   {% endif %}

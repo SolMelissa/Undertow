@@ -1,18 +1,23 @@
+{% if banner %}
+<div id="resource-banner" hx-swap-oob="true" class="alert alert-warning py-1.5 px-4 text-xs rounded-none font-mono">&#9888; {{ banner }}</div>
+{% else %}
+<div id="resource-banner" hx-swap-oob="true"></div>
+{% endif %}
 <div class="hud-panel">
   <div class="hud-titlebar">HOST<div class="rule"></div></div>
   <div class="p-2 text-[11px] flex flex-col gap-1.5">
     <div>
-      <div class="flex justify-between"><span class="text-[#5a8a6c]">CPU</span><span class="text-[#39ff88]">{{ host.cpu_pct }}%</span></div>
-      <div class="h-1.5 bg-[#020604] mt-0.5"><div class="h-1.5 bg-[#39ff88]" style="width:{{ host.cpu_pct }}%"></div></div>
-    </div>
-    <div>
       <div class="flex justify-between"><span class="text-[#5a8a6c]">MEM</span><span class="text-[#39d3ff]">{{ host.mem_used_gb|round(1) }} / {{ host.mem_total_gb|round(1) }}G</span></div>
       <div class="h-1.5 bg-[#020604] mt-0.5"><div class="h-1.5 bg-[#39d3ff]" style="width:{{ host.mem_pct }}%"></div></div>
     </div>
+    {% if host.disk_pct is not none %}
     <div>
-      <div class="flex justify-between"><span class="text-[#5a8a6c]">DISK</span><span class="text-[#ff9d3c]">{{ host.disk_used_gb|round(0) }} / {{ host.disk_total_gb|round(0) }}G</span></div>
+      <div class="flex justify-between"><span class="text-[#5a8a6c]">DISK (hydrus storage)</span><span class="text-[#ff9d3c]">{{ host.disk_used_gb|round(0) }} / {{ host.disk_total_gb|round(0) }}G</span></div>
       <div class="h-1.5 bg-[#020604] mt-0.5"><div class="h-1.5 bg-[#ff9d3c]" style="width:{{ host.disk_pct }}%"></div></div>
     </div>
+    {% else %}
+    <div class="text-[#5a8a6c]">DISK: unavailable (Hydrus API not reachable)</div>
+    {% endif %}
   </div>
 </div>
 

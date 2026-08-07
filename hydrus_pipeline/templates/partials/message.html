@@ -1,1 +1,5 @@
-<div class="alert {{ 'alert-error' if error else 'alert-success' }} py-2 text-sm rounded-none font-mono" x-data x-init="setTimeout(() => $el.remove(), 4000)">{{ message }}</div>
+<div class="toast-item alert {{ 'alert-error' if error else 'alert-success' }} py-2 text-sm rounded-none font-mono shadow-lg flex items-start gap-2"
+     x-data x-init="setTimeout(() => $el.remove(), 4000)">
+  <span class="flex-1">{{ message }}</span>
+  <button type="button" class="opacity-70 hover:opacity-100 leading-none" @click="$el.closest('.toast-item').remove()">&times;</button>
+</div>

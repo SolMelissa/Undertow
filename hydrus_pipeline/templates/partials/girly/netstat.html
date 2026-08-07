@@ -1,0 +1,18 @@
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">API Calls / min</div>
+  <div class="kawaii-stat-value info">{{ stats.calls_per_min }}</div>
+  <div class="kawaii-stat-note">{{ stats.total }} total &middot; {{ stats.avg_ms }}ms avg</div>
+</div>
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Errors</div>
+  <div class="kawaii-stat-value {{ 'danger' if stats.errors else '' }}">{{ stats.errors }}</div>
+  {% if stats.top_routes %}
+  <div class="kawaii-stat-note" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.2rem;">
+    {% for route, count in stats.top_routes[:4] %}
+    <span>{{ route }} &middot; {{ count }}</span>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="kawaii-stat-note">no calls logged yet</div>
+  {% endif %}
+</div>

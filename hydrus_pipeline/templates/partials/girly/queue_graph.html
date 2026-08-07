@@ -1,0 +1,27 @@
+<div class="kawaii-card kawaii-chart-card">
+  {% if not graph %}
+  <div class="kawaii-empty">gathering data for the chart&hellip;</div>
+  {% else %}
+  <div class="kawaii-chart-legend">
+    <span><span class="swatch" style="background: var(--k-accent-2-text);"></span>URLs queued (now {{ graph.queued_now }})</span>
+    <span><span class="swatch" style="background: var(--k-accent-3-text);"></span>Subscriptions due (now {{ graph.due_now }})</span>
+    <span style="margin-left:auto;">peak {{ graph.peak }}</span>
+  </div>
+  <svg viewBox="-28 -6 {{ graph.width + 34 }} {{ graph.height + 22 }}" class="w-full" style="height: 200px;" preserveAspectRatio="xMidYMid meet">
+    <!-- y-axis -->
+    <line x1="0" y1="0" x2="0" y2="{{ graph.height }}" stroke="var(--k-border)" stroke-width="1.5" />
+    <text x="-6" y="4" text-anchor="end" class="kawaii-axis-label">{{ graph.peak }}</text>
+    <text x="-6" y="{{ graph.height }}" text-anchor="end" class="kawaii-axis-label">0</text>
+    <!-- x-axis -->
+    <line x1="0" y1="{{ graph.height }}" x2="{{ graph.width }}" y2="{{ graph.height }}" stroke="var(--k-border)" stroke-width="1.5" />
+    <text x="0" y="{{ graph.height + 16 }}" text-anchor="start" class="kawaii-axis-label">~96s ago</text>
+    <text x="{{ graph.width }}" y="{{ graph.height + 16 }}" text-anchor="end" class="kawaii-axis-label">now</text>
+
+    <polyline points="{{ graph.queued_points }}" fill="none" stroke="var(--k-accent-2-text)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+    <polyline points="{{ graph.due_points }}" fill="none" stroke="var(--k-accent-3-text)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+    <circle cx="{{ graph.queued_last[0] }}" cy="{{ graph.queued_last[1] }}" r="4.5" fill="#fff" stroke="var(--k-accent-2-text)" stroke-width="2" />
+    <circle cx="{{ graph.due_last[0] }}" cy="{{ graph.due_last[1] }}" r="4.5" fill="#fff" stroke="var(--k-accent-3-text)" stroke-width="2" />
+  </svg>
+  <div class="kawaii-stat-note" style="text-align:center;">queue &amp; due-check history, updated every 2 seconds</div>
+  {% endif %}
+</div>

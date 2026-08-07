@@ -1,0 +1,31 @@
+{% if banner %}
+<div id="resource-banner" hx-swap-oob="true" class="kawaii-card" style="border-color: var(--k-accent-3-text); background:#fff8ec; color:#8a5a12; margin: 0 0 1rem;">&#9888; {{ banner }}</div>
+{% else %}
+<div id="resource-banner" hx-swap-oob="true"></div>
+{% endif %}
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Memory</div>
+  <div class="kawaii-stat-value info">{{ host.mem_pct|round(0)|int }}%</div>
+  <div class="kawaii-stat-note">{{ host.mem_used_gb|round(1) }} / {{ host.mem_total_gb|round(1) }} GB</div>
+  <div class="kawaii-bar-track"><div class="kawaii-bar-fill" style="width:{{ host.mem_pct }}%"></div></div>
+</div>
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Disk (Hydrus storage)</div>
+  {% if host.disk_pct is not none %}
+  <div class="kawaii-stat-value warn">{{ host.disk_pct|round(0)|int }}%</div>
+  <div class="kawaii-stat-note">{{ host.disk_used_gb|round(0) }} / {{ host.disk_total_gb|round(0) }} GB</div>
+  <div class="kawaii-bar-track"><div class="kawaii-bar-fill warn" style="width:{{ host.disk_pct }}%"></div></div>
+  {% else %}
+  <div class="kawaii-stat-note">unavailable (Hydrus API not reachable)</div>
+  {% endif %}
+</div>
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">GPU</div>
+  {% if not gpu %}
+  <div class="kawaii-stat-note">not detected</div>
+  {% else %}
+  <div class="kawaii-stat-value accent">{{ gpu.util_pct|round(0)|int }}%</div>
+  <div class="kawaii-stat-note">{{ (gpu.mem_used_mb/1024)|round(1) }} / {{ (gpu.mem_total_mb/1024)|round(1) }} GB VRAM &middot; {{ gpu.temp_c|round(0)|int }}&deg;C</div>
+  <div class="kawaii-bar-track"><div class="kawaii-bar-fill" style="width:{{ gpu.util_pct }}%"></div></div>
+  {% endif %}
+</div>

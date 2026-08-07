@@ -19,6 +19,7 @@ SYSTRAY_DIR = INSTALL_ROOT / "hydownloader-systray"
 
 WATCHDOG_INTERVAL_SECONDS = 90
 WATCHDOG_STATUS_FILE = LOGS_DIR / "watchdog-status.json"
+WATCHDOG_HISTORY_FILE = LOGS_DIR / "watchdog-history.jsonl"
 
 DAEMON_LAUNCH_STDOUT_LOG = LOGS_DIR / "daemon-launch-stdout.log"
 DAEMON_LAUNCH_STDERR_LOG = LOGS_DIR / "daemon-launch-stderr.log"
@@ -38,6 +39,22 @@ GALLERY_DL_USER_CONFIG_FILE = DATA_DIR / "gallery-dl-user-config.json"
 IMPORT_JOBS_FILE = DATA_DIR / "hydownloader-import-jobs.py"
 HYDRUS_API_URL = "http://localhost:45869"
 
+# Hydrus's media library lives on a VeraCrypt volume mounted as A: - see
+# services.ensure_veracrypt_drive_mounted(). VeraCrypt isn't always installed to the same
+# place, so a couple of common locations are tried before giving up.
+HYDRUS_VOLUME_DRIVE = "A:"
+VERACRYPT_EXE_CANDIDATES = [
+    Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "VeraCrypt" / "VeraCrypt.exe",
+    Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "VeraCrypt" / "VeraCrypt.exe",
+]
+
+
+def find_veracrypt_exe() -> Path | None:
+    for candidate in VERACRYPT_EXE_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return None
+
 
 def find_systray_exe() -> Path | None:
     """The systray exe lands inside a commit-hash-named subfolder, so it has to be searched
@@ -46,3 +63,21 @@ def find_systray_exe() -> Path | None:
         return None
     matches = list(SYSTRAY_DIR.rglob("hydownloader-systray.exe"))
     return matches[0] if matches else None
+
+
+# ---------------------------------------------------------------------- settings-aware getters
+# The constants above are the ultimate hardcoded fallbacks; these getters check settings.json
+# (via hydrus_pipeline.settings) for a user override first. Each imports `settings` inside the
+# function body rather than at module top - config.py is imported by nearly every other module
+# in the package, and settings.py itself imports config.py for path/default construction, so a
+# top-level `config -> settings -> config` cycle would break imports everywhere. Deferring the
+# import to call time avoids that entirely.
+
+def get_watchdog_interval_seconds() -> int:
+    from . import settings
+    return int(settings.load_settings().get("watchdog_interval_seconds", WATCHDOG_INTERVAL_SECONDS))
+
+
+def get_hydrus_api_url() -> str:
+    from . import settings
+    return str(settings.load_settings().get("hydrus_api_url", HYDRUS_API_URL))

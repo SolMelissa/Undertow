@@ -9,6 +9,16 @@
   {{ new_files }}
   {%- endif -%}
 </td>
+{# Same data, into the girly subs-list card layout's own element ids (see
+   templates/partials/girly/subs_table.html) - htmx OOB swap matches purely by id, so this can
+   coexist as a second target for the exact same payload without a second round trip. #}
+<div id="g-nf-{{ sub_id }}" hx-swap-oob="true">
+  {%- if new_files is none -%}
+  &ndash;
+  {%- else -%}
+  {{ new_files }}
+  {%- endif -%}
+</div>
 {% endfor %}
 {% for sub_id in all_ids %}
 <td id="td-{{ sub_id }}" class="tabular-nums" hx-swap-oob="true">{{ totals.get(sub_id, 0) }}</td>

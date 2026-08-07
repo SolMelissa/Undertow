@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- cat-eared chibi companion, waving - original placeholder art -->
+  <!-- ears -->
+  <path d="M62 60 L48 20 L82 48 Z" fill="#ffd6e8" stroke="#ff8fbf" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M138 60 L152 20 L118 48 Z" fill="#ffd6e8" stroke="#ff8fbf" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M64 52 L56 32 L74 46 Z" fill="#ffb8d9"/>
+  <path d="M136 52 L144 32 L126 46 Z" fill="#ffb8d9"/>
+
+  <!-- hair back -->
+  <ellipse cx="100" cy="78" rx="46" ry="42" fill="#f6c9e0"/>
+
+  <!-- body -->
+  <path d="M60 150 Q60 110 100 108 Q140 110 140 150 L140 185 Q100 198 60 185 Z" fill="#ffe3f0" stroke="#ff8fbf" stroke-width="3"/>
+  <!-- collar bow -->
+  <path d="M100 118 l-9 -7 l0 14 z" fill="#ff6fa5"/>
+  <path d="M100 118 l9 -7 l0 14 z" fill="#ff6fa5"/>
+  <circle cx="100" cy="118" r="3" fill="#ff4f8f"/>
+
+  <!-- left arm waving -->
+  <path d="M64 140 Q40 120 42 92" stroke="#ffe3f0" stroke-width="16" fill="none" stroke-linecap="round"/>
+  <circle cx="42" cy="90" r="10" fill="#ffe3f0" stroke="#ff8fbf" stroke-width="2.5"/>
+  <!-- right arm at side -->
+  <path d="M136 140 Q152 150 148 170" stroke="#ffe3f0" stroke-width="16" fill="none" stroke-linecap="round"/>
+  <circle cx="148" cy="171" r="10" fill="#ffe3f0" stroke="#ff8fbf" stroke-width="2.5"/>
+
+  <!-- face -->
+  <circle cx="100" cy="88" r="40" fill="#fff6fa" stroke="#ff8fbf" stroke-width="3"/>
+  <ellipse cx="80" cy="94" rx="7" ry="4.4" fill="#ffb8d9" opacity="0.85"/>
+  <ellipse cx="120" cy="94" rx="7" ry="4.4" fill="#ffb8d9" opacity="0.85"/>
+  <circle cx="86" cy="86" r="4.4" fill="#7a4a63"/>
+  <circle cx="114" cy="86" r="4.4" fill="#7a4a63"/>
+  <circle cx="87.6" cy="84.2" r="1.4" fill="#fff"/>
+  <circle cx="115.6" cy="84.2" r="1.4" fill="#fff"/>
+  <path d="M92 102 Q100 108 108 102" stroke="#c96a90" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+
+  <!-- sparkles -->
+  <g fill="#ffd166">
+    <path d="M168 60 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z"/>
+    <path d="M28 130 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2 z"/>
+  </g>
+</svg>

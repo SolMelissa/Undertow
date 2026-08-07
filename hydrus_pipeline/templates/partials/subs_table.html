@@ -1,24 +1,51 @@
 {% if error %}
 <div class="alert alert-error py-2 text-sm m-2 rounded-none font-mono">daemon unreachable: {{ error }}</div>
 {% endif %}
-<div class="overflow-x-auto">
+{% macro sort_th(col, label) %}
+<th class="cursor-pointer select-none whitespace-nowrap" onclick="subsSortBy('{{ col }}')">
+  {{ label }}{% if meta and meta.sort_by == col %}<span class="text-[#ff9d3c]">{{ ' ▲' if meta.sort_dir == 'asc' else ' ▼' }}</span>{% endif %}
+</th>
+{% endmacro %}
+<div class="overflow-x-auto" x-data="{ pageIds: [{{ subs|map(attribute='id')|join(',') }}] }">
 <table class="table table-sm table-pin-rows term-table">
   <thead>
     <tr class="text-[#39ff88] bg-[#04140a]">
-      <th>ID</th><th>DOWNLOADER</th><th>KEYWORDS</th><th>PAUSED</th><th>DUE</th><th>LAST</th><th>NEW</th><th>LAST CHECK</th><th>INTERVAL</th><th>NEXT CHECK</th><th>TOTAL DLS</th>
+      <th class="w-6">
+        <input type="checkbox" class="checkbox checkbox-xs"
+               :checked="pageIds.length > 0 && pageIds.every(id => selected.includes(id))"
+               @change="selected = $event.target.checked ? [...new Set([...selected, ...pageIds])] : selected.filter(id => !pageIds.includes(id))">
+      </th>
+      {{ sort_th('id', 'ID') }}
+      {{ sort_th('downloader', 'DOWNLOADER') }}
+      {{ sort_th('keywords', 'KEYWORDS') }}
+      {{ sort_th('paused', 'PAUSED') }}
+      {{ sort_th('due', 'DUE') }}
+      <th>LAST</th>
+      <th>NEW</th>
+      {{ sort_th('last_check', 'LAST CHECK') }}
+      {{ sort_th('interval', 'INTERVAL') }}
+      {{ sort_th('next_check', 'NEXT CHECK') }}
+      {{ sort_th('total_dls', 'TOTAL DLS') }}
     </tr>
   </thead>
   <tbody>
     {% if not subs %}
-    <tr><td colspan="11" class="text-center text-[#5a8a6c] py-6">-- no subscriptions --  (SUBSCRIBE above, or paste a URL into the $ bar)</td></tr>
+    <tr><td colspan="12" class="text-center text-[#5a8a6c] py-6">-- no subscriptions --  (SUBSCRIBE above, or paste a URL into the $ bar)</td></tr>
     {% endif %}
     {% for s in subs %}
     <tr class="hover cursor-pointer border-b border-[#0d2416] {{ 'bg-[#0d2b16]' if s.id == active_id else '' }}"
-        x-show="!filter || $el.innerText.toLowerCase().includes(filter.toLowerCase())"
+        x-show="!filter || filter.toLowerCase().startsWith('tag:') || $el.innerText.toLowerCase().includes(filter.toLowerCase())"
         hx-get="/subscriptions/{{ s.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML">
+      <td @click.stop>
+        <input type="checkbox" class="checkbox checkbox-xs"
+               :checked="selected.includes({{ s.id }})"
+               @change="$event.target.checked ? selected.push({{ s.id }}) : (selected = selected.filter(id => id !== {{ s.id }}))">
+      </td>
       <td class="text-[#5a8a6c]">{{ '%04d' % s.id }}</td>
       <td>{{ s.downloader }}</td>
-      <td class="max-w-xs truncate"><span id="warn-{{ s.id }}" hx-preserve="true"></span>{% if s.id == active_id %}<span class="text-[#ffe08a]">&#9654; </span>{% endif %}{{ s.keywords }}</td>
+      <td class="max-w-xs truncate"><span id="warn-{{ s.id }}" hx-preserve="true"></span>{% if s.id == active_id %}<span class="text-[#ffe08a]">&#9654; </span>{% endif %}{{ s.keywords }}
+        {%- for t in (s.tags or []) %} <span class="text-[10px] px-1 border border-[#ff9d3c66] text-[#ff9d3c]">{{ t }}</span>{% endfor -%}
+      </td>
       <td>{% if s.paused %}<span class="tag-fail">[Y]</span>{% else %}<span class="text-[#1c6b3e]">[N]</span>{% endif %}</td>
       <td>{% if s.is_due %}<span class="text-[#39d3ff]">[Y]</span>{% else %}<span class="text-[#1c6b3e]">[N]</span>{% endif %}</td>
       <td>
@@ -36,3 +63,17 @@
   </tbody>
 </table>
 </div>
+{% if meta and meta.total > 0 %}
+<div class="flex items-center justify-between gap-2 px-2 py-1.5 text-[10.5px] text-[#8aa0a8] border-t border-[#0d2416]">
+  <div>{{ meta.total }} subscription(s) &middot; page {{ meta.page }} of {{ meta.total_pages }}</div>
+  <div class="flex items-center gap-2">
+    <select onchange="subsSetPageSize(this.value)" class="select select-xs bg-[#020604] border-[var(--term-dim)] text-[var(--term-green)] rounded-none font-mono">
+      {% for size in (10, 25, 50, 100) %}
+      <option value="{{ size }}" {{ 'selected' if meta.page_size == size else '' }}>{{ size }}/page</option>
+      {% endfor %}
+    </select>
+    <button class="bracket-btn" {{ 'disabled' if meta.page <= 1 else '' }} onclick="subsGoPage(-1)">PREV</button>
+    <button class="bracket-btn" {{ 'disabled' if meta.page >= meta.total_pages else '' }} onclick="subsGoPage(1)">NEXT</button>
+  </div>
+</div>
+{% endif %}

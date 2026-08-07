@@ -117,6 +117,16 @@
           {% endfor %}
           <button type="submit" class="btn btn-sm btn-primary w-fit">Save</button>
         </form>
+        {% if svc.test_url %}
+        <form hx-post="/api-keys/service/{{ svc.id }}/test" hx-target="#modal-content" hx-swap="innerHTML" class="flex items-center gap-2">
+          <input type="hidden" name="_tab" value="services">
+          <button type="submit" class="btn btn-sm">Test connection</button>
+        </form>
+        {% endif %}
+        {% if tested_service_id == svc.id %}
+        <div class="text-xs {{ 'text-[#39ff88]' if service_test_ok else 'text-[#ff4f6d]' }}">{{ 'Reachable - test passed.' if service_test_ok else 'Test failed - see output below.' }}</div>
+        <pre class="text-xs bg-[#020304] border border-[#17323a] rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">{{ service_test_output }}</pre>
+        {% endif %}
       </div>
       {% endfor %}
 

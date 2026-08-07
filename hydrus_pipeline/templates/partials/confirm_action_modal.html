@@ -1,0 +1,11 @@
+<div class="flex flex-col gap-3">
+  <div class="text-lg font-bold {{ 'text-[#ff4f6d]' if confirm_variant == 'danger' else 'text-[var(--term-green)]' }}">{{ title }}</div>
+  <p class="text-sm text-[#8aa0a8] whitespace-pre-line">{{ body }}</p>
+  <div class="flex gap-2 justify-end">
+    <button class="btn btn-sm"
+            {% if cancel_url %}hx-get="{{ cancel_url }}" hx-target="#modal-content" hx-swap="innerHTML"
+            {% else %}onclick="document.getElementById('modal').close()"{% endif %}>Cancel</button>
+    <button class="btn btn-sm {{ 'btn-error' if confirm_variant == 'danger' else 'btn-primary' }}"
+            hx-post="{{ post_url }}" hx-target="#modal-content" hx-swap="innerHTML">{{ confirm_label }}</button>
+  </div>
+</div>

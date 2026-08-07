@@ -22,11 +22,11 @@
 
   <div class="flex flex-wrap gap-2 justify-end mt-2">
     <button class="btn btn-sm {{ 'btn-success' if sub.paused else 'btn-warning' }}"
-            hx-post="/subscriptions/{{ sub.id }}/toggle-pause" hx-target="#modal-content" hx-swap="innerHTML">
+            hx-get="/subscriptions/{{ sub.id }}/confirm-pause" hx-target="#modal-content" hx-swap="innerHTML">
       {{ 'Resume' if sub.paused else 'Pause' }}
     </button>
     <button class="btn btn-sm bg-[#123038] border-none text-[#39ff88] hover:bg-[#17434d]"
-            hx-post="/subscriptions/{{ sub.id }}/force-check" hx-target="#modal-content" hx-swap="innerHTML">Force check</button>
+            hx-get="/subscriptions/{{ sub.id }}/confirm-force-check" hx-target="#modal-content" hx-swap="innerHTML">Force check</button>
     <button class="btn btn-sm bg-[#123038] border-none text-[#39ff88] hover:bg-[#17434d]"
             hx-get="/subscriptions/{{ sub.id }}/edit-modal" hx-target="#modal-content" hx-swap="innerHTML">Edit</button>
     <button class="btn btn-sm bg-[#123038] border-none text-[#39ff88] hover:bg-[#17434d]"

@@ -58,6 +58,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
                 "OAuth Consumer Key below. Fixes \"Daily API rate limit exceeded\" errors, "
                 "which happen because gallery-dl's default key is shared across every user.",
         "fields": [{"key": "api-key", "label": "OAuth Consumer Key"}],
+        "test_url": "https://staff.tumblr.com/",
     },
     {
         "id": "imgur",
@@ -66,6 +67,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "note": "Register an application (OAuth 2 authorization without a callback URL works "
                 "for anonymous/client-ID-only usage), then copy its Client ID below.",
         "fields": [{"key": "client-id", "label": "Client ID"}],
+        "test_url": "https://imgur.com/t/cat",
     },
     {
         "id": "deviantart",
@@ -76,6 +78,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
             {"key": "client-id", "label": "Client ID"},
             {"key": "client-secret", "label": "Client Secret"},
         ],
+        "test_url": "https://www.deviantart.com/tag/art",
     },
     {
         "id": "civitai",
@@ -83,6 +86,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "url": "https://civitai.com/user/account",
         "note": "Under \"API Keys\", add a new key, then paste it below.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": "https://civitai.com/images",
     },
     {
         "id": "mangadex",
@@ -95,6 +99,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
             {"key": "client-id", "label": "Client ID"},
             {"key": "client-secret", "label": "Client Secret"},
         ],
+        "test_url": None,  # no evergreen public URL known - verify manually for now
     },
     {
         "id": "pixeldrain",
@@ -102,6 +107,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "url": "https://pixeldrain.com/user/api_keys",
         "note": "Copy your account's API key below.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": None,  # files-only, no evergreen listing to test against
     },
     {
         "id": "wallhaven",
@@ -109,6 +115,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "url": "https://wallhaven.cc/settings/account",
         "note": "Your API key is shown under \"API Key\" on the account settings page.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": "https://wallhaven.cc/search?q=cat",
     },
     {
         "id": "weasyl",
@@ -116,6 +123,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "url": "https://www.weasyl.com/control/apikeys",
         "note": "Generate an API key, then paste it below.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": None,  # no confirmed evergreen public browse URL - verify manually for now
     },
     {
         "id": "derpibooru",
@@ -124,6 +132,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "note": "Your API key is shown under account settings. Only needed for private/"
                 "restricted content - public search works without it.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": "https://derpibooru.org/search?q=safe",
     },
     {
         "id": "ponybooru",
@@ -132,6 +141,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "note": "Your API key is shown under account settings. Only needed for private/"
                 "restricted content - public search works without it.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": "https://ponybooru.org/search?q=safe",
     },
     {
         "id": "twibooru",
@@ -140,6 +150,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "note": "Your API key is shown under account settings. Only needed for private/"
                 "restricted content - public search works without it.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": "https://twibooru.org/search?q=safe",
     },
     {
         "id": "rule34",
@@ -150,6 +161,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
             {"key": "api-key", "label": "API Key"},
             {"key": "user-id", "label": "User ID"},
         ],
+        "test_url": "https://rule34.xxx/index.php?page=post&s=list&tags=cat",
     },
     {
         "id": "blogger",
@@ -158,6 +170,7 @@ SERVICE_KEY_REGISTRY: list[dict] = [
         "note": "Enable the Blogger API v3 on a Google Cloud project, create an API key "
                 "credential, then paste it below.",
         "fields": [{"key": "api-key", "label": "API Key"}],
+        "test_url": None,  # needs a specific blog domain - no generic public one to test against
     },
 ]
 
@@ -230,6 +243,41 @@ def apply_service_key(service_id: str, values: dict[str, str]) -> tuple[bool, st
     cfg.setdefault("extractor", {}).setdefault(service_id, {}).update(given)
     config.GALLERY_DL_USER_CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     return True, f"Saved {entry['label']} key(s). Takes effect on that service's next subscription check - no daemon restart needed."
+
+
+def test_service_key(service_id: str, timeout: float = 30.0) -> tuple[bool, str]:
+    """--simulate probe of a just-saved SERVICE_KEY_REGISTRY key against its `test_url`, so a
+    bad/typo'd key is caught immediately instead of only surfacing later as a failed
+    subscription check. Returns (False, "no automated test available for this service yet")
+    for an entry with no test_url rather than guessing a URL that might not match gallery-dl's
+    actual extractor patterns for that site.
+
+    Explicitly passes --config <GALLERY_DL_USER_CONFIG_FILE> - this is NOT the same file
+    run_reddit_shared_test_capture's bare `gallery-dl --simulate` relies on. A standalone
+    `gallery-dl` invocation with no --config flag reads GALLERY_DL_CONFIG_FILE (see that
+    constant's own comment in config.py), but the daemon's actual subscription checks - and
+    apply_service_key's writes above - use the separate GALLERY_DL_USER_CONFIG_FILE overlay.
+    Testing without --config here would silently probe the wrong file and could report a false
+    pass/fail for the key that was actually just saved."""
+    entry = next((e for e in SERVICE_KEY_REGISTRY if e["id"] == service_id), None)
+    if entry is None:
+        return False, f"unknown service: {service_id}"
+    test_url = entry.get("test_url")
+    if not test_url:
+        return False, "no automated test available for this service yet - verify by checking its next subscription run."
+    try:
+        result = subprocess.run(
+            ["gallery-dl", "--config", str(config.GALLERY_DL_USER_CONFIG_FILE), "--simulate", test_url, "--range", "1-3"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        output = (result.stdout or "") + (result.stderr or "")
+        return result.returncode == 0, output.strip() or "(no output - check errors below)"
+    except FileNotFoundError:
+        return False, "gallery-dl isn't on PATH - check diagnostics."
+    except subprocess.TimeoutExpired:
+        return False, f"timed out after {timeout:.0f}s."
+    except OSError as e:
+        return False, str(e)
 
 
 def get_hydrus_key_status() -> tuple[bool, str | None]:
@@ -326,7 +374,7 @@ def apply_hydrus_key(api_key: str) -> tuple[bool, str]:
     if not config.IMPORT_JOBS_FILE.exists():
         return False, f"{config.IMPORT_JOBS_FILE} not found - has hydownloader been set up yet?"
     content = config.IMPORT_JOBS_FILE.read_text(encoding="utf-8-sig")
-    content = re.sub(r"(apiURL\s*=\s*)['\"][^'\"]*['\"]", rf'\1"{config.HYDRUS_API_URL}"', content)
+    content = re.sub(r"(apiURL\s*=\s*)['\"][^'\"]*['\"]", rf'\1"{config.get_hydrus_api_url()}"', content)
     content = re.sub(r"(apiKey\s*=\s*)['\"][^'\"]*['\"]", rf'\1"{api_key}"', content)
     config.IMPORT_JOBS_FILE.write_text(content, encoding="utf-8")
     return True, "Saved. Hydrus API key is now configured. (This does NOT touch hydownloader-config.json's own separate 'daemon.access-key' secret.)"
