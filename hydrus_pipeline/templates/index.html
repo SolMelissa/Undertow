@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en" data-theme="night">
+<html lang="en" data-theme="kawaii">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hydrus Pipeline</title>
 <script>
-// Applied before any CSS loads so a previously-chosen kawaii theme doesn't flash the default
-// terminal theme first - see the fuller applyPipelineTheme()/togglePipelineTheme() pair at the
-// bottom of this file, which this initial value stays in sync with.
+// Girly (kawaii) is the only mode under active development - hacker/terminal mode is
+// deprecated (still present in the DOM as #hacker-view, but no longer reachable from the UI).
+// See the fuller applyPipelineTheme() pair at the bottom of this file, which this initial
+// value stays in sync with.
 (function () {
-  var saved = localStorage.getItem('pipeline-theme');
-  if (saved === 'kawaii') document.documentElement.setAttribute('data-theme', 'kawaii');
+  document.documentElement.setAttribute('data-theme', 'kawaii');
   if (localStorage.getItem('pipeline-kawaii-dark') === '1') document.documentElement.setAttribute('data-kawaii-mode', 'dark');
 })();
 </script>
@@ -180,10 +180,6 @@
       <span class="text-[10px] text-[#ff9d3c] hidden sm:inline tracking-widest kawaii-hide">::UPLINK_ESTABLISHED::</span>
     </div>
     <span id="clock" class="text-xs text-[var(--term-dim)] tabular-nums hidden md:inline"></span>
-    <button id="theme-toggle" type="button" onclick="togglePipelineTheme()"
-            class="ml-3 text-[10px] px-2 py-1 border border-[var(--term-dim)] text-[var(--term-dim)] hover:text-[var(--term-green)] hover:border-[var(--term-green)]">
-      <span id="theme-toggle-label">GIRLY MODE</span>
-    </button>
     <button id="kawaii-dark-toggle" type="button" onclick="toggleKawaiiDark()"
             class="kawaii-only ml-2 text-[10px] px-2 py-1"
             style="border-radius:999px; border:1.5px solid var(--k-border); color:var(--k-text-dim-text); font-family:'Quicksand',sans-serif;">
@@ -191,12 +187,11 @@
     </button>
   </div>
 
-  <!-- #hacker-view / #girly-view: the two dashboards are fully separate DOM subtrees from here
-       down (see static/kawaii/css/kawaii.css's top-level view switch) - only one is ever shown,
-       purely via CSS, keyed off data-theme="kawaii" on <html>. Both keep polling in the
-       background regardless of which is visible, same as the existing .kawaii-mascot pattern,
-       so the toggle is instant with no re-fetch needed. -->
-  <div id="hacker-view">
+  <!-- #hacker-view / #girly-view: #hacker-view is DEPRECATED - girly is the only mode reachable
+       from the UI now (no more theme-toggle button; data-theme is hardcoded to "kawaii" above),
+       but the markup stays in the DOM for now since static/kawaii/css/kawaii.css's view switch
+       still hides it purely via CSS. Don't build new features here. -->
+  <div id="hacker-view" style="display:none">
 
   <!-- STATUS WALL: dedicated dense status band - real service/worker status on the left,
        decorative signal-noise readouts on the right so this reads as a proper NOC status wall
@@ -481,26 +476,19 @@
 </div>
 
 <script>
-// Theme toggle: "night" (the default terminal/CRT look) vs "kawaii" (pastel re-skin, see
-// static/kawaii/css/kawaii.css). Persisted in localStorage so it survives reloads/restarts of
-// the dashboard; applied immediately on load rather than waiting for DOMContentLoaded so there
-// is no visible flash of the other theme.
+// Girly (kawaii, see static/kawaii/css/kawaii.css) is the only mode reachable from the UI -
+// hacker/terminal mode is deprecated, so there's no toggle anymore. This still funnels through
+// applyPipelineTheme() rather than being inlined so _themed_template() in webui.py keeps
+// working unchanged.
 function applyPipelineTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  const label = document.getElementById('theme-toggle-label');
-  if (label) label.textContent = theme === 'kawaii' ? 'HACKER MODE' : 'GIRLY MODE';
   // Theme signal for themed partial routes (see _themed_template() in webui.py): htmx re-reads
   // an ancestor's hx-headers attribute fresh on every request, so setting it once here on
-  // <body> makes every existing hx-get/hx-post in the page - hacker view AND girly view alike -
-  // automatically carry the current theme, with zero per-element plumbing changes needed.
+  // <body> makes every existing hx-get/hx-post in the page carry the current theme, with zero
+  // per-element plumbing changes needed.
   document.body.setAttribute('hx-headers', JSON.stringify({ 'X-Pipeline-Theme': theme }));
 }
-function togglePipelineTheme() {
-  const next = document.documentElement.getAttribute('data-theme') === 'kawaii' ? 'night' : 'kawaii';
-  localStorage.setItem('pipeline-theme', next);
-  applyPipelineTheme(next);
-}
-applyPipelineTheme(localStorage.getItem('pipeline-theme') || 'night');
+applyPipelineTheme('kawaii');
 
 // Girly-mode-only light/dark toggle, independent of the hacker/kawaii theme switch above.
 // Persisted separately so "girly mode" and "dark palette within girly mode" are orthogonal

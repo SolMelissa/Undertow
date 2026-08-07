@@ -14,3 +14,14 @@ __pycache__/
 *.exe.WebView2/
 launcher/bin/
 launcher/obj/
+
+# Deprecated hacker/terminal-mode dashboard partials - girly mode is now the default and only
+# mode under active development. These are the non-girly counterparts _themed_template() in
+# webui.py used to pick between (see hydrus_pipeline/templates/partials/girly/ for the ones
+# still in use); the #hacker-view UI that rendered them is no longer reachable from index.html.
+hydrus_pipeline/templates/partials/fleet.html
+hydrus_pipeline/templates/partials/hoststats.html
+hydrus_pipeline/templates/partials/netstat.html
+hydrus_pipeline/templates/partials/queue_graph.html
+hydrus_pipeline/templates/partials/status.html
+hydrus_pipeline/templates/partials/subs_table.html
