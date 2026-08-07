@@ -1,0 +1,9 @@
+<div class="kawaii-card">
+  <div class="kawaii-stat-label">Hydrus Library</div>
+  {% if not stats.reachable %}
+  <div class="kawaii-stat-note">unavailable &mdash; {{ stats.error or 'unknown' }}</div>
+  {% else %}
+  <div class="kawaii-stat-value">{{ stats.total_files }}</div>
+  <div class="kawaii-stat-note">total files &middot; {{ stats.inbox_count }} in inbox</div>
+  {% endif %}
+</div>

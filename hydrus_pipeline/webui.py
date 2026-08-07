@@ -297,11 +297,11 @@ if HAVE_FLASK:
         ranked = subscriptions.top_downloaders(subs)
         max_count = max((c for _, c in ranked), default=1) or 1
         sector = [{"name": name, "count": count, "pct": round(count / max_count * 100, 1)} for name, count in ranked]
-        return render_template("partials/sector_scan.html", sector=sector)
+        return render_template(_themed_template("sector_scan.html"), sector=sector)
 
     @app.route("/partials/sparkline")
     def partial_sparkline():
-        return render_template("partials/sparkline.html", spark=_build_sparkline(list(_activity_history)))
+        return render_template(_themed_template("sparkline.html"), spark=_build_sparkline(list(_activity_history)))
 
     @app.route("/partials/queue-graph")
     def partial_queue_graph():
@@ -321,15 +321,15 @@ if HAVE_FLASK:
 
     @app.route("/partials/topprocs")
     def partial_topprocs():
-        return render_template("partials/topprocs.html", procs=services.get_top_processes())
+        return render_template(_themed_template("topprocs.html"), procs=services.get_top_processes())
 
     @app.route("/partials/netconn")
     def partial_netconn():
-        return render_template("partials/netconn.html", conns=services.get_network_connections())
+        return render_template(_themed_template("netconn.html"), conns=services.get_network_connections())
 
     @app.route("/partials/hydrus")
     def partial_hydrus():
-        return render_template("partials/hydrus_stats.html", stats=hydrus_client.get_hydrus_stats())
+        return render_template(_themed_template("hydrus_stats.html"), stats=hydrus_client.get_hydrus_stats())
 
     @app.route("/partials/subscriptions")
     def partial_subscriptions():

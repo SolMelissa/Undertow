@@ -358,7 +358,7 @@
        friendly subscriptions list and activity feed - built from templates/partials/girly/*.html
        (rendered by the same Flask routes as the hacker view; see _themed_template() in
        webui.py) rather than a recolored copy of the cockpit-grid/hud-panel markup above. -->
-  <div id="girly-view">
+  <div id="girly-view" x-data="{ girlyTab: 'home' }">
 
     <div class="kawaii-hero">
       <div class="kawaii-hero-art">
@@ -397,41 +397,73 @@
       <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
     </form>
 
-    <div id="girly-status-badges" class="kawaii-card" style="margin-bottom:0.25rem;"
+    <!-- Status badges sit above the tabs, shared by both - service up/down plus queue/due
+         counts are the single most useful glance at all times, so they're never buried inside
+         a tab. -->
+    <div id="girly-status-badges" class="kawaii-card" style="margin-bottom:0.75rem;"
          hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
       loading&hellip;
     </div>
 
-    <p class="kawaii-section-title">&#128200; Overview</p>
-    <div id="girly-fleet-panel" class="kawaii-stat-grid"
-         hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
-
-    <p class="kawaii-section-title">&#128187; System</p>
-    <div class="kawaii-stat-grid">
-      <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
-      <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+    <!-- Two-tab layout: Home keeps the girly view calm and subscription-focused (the thing you
+         actually came here to look at); System Metrics is where all the host/queue/network
+         instrumentation lives, opt-in via a click instead of always-on clutter like the hacker
+         cockpit's side rails. Both tab panels' htmx polling keeps running while hidden (same
+         #hacker-view/#girly-view pattern above), so switching tabs is instant with no re-fetch. -->
+    <div class="kawaii-tabs">
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'home' }" @click="girlyTab = 'home'">&#127968; Home</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; System Metrics</button>
     </div>
 
-    <p class="kawaii-section-title">&#128202; Queue &amp; Throughput</p>
-    <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+    <div x-show="girlyTab === 'home'">
+      <p class="kawaii-section-title">&#128200; Overview</p>
+      <div id="girly-fleet-panel" class="kawaii-stat-grid"
+           hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
 
-    <p class="kawaii-section-title">&#128150; Subscriptions</p>
-    <div id="girly-subs-panel"
-         hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
-         hx-vals="js:{...window.subsTableState}" hx-swap="innerHTML">
-      loading subscriptions&hellip;
-    </div>
-    <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
+      <p class="kawaii-section-title">&#128150; Subscriptions</p>
+      <div id="girly-subs-panel"
+           hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
+           hx-vals="js:{...window.subsTableState}" hx-swap="innerHTML">
+        loading subscriptions&hellip;
+      </div>
+      <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
 
-    <p class="kawaii-section-title">&#128172; Activity Feed</p>
-    <div class="kawaii-card">
-      <div id="girly-log-box">loading activity&hellip;</div>
-    </div>
+      <p class="kawaii-section-title">&#128172; Activity Feed</p>
+      <div class="kawaii-card">
+        <div id="girly-log-box">loading activity&hellip;</div>
+      </div>
 
-    <div class="kawaii-art-slot" style="max-width:220px; margin: 2rem auto 0; padding: 1.5rem;">
-      <span style="font-size:2rem;">&#127908;</span>
-      <span>companion illustration slot<br>(swap in real art anytime)</span>
-    </div>
+      <div class="kawaii-art-slot" style="max-width:220px; margin: 2rem auto 0; padding: 1.5rem;">
+        <span style="font-size:2rem;">&#127908;</span>
+        <span>companion illustration slot<br>(swap in real art anytime)</span>
+      </div>
+    </div><!-- /girlyTab === 'home' -->
+
+    <div x-show="girlyTab === 'metrics'" x-cloak>
+      <p class="kawaii-section-title">&#128421; System</p>
+      <div class="kawaii-stat-grid">
+        <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+        <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+        <div id="girly-hydrus-panel" style="display:contents;" hx-get="/partials/hydrus" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+      </div>
+
+      <p class="kawaii-section-title">&#128202; Queue &amp; Throughput</p>
+      <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+      <div class="kawaii-stat-grid" style="margin-top:1rem;">
+        <div id="girly-sparkline" style="display:contents;" hx-get="/partials/sparkline" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+        <div id="girly-sector" style="display:contents;" hx-get="/partials/sector" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+      </div>
+
+      <p class="kawaii-section-title">&#9889; Top Processes</p>
+      <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+
+      <p class="kawaii-section-title">&#127760; Network Connections</p>
+      <div class="kawaii-card">
+        <div id="girly-netconn" style="max-height:14rem; overflow-y:auto;" hx-get="/partials/netconn" hx-trigger="load, every 3s" hx-swap="innerHTML">
+          loading&hellip;
+        </div>
+      </div>
+    </div><!-- /girlyTab === 'metrics' -->
   </div><!-- /#girly-view -->
 
   <dialog id="modal" class="modal">

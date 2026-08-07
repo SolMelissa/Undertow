@@ -1,0 +1,15 @@
+<div class="kawaii-card">
+  <div class="kawaii-stat-label" style="margin-bottom:0.6rem;">Top Processes</div>
+  <div style="display:flex; flex-direction:column; gap:0.35rem;">
+    {% if not procs %}
+    <div class="kawaii-stat-note">nothing to show yet&hellip;</div>
+    {% endif %}
+    {% for p in procs %}
+    <div style="display:flex; align-items:center; gap:0.6rem; font-size:0.85rem;">
+      <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--k-text);">{{ p.name }}</span>
+      <span style="width:3.2rem; text-align:right; color:var(--k-accent-text); font-weight:600;">{{ p.cpu }}%</span>
+      <span style="width:4.2rem; text-align:right; color:var(--k-text-dim-text);">{{ p.mem_mb|round(0)|int }} MB</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>

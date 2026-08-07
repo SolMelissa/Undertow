@@ -184,6 +184,32 @@
   gap: 0.5rem;
 }
 
+/* ------------------------------------------------------------------------------------ tabs
+   Home vs System Metrics. Both panels stay mounted and polling at all times (see the x-show
+   toggle in index.html) - this is purely a visibility/style switch, not a content swap. */
+[x-cloak] { display: none !important; }
+.kawaii-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid var(--k-border);
+  margin-bottom: 0.25rem;
+}
+.kawaii-tab-btn {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: none;
+  border: none;
+  color: var(--k-text-dim-text);
+  padding: 0.6rem 1rem 0.7rem;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.kawaii-tab-btn:hover { color: var(--k-accent-text); }
+.kawaii-tab-btn.active { color: var(--k-accent-text); border-bottom-color: var(--k-accent); }
+
 /* ------------------------------------------------------------------------- action button row */
 .kawaii-btn-row {
   display: flex;

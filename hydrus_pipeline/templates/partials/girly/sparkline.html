@@ -1,0 +1,17 @@
+<div class="kawaii-card">
+  <div class="kawaii-stat-label" style="margin-bottom:0.4rem;">Activity</div>
+  {% if not spark %}
+  <div class="kawaii-stat-note">gathering telemetry&hellip;</div>
+  {% else %}
+  <svg viewBox="0 0 {{ spark.width }} {{ spark.height }}" style="width:100%; height:2.5rem;" preserveAspectRatio="none">
+    <polyline points="{{ spark.points }}" fill="none" stroke="var(--k-accent-2-text)" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round" />
+    <circle cx="{{ spark.last_x }}" cy="{{ spark.last_y }}" r="5" fill="#fff" />
+    <circle cx="{{ spark.last_x }}" cy="{{ spark.last_y }}" r="3.5" fill="var(--k-accent-2-text)" />
+  </svg>
+  <div style="display:flex; justify-content:space-between; margin-top:0.35rem;" class="kawaii-stat-note">
+    <span>peak <strong style="color:var(--k-text);">{{ spark.peak }}</strong></span>
+    <span>now <strong style="color:var(--k-text);">{{ spark.now }}</strong></span>
+  </div>
+  {% endif %}
+</div>
