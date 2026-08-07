@@ -56,6 +56,46 @@
   --k-danger-text: #d1315e;
 }
 
+/* Dark palette for girly mode, toggled independently of light/kawaii via the "DARK MODE" button
+   (data-kawaii-mode="dark" on <html>, set by toggleKawaiiDark() in index.html). Same hues as the
+   light palette above so it still reads as "the same theme, dark" rather than a different skin -
+   every rule below this point overrides only variables/hardcoded colors, no new selectors. */
+:root[data-theme="kawaii"][data-kawaii-mode="dark"] {
+  --k-bg: #1a1220;
+  --k-panel: #241a2e;
+  --k-panel-alt: #2e2138;
+  --k-border: #4a2f52;
+  --k-text: #f3d9e8;
+  --k-text-dim: #b98aa8;
+  --k-accent: #ff6fa5;
+  --k-accent-2: #7dd8e0;
+  --k-accent-3: #ffb84d;
+  --k-danger: #ff5c8a;
+  --k-good: #6fd88a;
+
+  --k-text-dim-text: #d8a8c4;
+  --k-accent-text: #ff8dbb;
+  --k-accent-2-text: #7dd8e0;
+  --k-accent-3-text: #ffc978;
+  --k-danger-text: #ff8fa8;
+}
+
+/* A handful of girly-view rules hardcode #fff / light hex values instead of using the token
+   variables above (buttons, inputs, art slot, pills) - these need explicit dark overrides. */
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-btn,
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-input,
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-select,
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-pill,
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-art-slot {
+  background: var(--k-panel);
+}
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-sub-row.active { background: #2e2138; }
+
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-pill.ok { color: #7fe0a0; border-color: #2f5d3f; background: #1c3324; }
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-pill.bad { color: #ff8fa8; border-color: #5d2f3d; background: #33212a; }
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-pill.warn { color: #ffc978; border-color: #5d4a2f; background: #332921; }
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-pill.info { color: #7dd8e0; border-color: #2f4f5d; background: #1e2e33; }
+
 [data-theme="kawaii"] body {
   background: var(--k-bg) !important;
   color: var(--k-text) !important;

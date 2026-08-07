@@ -11,6 +11,7 @@
 (function () {
   var saved = localStorage.getItem('pipeline-theme');
   if (saved === 'kawaii') document.documentElement.setAttribute('data-theme', 'kawaii');
+  if (localStorage.getItem('pipeline-kawaii-dark') === '1') document.documentElement.setAttribute('data-kawaii-mode', 'dark');
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"
@@ -182,6 +183,11 @@
     <button id="theme-toggle" type="button" onclick="togglePipelineTheme()"
             class="ml-3 text-[10px] px-2 py-1 border border-[var(--term-dim)] text-[var(--term-dim)] hover:text-[var(--term-green)] hover:border-[var(--term-green)]">
       <span id="theme-toggle-label">GIRLY MODE</span>
+    </button>
+    <button id="kawaii-dark-toggle" type="button" onclick="toggleKawaiiDark()"
+            class="kawaii-only ml-2 text-[10px] px-2 py-1"
+            style="border-radius:999px; border:1.5px solid var(--k-border); color:var(--k-text-dim-text); font-family:'Quicksand',sans-serif;">
+      <span id="kawaii-dark-toggle-label">DARK MODE</span>
     </button>
   </div>
 
@@ -463,6 +469,21 @@ function togglePipelineTheme() {
   applyPipelineTheme(next);
 }
 applyPipelineTheme(localStorage.getItem('pipeline-theme') || 'night');
+
+// Girly-mode-only light/dark toggle, independent of the hacker/kawaii theme switch above.
+// Persisted separately so "girly mode" and "dark palette within girly mode" are orthogonal
+// choices; see the matching data-kawaii-mode dark overrides in static/kawaii/css/kawaii.css.
+function applyKawaiiDark(dark) {
+  document.documentElement.setAttribute('data-kawaii-mode', dark ? 'dark' : 'light');
+  const label = document.getElementById('kawaii-dark-toggle-label');
+  if (label) label.textContent = dark ? 'LIGHT MODE' : 'DARK MODE';
+}
+function toggleKawaiiDark() {
+  const next = document.documentElement.getAttribute('data-kawaii-mode') !== 'dark';
+  localStorage.setItem('pipeline-kawaii-dark', next ? '1' : '0');
+  applyKawaiiDark(next);
+}
+applyKawaiiDark(localStorage.getItem('pipeline-kawaii-dark') === '1');
 
 // Sort/page state for the subscriptions table - a plain JS object (not Alpine) so htmx's
 // `hx-vals="js:..."` re-reads it fresh on every trigger, including the automatic 2s poll -
