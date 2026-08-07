@@ -427,9 +427,22 @@
            hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
 
       <p class="kawaii-section-title">&#128150; Subscriptions</p>
+      <div style="display:flex; gap:0.6rem; margin-bottom:0.6rem; flex-wrap:wrap;"
+           x-data="{ filter: '', _lastTagQuery: '' }"
+           x-effect="
+             const q = filter.toLowerCase().startsWith('tag:') ? filter.slice(4).trim() : '';
+             if (q !== _lastTagQuery) { _lastTagQuery = q; window.subsTableState.tag = q; htmx.trigger(document.body, 'subsTableNav'); }
+             window.subsGroupState.filter = filter.toLowerCase().startsWith('tag:') ? '' : filter;
+             applyGroupExpandState(document.getElementById('girly-subs-panel'));
+           ">
+        <input type="text" x-model.debounce.150ms="filter" placeholder="search subs&hellip; (or tag:foo)"
+               title="Plain text expands and searches within groups. Prefix with tag: (e.g. tag:favorites) to search by tag across every source instead."
+               class="kawaii-input" style="flex:1; min-width:12rem;">
+        <button type="button" id="subs-group-toggle-btn" class="kawaii-btn" onclick="toggleSubsGrouping()">Ungroup</button>
+      </div>
       <div id="girly-subs-panel"
            hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
-           hx-vals="js:{...window.subsTableState}" hx-swap="innerHTML">
+           hx-vals="js:{...window.subsTableState, ...window.subsGroupState}" hx-swap="innerHTML">
         loading subscriptions&hellip;
       </div>
       <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
@@ -537,6 +550,74 @@ function subsSetPageSize(size) {
   window.subsTableState.page = 1;
   htmx.trigger(document.body, 'subsTableNav');
 }
+
+// Girly-mode "group by source" state - separate from subsTableState above since flat mode
+// (sort/page) and grouped mode (group sort, expand/collapse) track different things and can't
+// both apply to the same request. Expanded groups persist across the 2s auto-poll (which
+// replaces #girly-subs-panel's whole innerHTML) by living in a JS Set outside the DOM, reapplied
+// via applyGroupExpandState() after every swap instead of round-tripping to the server.
+window.subsGroupState = { grouped: true, group_sort: 'name', group_dir: 'asc', filter: '' };
+window.subsExpandedGroups = new Set();
+
+function toggleSubsGroup(el) {
+  if (!el) return;
+  const name = el.dataset.group;
+  if (el.classList.contains('open')) {
+    el.classList.remove('open');
+    window.subsExpandedGroups.delete(name);
+  } else {
+    el.classList.add('open');
+    window.subsExpandedGroups.add(name);
+  }
+}
+
+function subsGroupSortBy(col) {
+  const st = window.subsGroupState;
+  st.group_dir = (st.group_sort === col && st.group_dir === 'asc') ? 'desc' : 'asc';
+  st.group_sort = col;
+  htmx.trigger(document.body, 'subsTableNav');
+}
+
+function toggleSubsGrouping() {
+  window.subsGroupState.grouped = !window.subsGroupState.grouped;
+  const btn = document.getElementById('subs-group-toggle-btn');
+  if (btn) btn.textContent = window.subsGroupState.grouped ? 'Ungroup' : 'Group by Source';
+  htmx.trigger(document.body, 'subsTableNav');
+}
+
+// Reapplies expand/collapse + text-filter visibility to a freshly-swapped grouped subs panel.
+// A non-empty filter force-expands (and shows only) groups with a matching sub or source name;
+// an empty filter restores whatever's in subsExpandedGroups. No-ops harmlessly when the panel
+// is showing the flat (ungrouped) list instead, since it has no .kawaii-group elements.
+function applyGroupExpandState(root) {
+  if (!root) return;
+  const filter = (window.subsGroupState.filter || '').toLowerCase().trim();
+  root.querySelectorAll('.kawaii-group').forEach((group) => {
+    const name = group.dataset.group;
+    if (filter) {
+      let anyRowVisible = false;
+      group.querySelectorAll('.kawaii-sub-row').forEach((row) => {
+        const hit = row.innerText.toLowerCase().includes(filter);
+        row.style.display = hit ? '' : 'none';
+        if (hit) anyRowVisible = true;
+      });
+      const nameEl = group.querySelector('.kawaii-group-name');
+      const headerHit = nameEl ? nameEl.innerText.toLowerCase().includes(filter) : false;
+      const matches = anyRowVisible || headerHit;
+      group.style.display = matches ? '' : 'none';
+      group.classList.toggle('open', matches);
+    } else {
+      group.style.display = '';
+      group.querySelectorAll('.kawaii-sub-row').forEach((row) => { row.style.display = ''; });
+      group.classList.toggle('open', window.subsExpandedGroups.has(name));
+    }
+  });
+}
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  if (e.detail.target && e.detail.target.id === 'girly-subs-panel') {
+    applyGroupExpandState(e.detail.target);
+  }
+});
 
 document.body.addEventListener('htmx:afterSwap', (e) => {
   if (e.detail.target && e.detail.target.id === 'modal-content') {
