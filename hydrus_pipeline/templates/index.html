@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en" data-theme="night">
+<html lang="en" data-theme="kawaii">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hydrus Pipeline</title>
 <script>
-// Applied before any CSS loads so a previously-chosen kawaii theme doesn't flash the default
-// terminal theme first - see the fuller applyPipelineTheme()/togglePipelineTheme() pair at the
+// Applied before any CSS loads so a previously-chosen terminal theme doesn't flash the default
+// kawaii theme first - see the fuller applyPipelineTheme()/togglePipelineTheme() pair at the
 // bottom of this file, which this initial value stays in sync with.
 (function () {
   var saved = localStorage.getItem('pipeline-theme');
-  if (saved === 'kawaii') document.documentElement.setAttribute('data-theme', 'kawaii');
+  if (saved === 'night') document.documentElement.setAttribute('data-theme', 'night');
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"
@@ -462,7 +462,7 @@ function togglePipelineTheme() {
   localStorage.setItem('pipeline-theme', next);
   applyPipelineTheme(next);
 }
-applyPipelineTheme(localStorage.getItem('pipeline-theme') || 'night');
+applyPipelineTheme(localStorage.getItem('pipeline-theme') || 'kawaii');
 
 // Sort/page state for the subscriptions table - a plain JS object (not Alpine) so htmx's
 // `hx-vals="js:..."` re-reads it fresh on every trigger, including the automatic 2s poll -
