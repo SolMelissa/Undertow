@@ -17,7 +17,8 @@
       "Bash(.venv/Scripts/python.exe -c ' *)",
       "Bash(python3 *)",
       "Bash(powershell -Command \"Get-Process hydrus_client -ErrorAction SilentlyContinue\"*)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(git push:*)"
     ]
   }
 }
