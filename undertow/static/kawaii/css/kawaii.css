@@ -162,16 +162,39 @@
 }
 
 .kawaii-hero {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  background: linear-gradient(135deg, var(--k-panel-alt), var(--k-panel));
+  background: linear-gradient(135deg, #ffd6e8 0%, var(--k-panel-alt) 45%, var(--k-panel) 100%);
   border: 1px solid var(--k-border);
   border-radius: 24px;
   padding: 1.75rem 2rem;
   margin-bottom: 1.5rem;
   box-shadow: 0 4px 18px rgba(255, 111, 165, 0.12);
+  overflow: hidden;
 }
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-hero {
+  background: linear-gradient(135deg, #3a1e35 0%, var(--k-panel-alt) 45%, var(--k-panel) 100%);
+}
+/* Glitter dots - a handful of soft radial highlights scattered across the hero, Barbie-pink
+   sparkle without any actual animation/JS cost. */
+.kawaii-hero::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle, #fff 0 2px, transparent 3px),
+    radial-gradient(circle, #fff 0 1.5px, transparent 2.5px),
+    radial-gradient(circle, #fff 0 2px, transparent 3px),
+    radial-gradient(circle, #fff 0 1.5px, transparent 2.5px);
+  background-position: 12% 20%, 32% 70%, 78% 15%, 90% 60%;
+  background-repeat: no-repeat;
+  opacity: 0.65;
+}
+.kawaii-btn-primary {
+  background: linear-gradient(135deg, var(--k-accent), #ff3d94);
+  border-color: transparent;
+}
+.kawaii-btn-primary:hover { background: linear-gradient(135deg, #ff3d94, var(--k-accent)); }
 .kawaii-hero-art {
   flex: 0 0 auto;
   width: 96px; height: 96px;
@@ -269,8 +292,7 @@
 .kawaii-btn:hover { background: var(--k-accent-text); color: #fff; transform: translateY(-1px); }
 .kawaii-btn-danger { border-color: var(--k-danger-text); color: var(--k-danger-text); }
 .kawaii-btn-danger:hover { background: var(--k-danger-text); color: #fff; }
-.kawaii-btn-primary { background: var(--k-accent-text); color: #fff; }
-.kawaii-btn-primary:hover { background: var(--k-accent); }
+.kawaii-btn-primary { color: #fff; }
 
 .kawaii-input {
   font-family: 'Quicksand', sans-serif;
@@ -431,4 +453,79 @@
 @media (max-width: 640px) {
   .kawaii-hero { flex-wrap: wrap; text-align: center; justify-content: center; }
   .kawaii-hero-spacer { display: none; }
+}
+
+/* ============================================================== modern polish pass
+   Soft blurred colour blobs drifting behind the page - purely decorative, sits behind
+   everything (z-index -1) and never intercepts clicks. Gives the flat pastel background some
+   depth without touching the "extremely girly" palette. */
+#girly-view { position: relative; }
+.kawaii-blob-bg {
+  position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+}
+.kawaii-blob-bg span {
+  position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.35;
+}
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-blob-bg span { opacity: 0.22; }
+.kawaii-blob-bg span:nth-child(1) { width: 420px; height: 420px; top: -140px; left: -120px; background: var(--k-accent); }
+.kawaii-blob-bg span:nth-child(2) { width: 360px; height: 360px; top: 20%; right: -140px; background: var(--k-accent-2); }
+.kawaii-blob-bg span:nth-child(3) { width: 320px; height: 320px; bottom: -120px; left: 30%; background: var(--k-accent-3); }
+
+/* Cards get a touch of glass + lift-on-hover so the page reads as an active, modern surface
+   rather than flat pastel rectangles - subtle, not a redesign of the token system above. */
+.kawaii-card, .kawaii-hero, .kawaii-sub-row, .kawaii-gallery-slot {
+  backdrop-filter: blur(6px);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.kawaii-card:hover { box-shadow: 0 6px 20px rgba(255, 111, 165, 0.18); transform: translateY(-2px); }
+
+.kawaii-divider {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin: 1.5rem 0 1rem; color: var(--k-text-dim-text);
+  font-family: 'Baloo 2', sans-serif; font-size: 0.9rem; font-weight: 700;
+}
+.kawaii-divider::before, .kawaii-divider::after {
+  content: ""; flex: 1; height: 2px; border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--k-border), transparent);
+}
+
+/* -------------------------------------------------------------- user image gallery spots
+   See static/kawaii/gallery/README.md - each .kawaii-gallery-* size class here is one slot
+   that GET /kawaii/gallery/<slot> (webui.py) fills with a randomly-chosen user image (or the
+   slot's default.svg placeholder if the user hasn't dropped anything in yet). */
+.kawaii-gallery-slot {
+  display: block; overflow: hidden;
+  border: 1px solid var(--k-border);
+  background: var(--k-panel);
+  box-shadow: 0 3px 14px rgba(255, 111, 165, 0.14);
+  text-decoration: none;
+}
+.kawaii-gallery-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kawaii-gallery-slot:hover { box-shadow: 0 8px 22px rgba(255, 111, 165, 0.24); transform: translateY(-2px) rotate(0deg) !important; }
+
+.kawaii-gallery-icon   { width: 60px;  height: 60px;  border-radius: 16px; flex: 0 0 auto; }
+.kawaii-gallery-avatar { width: 110px; height: 110px; border-radius: 50%; flex: 0 0 auto; }
+.kawaii-gallery-sm     { width: 160px; height: 160px; border-radius: 20px; }
+.kawaii-gallery-md     { width: 220px; height: 220px; border-radius: 22px; }
+.kawaii-gallery-lg     { width: 320px; height: 320px; border-radius: 26px; margin: 0 auto; }
+.kawaii-gallery-wide   { width: 100%; max-width: 480px; height: 150px; border-radius: 22px; margin: 0 auto; }
+.kawaii-gallery-tall   { width: 200px; height: 300px; border-radius: 24px; }
+
+/* Washi-tape sticker rail: a horizontal strip of small squares, each nudged to its own gentle
+   tilt so it reads as "photos tucked onto a corkboard" instead of a rigid icon row. */
+.kawaii-sticker-rail { display: flex; flex-wrap: wrap; gap: 0.9rem; justify-content: center; margin: 1rem 0; }
+.kawaii-sticker-rail .kawaii-gallery-slot:nth-child(1) { transform: rotate(-6deg); }
+.kawaii-sticker-rail .kawaii-gallery-slot:nth-child(2) { transform: rotate(4deg); }
+.kawaii-sticker-rail .kawaii-gallery-slot:nth-child(3) { transform: rotate(-3deg); }
+.kawaii-sticker-rail .kawaii-gallery-slot:nth-child(4) { transform: rotate(5deg); }
+
+.kawaii-gallery-row { display: flex; flex-wrap: wrap; gap: 1.1rem; align-items: flex-start; justify-content: center; }
+.kawaii-gallery-flank { display: flex; flex-direction: column; gap: 1.1rem; }
+
+@media (max-width: 640px) {
+  .kawaii-gallery-tall { width: 140px; height: 210px; }
+  .kawaii-gallery-lg { width: 220px; height: 220px; }
+}
+@media (max-width: 900px) {
+  .kawaii-hide-sm { display: none !important; }
 }

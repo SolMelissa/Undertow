@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 150">
+  <rect x="3" y="3" width="474" height="144" rx="22" fill="#fff5f9" stroke="#ffc2dd" stroke-width="2.5" stroke-dasharray="7 5"/>
+  <text x="240" y="70" font-family="Quicksand, sans-serif" font-size="30" text-anchor="middle" fill="#ff6fa5">&#127880; &#127880; &#127880;</text>
+  <text x="240" y="102" font-family="Quicksand, sans-serif" font-size="14" text-anchor="middle" fill="#b98aa8">drop a wide banner image in static/kawaii/gallery/wide</text>
+</svg>

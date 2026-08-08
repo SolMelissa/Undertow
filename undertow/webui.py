@@ -22,6 +22,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import subprocess
 import sys
@@ -38,7 +39,7 @@ from .subscriptions import add_single_subscription
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 try:
-    from flask import Flask, Response, jsonify, render_template, request
+    from flask import Flask, Response, jsonify, render_template, request, send_from_directory
     HAVE_FLASK = True
 except ImportError:
     HAVE_FLASK = False
@@ -56,6 +57,146 @@ if app is not None:
     app.jinja_env.auto_reload = True
 
 _ACTIVE_SUB_RE = re.compile(r"checking subscription:\s*(\d+)")
+
+# Girly-mode user image gallery: each slot is a size/aspect-ratio bucket used by one or more
+# <img> spots in templates/index.html's #girly-view (see kawaii.css's .kawaii-gallery-* classes
+# for the on-page dimensions each slot is displayed at). Drop any number of images into
+# static/kawaii/gallery/<slot>/ and every page load re-rolls which file each spot on the page
+# shows - no code changes needed, same "just drop files in" pattern as static/kawaii/mascots/.
+# Selection isn't pure uniform-random: candidates whose own aspect ratio is close to the slot's
+# target ratio are weighted higher (see _gallery_pick()) so a landscape photo dropped into "tall"
+# doesn't constantly get cropped down to a sliver by the CSS object-fit:cover - it can still be
+# picked, just less often than a better-fitting image in the same folder.
+_GALLERY_DIR = _PROJECT_ROOT / "undertow" / "static" / "kawaii" / "gallery"
+_GALLERY_RATIOS = {
+    "icon": 1.0, "avatar": 1.0, "sm": 1.0, "md": 1.0, "lg": 1.0,
+    "wide": 480 / 150, "tall": 200 / 300,
+}
+_GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+
+
+def _image_aspect_ratio(path: Path) -> float | None:
+    """Pure-stdlib width/height sniffer (no Pillow dependency) covering the formats gallery
+    images realistically show up in. Returns None (treated as "unknown, assume it fits fine")
+    for anything it can't parse rather than raising - a malformed/unsupported file should still
+    be selectable, just without the aspect-ratio weighting."""
+    try:
+        suffix = path.suffix.lower()
+        if suffix == ".svg":
+            text = path.read_text(encoding="utf-8", errors="ignore")[:4000]
+            m = re.search(r'viewBox=["\']\s*[\d.\-]+\s+[\d.\-]+\s+([\d.]+)\s+([\d.]+)', text)
+            if not m:
+                m = re.search(r'width=["\']([\d.]+)', text), re.search(r'height=["\']([\d.]+)', text)
+                if m[0] and m[1]:
+                    w, h = float(m[0].group(1)), float(m[1].group(1))
+                    return w / h if h else None
+                return None
+            w, h = float(m.group(1)), float(m.group(2))
+            return w / h if h else None
+
+        with open(path, "rb") as f:
+            head = f.read(32)
+            if head[:8] == b"\x89PNG\r\n\x1a\n":
+                w, h = int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+                return w / h if h else None
+            if head[:6] in (b"GIF87a", b"GIF89a"):
+                w = int.from_bytes(head[6:8], "little")
+                h = int.from_bytes(head[8:10], "little")
+                return w / h if h else None
+            if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+                f.seek(0)
+                data = f.read(64)
+                if data[12:16] == b"VP8 ":
+                    w = int.from_bytes(data[26:28], "little") & 0x3FFF
+                    h = int.from_bytes(data[28:30], "little") & 0x3FFF
+                elif data[12:16] == b"VP8L":
+                    b0, b1, b2, b3 = data[21], data[22], data[23], data[24]
+                    w = 1 + (((b1 & 0x3F) << 8) | b0)
+                    h = 1 + (((b3 & 0xF) << 10) | (b2 << 2) | (b1 >> 6))
+                else:
+                    return None
+                return w / h if h else None
+            if head[:2] == b"\xff\xd8":  # JPEG - scan markers for the first SOFn segment
+                f.seek(2)
+                while True:
+                    marker = f.read(2)
+                    if len(marker) < 2 or marker[0] != 0xFF:
+                        return None
+                    if marker[1] in (0xC0, 0xC1, 0xC2, 0xC3):
+                        f.read(3)
+                        h = int.from_bytes(f.read(2), "big")
+                        w = int.from_bytes(f.read(2), "big")
+                        return w / h if h else None
+                    if marker[1] in (0xD8, 0xD9):
+                        return None
+                    seg_len = int.from_bytes(f.read(2), "big")
+                    if seg_len < 2:
+                        return None
+                    f.seek(seg_len - 2, 1)
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _gallery_stats_path(folder: Path) -> Path:
+    return folder / ".gallery_stats.json"
+
+
+def _load_gallery_stats(folder: Path) -> dict:
+    """Per-slot-folder show-count tracker, one JSON file per folder (dotfile, so it never shows
+    up as a "candidate" image itself). Missing/corrupt file just means "nothing tracked yet"."""
+    try:
+        return json.loads(_gallery_stats_path(folder).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_gallery_stats(folder: Path, stats: dict) -> None:
+    try:
+        _gallery_stats_path(folder).write_text(json.dumps(stats), encoding="utf-8")
+    except OSError:
+        pass  # best-effort - a failed write just means balancing resets, nothing user-visible
+
+
+def _gallery_pick(slot: str) -> tuple[Path, str]:
+    """Returns (folder, filename) to serve for `slot`. Weighted random, not uniform: candidates
+    are favored by (a) how closely their own aspect ratio matches the slot's target (see
+    _GALLERY_RATIOS - avoids a badly-cropped object-fit:cover result) and (b) how rarely they've
+    been shown so far, tracked per-folder in .gallery_stats.json - so a folder of 10 images
+    settles into roughly even rotation instead of random chance favoring the same couple of
+    files run after run."""
+    folder = _GALLERY_DIR / slot
+    target = _GALLERY_RATIOS.get(slot, 1.0)
+    candidates = [
+        p for p in (folder.iterdir() if folder.is_dir() else [])
+        if p.is_file() and p.suffix.lower() in _GALLERY_EXTS and p.name != "default.svg"
+    ]
+    if not candidates:
+        return folder, "default.svg"
+
+    import math
+    stats = _load_gallery_stats(folder)
+    weights = []
+    for p in candidates:
+        ratio = _image_aspect_ratio(p)
+        if ratio is None or ratio <= 0:
+            fit = 1.0  # unknown aspect ratio - neither penalized nor favored
+        else:
+            # log-distance so over- and under-wide mismatches are penalized symmetrically;
+            # +0.15 floor keeps even a badly-mismatched image pickable, just rarely.
+            fit = 1.0 / (abs(math.log(ratio / target)) + 0.15)
+        balance = 1.0 / (stats.get(p.name, 0) + 1)  # decays as an image gets shown more
+        weights.append(fit * balance)
+    chosen = random.choices(candidates, weights=weights, k=1)[0]
+
+    # Drop stats for files that no longer exist in the folder (deleted/renamed since last pick)
+    # so the tracker file doesn't grow stale entries forever.
+    current_names = {p.name for p in candidates}
+    stats = {name: count for name, count in stats.items() if name in current_names}
+    stats[chosen.name] = stats.get(chosen.name, 0) + 1
+    _save_gallery_stats(folder, stats)
+
+    return folder, chosen.name
 
 # Activity history for the sparkline/queue-graph widgets - one (urls_queued, subscriptions_due)
 # sample per /partials/status poll (the page polls that every 2s, so this is a rolling ~96s
@@ -239,6 +380,17 @@ if HAVE_FLASK:
     @app.route("/")
     def index():
         return render_template("index.html")
+
+    @app.route("/kawaii/gallery/<slot>")
+    def kawaii_gallery_image(slot):
+        if slot not in _GALLERY_RATIOS:
+            return "", 404
+        folder, filename = _gallery_pick(slot)
+        resp = send_from_directory(folder, filename)
+        # Never cache - each <img> request (i.e. every page load) should be free to re-roll a
+        # different file, not get pinned to whatever the browser cached from the first visit.
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
     # ---------------------------------------------------------------- polled partials
 
