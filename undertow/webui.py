@@ -35,7 +35,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-from . import api_client, api_keys, hydrus_client, logtail, media, services, settings, subscriptions, tags, watchdog
+from . import api_client, api_keys, hydrus_client, logtail, media, services, settings, subscriptions, tags, version, watchdog
 from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -57,6 +57,10 @@ if app is not None:
     # process (see run_webui() below), not as the main process the reloader expects to own.
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.jinja_env.auto_reload = True
+
+    @app.context_processor
+    def _inject_version():
+        return {"version_info": version.get_version_info()}
 
 _ACTIVE_SUB_RE = re.compile(r"checking subscription:\s*(\d+)")
 

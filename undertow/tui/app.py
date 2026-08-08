@@ -33,7 +33,7 @@ from textual.reactive import reactive
 from textual.theme import Theme
 from textual.widgets import DataTable, Footer, Header, RichLog, Static
 
-from .. import api_client, api_keys, hydrus_client, logtail, services, subscriptions, tags, webui
+from .. import api_client, api_keys, hydrus_client, logtail, services, subscriptions, tags, version, webui
 from ..subscriptions import add_single_subscription
 from .modals import (
     AddDownloadModal,
@@ -337,6 +337,10 @@ class PipelineApp(App):
     def on_mount(self) -> None:
         self.register_theme(SPACESHIP_THEME)
         self.theme = "hydrus-spaceship"
+
+        v = version.get_version_info()
+        status_flag = {"current": "◈ UP TO DATE ◈", "stale": "⚠ UPDATE AVAILABLE ⚠", "unknown": "◈ TARGETING UPLINK ONLINE ◈"}[v["status"]]
+        self.sub_title = f"v{v['version']} ({v['commit']}{'+' if v['dirty'] else ''}) — {status_flag}"
 
         table = self.query_one("#subs-table", DataTable)
         # Explicit keys (matching subscriptions.SORT_KEYS names where a sort exists) rather
