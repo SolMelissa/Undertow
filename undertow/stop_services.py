@@ -2,7 +2,7 @@
 Stops the hydownloader daemon and hydownloader-systray ONLY (leaves Hydrus itself running).
 Equivalent of Stop-HydrusPipelineServices.ps1. Used when hydownloader-config.json changed
 and the running daemon/systray need to pick up fresh values - editing the file alone doesn't
-affect an already-running process. Run with: python -m hydrus_pipeline.stop_services
+affect an already-running process. Run with: python -m undertow.stop_services
 """
 
 from __future__ import annotations

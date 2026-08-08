@@ -1,4 +1,4 @@
-"""Lets the console TUI be launched on its own via `python -m hydrus_pipeline.tui`, without
+"""Lets the console TUI be launched on its own via `python -m undertow.tui`, without
 re-running the service-start sequence in menu.py - used as the fallback/"Console UI" option
 from the web dashboard, where services are already running and only the interface is being
 opened. Running this doesn't install the exit handlers menu.main() does (no idle-shutdown-on-

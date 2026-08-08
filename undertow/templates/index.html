@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hydrus Pipeline</title>
+<title>Undertow</title>
 <script>
 // Girly (kawaii) is the only mode under active development - hacker/terminal mode is
 // deprecated (still present in the DOM as #hacker-view, but no longer reachable from the UI).
@@ -168,7 +168,7 @@
 
 <div class="app-layer">
   <div id="term-banner" class="px-4 py-1 text-[10px] text-[var(--term-dim)] border-b border-[#0d2416] bg-[#010805] whitespace-nowrap overflow-x-auto">
-    root@hydrus-pipeline:~# tail -f /var/log/hydrus_pipeline.webui &nbsp;·&nbsp;
+    root@undertow:~# tail -f /var/log/undertow.webui &nbsp;·&nbsp;
     [ OK ] bound 127.0.0.1:8765 &nbsp;·&nbsp; [ OK ] htmx/alpine runtime attached &nbsp;·&nbsp;
     [ OK ] daemon api client ready<span class="cursor-blink">&nbsp;</span>
   </div>
@@ -366,7 +366,7 @@
         <img src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="" style="width:96px;height:96px;">
       </div>
       <div>
-        <p class="kawaii-hero-title">Hydrus Pipeline</p>
+        <p class="kawaii-hero-title">Undertow</p>
         <p class="kawaii-hero-sub">Your subscriptions and downloads, at a glance &#10024;</p>
       </div>
       <div class="kawaii-hero-spacer"></div>

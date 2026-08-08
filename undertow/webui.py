@@ -13,7 +13,7 @@ Styling is Tailwind + daisyUI loaded from a CDN, interactivity is htmx (server-r
 fragments swapped into the page - polling for live data, hx-post for actions) plus a small
 amount of Alpine.js for pure client-side UI state (the subscriptions filter box, the API keys
 modal's tabs) that has no reason to round-trip to the server. No build step, no npm - every
-route here returns a Jinja2-rendered template fragment straight from hydrus_pipeline/templates/.
+route here returns a Jinja2-rendered template fragment straight from undertow/templates/.
 """
 
 from __future__ import annotations
@@ -925,14 +925,14 @@ if HAVE_FLASK:
     @app.route("/launch-tui", methods=["POST"])
     def launch_tui():
         """Opens the classic console TUI in a fresh, visible console window - the fallback/
-        menu option this dashboard's docstring promises. Runs `python -m hydrus_pipeline.tui`
+        menu option this dashboard's docstring promises. Runs `python -m undertow.tui`
         (see tui/__main__.py) rather than menu.main(), since services/watchdog are already
         running under this process - the TUI just needs to connect to them, not start them
-        again. cwd is pinned to the project root so `-m hydrus_pipeline.tui` resolves
+        again. cwd is pinned to the project root so `-m undertow.tui` resolves
         regardless of whatever directory this request happened to be handled from."""
         try:
             subprocess.Popen(
-                [sys.executable, "-m", "hydrus_pipeline.tui"],
+                [sys.executable, "-m", "undertow.tui"],
                 cwd=str(_PROJECT_ROOT),
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
@@ -973,7 +973,7 @@ if HAVE_FLASK:
     @app.route("/shutdown-full", methods=["POST"])
     def shutdown_full():
         """Stronger version of /shutdown-app for the WebView2 app frame's window-close handler
-        (HydrusPipelineLauncher.cs) - unconditionally stops the daemon, systray, and Hydrus
+        (UndertowLauncher.cs) - unconditionally stops the daemon, systray, and Hydrus
         itself, then dismounts the VeraCrypt volume, then exits this process. The frame POSTs
         here synchronously before closing so the work has a moment to start; it doesn't wait
         for the full response since dismounting can take a few seconds."""

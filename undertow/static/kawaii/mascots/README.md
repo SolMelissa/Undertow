@@ -7,7 +7,7 @@ dashboard picks up your replacement automatically on next page load. No code cha
 
 | File | Where it shows up | Suggested size |
 | --- | --- | --- |
-| `header.svg` | Small icon next to the "HYDRUS PIPELINE" title in the top bar | square, ~64x64 |
+| `header.svg` | Small icon next to the "UNDERTOW" title in the top bar | square, ~64x64 |
 | `corner-companion.svg` | Floating character docked in the bottom-right corner of the whole page (has a gentle idle bounce animation via CSS - any art works, but something with a clear "front-facing" pose reads best while bouncing) | square, ~200x200 |
 
 Placeholder art shipped here is original, hand-drawn-in-code SVG (simple chibi line art, fully

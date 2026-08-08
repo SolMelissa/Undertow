@@ -1,10 +1,10 @@
 """
-Creates the "Hydrus Pipeline" Desktop shortcut, pointing at HydrusPipeline.exe (built from
-HydrusPipelineLauncher.cs via build_launcher.bat) instead of powershell.exe. Using a real
+Creates the "Undertow" Desktop shortcut, pointing at Undertow.exe (built from
+UndertowLauncher.cs via build_launcher.bat) instead of powershell.exe. Using a real
 .exe rather than run.bat means the resulting shortcut can be pinned to the Start menu AND
 the taskbar - Windows won't let you pin a .lnk that targets a .bat to the taskbar. Falls back
 to run.bat if the exe hasn't been built yet. Equivalent of Create-DesktopShortcut.ps1. Safe
-to re-run - just overwrites the shortcut. Run with: python -m hydrus_pipeline.shortcut
+to re-run - just overwrites the shortcut. Run with: python -m undertow.shortcut
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from pathlib import Path
 from . import config
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-LAUNCHER_EXE = PACKAGE_DIR.parent / "HydrusPipeline.exe"
+LAUNCHER_EXE = PACKAGE_DIR.parent / "Undertow.exe"
 RUN_BAT = PACKAGE_DIR.parent / "run.bat"
 
 
@@ -32,7 +32,7 @@ def create_desktop_shortcut() -> None:
         return
 
     desktop_dir = Path(os.path.join(os.environ["USERPROFILE"], "Desktop"))
-    shortcut_path = desktop_dir / "Hydrus Pipeline.lnk"
+    shortcut_path = desktop_dir / "Undertow.lnk"
 
     shell = win32com.client.Dispatch("WScript.Shell")
     shortcut = shell.CreateShortcut(str(shortcut_path))

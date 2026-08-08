@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Relocates the Hydrus Pipeline *app folder* to the iCloud Drive path and repairs every
+    Relocates the Undertow *app folder* to the iCloud Drive path and repairs every
     link that depends on its location.
 
 .DESCRIPTION
@@ -8,7 +8,7 @@
         C:\0Docs\AI\Claude\The Pipeline
             -> F:\Apple\iCloudDrive\0Docs\AI\Claude\The Pipeline
 
-        That is the app you wrote: the hydrus_pipeline package (web dashboard, TUI,
+        That is the app you wrote: the undertow package (web dashboard, TUI,
         watchdog, subscriptions), the legacy .ps1 scripts, run.bat, the guide, and .git.
 
     WHAT THIS DOES NOT TOUCH - deliberately
@@ -26,7 +26,7 @@
         its -wal out of step, and "Optimize Storage" can evict client_files to the cloud
         and leave Hydrus reporting its own media as missing.
 
-        No code change is needed for any of this: hydrus_pipeline/config.py derives
+        No code change is needed for any of this: undertow/config.py derives
         INSTALL_ROOT from %USERPROFILE%, which does not change. The daemon is launched as
         `poetry run hydownloader-daemon --path <data dir>` with cwd=<repo dir>, both of
         which also stay put.
@@ -35,7 +35,7 @@
         1. The .venv - virtualenvs are not relocatable. pyvenv.cfg and the Scripts\*.exe
            launcher shims embed the absolute build path. It is excluded from the copy and
            rebuilt from scratch.
-        2. The Desktop shortcut - "Hydrus Pipeline.lnk" targets the old run.bat. Rebuilt.
+        2. The Desktop shortcut - "Undertow.lnk" targets the old run.bat. Rebuilt.
         3. PYTHON_PORT_SETUP.md referenced the old path. Already corrected in the source.
 
 .PARAMETER VenvInFolder
@@ -59,7 +59,7 @@
 param(
     [string] $Source      = 'C:\0Docs\AI\Claude\The Pipeline',
     [string] $Destination = 'F:\Apple\iCloudDrive\0Docs\AI\Claude\The Pipeline',
-    [string] $VenvPath    = "$env:LOCALAPPDATA\HydrusPipeline\venv",
+    [string] $VenvPath    = "$env:LOCALAPPDATA\Undertow\venv",
     [switch] $VenvInFolder,
     [switch] $RemoveSource,
     [switch] $DryRun
@@ -79,7 +79,7 @@ $ExcludeFiles = @('*.pyc', '*.stackdump')
 
 Write-Host @"
 
-  Hydrus Pipeline - relocate app folder to iCloud Drive
+  Undertow - relocate app folder to iCloud Drive
   -----------------------------------------------------
   Moving : $Source
   To     : $Destination
@@ -136,7 +136,7 @@ if (Test-Path -LiteralPath $installRoot) {
     }
 } else {
     Write-Warn "Expected install root not found: $installRoot"
-    Write-Warn 'The app will still move, but check hydrus_pipeline/config.py afterwards.'
+    Write-Warn 'The app will still move, but check undertow/config.py afterwards.'
 }
 
 
@@ -148,7 +148,7 @@ Write-Step '2/7  Stopping the Pipeline app (Hydrus and the daemon keep running)'
 # command line - the process name is indistinguishable from any other Python.
 $pipelineProcs = @(
     Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -and $_.CommandLine -like '*hydrus_pipeline*' }
+        Where-Object { $_.CommandLine -and $_.CommandLine -like '*undertow*' }
 )
 
 if ($pipelineProcs.Count -eq 0) {
@@ -259,7 +259,7 @@ if ($DryRun) {
     }
     Write-Ok 'Every source file is present at the destination.'
 
-    foreach ($critical in 'run.bat', 'hydrus_pipeline\config.py', 'hydrus_pipeline\webui.py', 'requirements.txt') {
+    foreach ($critical in 'run.bat', 'undertow\config.py', 'undertow\webui.py', 'requirements.txt') {
         if (Test-Path -LiteralPath (Join-Path $Destination $critical)) {
             Write-Ok "  $critical"
         } else {
@@ -319,20 +319,20 @@ if ($DryRun) {
 Write-Step '6/7  Recreating the Desktop shortcut'
 
 if ($DryRun) {
-    Write-Info 'Would rebuild "Hydrus Pipeline.lnk" pointing at the new run.bat'
+    Write-Info 'Would rebuild "Undertow.lnk" pointing at the new run.bat'
 } else {
-    # NOT `python -m hydrus_pipeline.shortcut` - that module's __main__ block ends with
+    # NOT `python -m undertow.shortcut` - that module's __main__ block ends with
     # input("Press Enter to close"), which would block this script forever on stdin.
     # Calling the function directly skips the prompt.
     Push-Location $Destination
     try {
-        & $venvPy -c "from hydrus_pipeline.shortcut import create_desktop_shortcut; create_desktop_shortcut()"
+        & $venvPy -c "from undertow.shortcut import create_desktop_shortcut; create_desktop_shortcut()"
         if ($LASTEXITCODE -ne 0) { throw 'Shortcut creation failed.' }
     } finally {
         Pop-Location
     }
 
-    $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Hydrus Pipeline.lnk'
+    $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Undertow.lnk'
     if (Test-Path -LiteralPath $lnk) {
         $shell = New-Object -ComObject WScript.Shell
         $sc = $shell.CreateShortcut($lnk)
@@ -360,7 +360,7 @@ if ($DryRun) {
     # across PS 5.1 / 7 on Windows. A file has no quoting to get wrong.
     $probe = Join-Path ([IO.Path]::GetTempPath()) 'hp_probe.py'
     @'
-from hydrus_pipeline import config
+from undertow import config
 def show(label, p):
     print("  %-13s %s -> %s" % (label, p, "FOUND" if p.exists() else "MISSING"))
 print("  %-13s %s" % ("INSTALL_ROOT", config.INSTALL_ROOT))
@@ -432,7 +432,7 @@ Write-Host @"
   Next steps
     1. In File Explorer, right-click the new folder and choose
        "Always Keep on This Device" so iCloud cannot evict the code.
-    2. Double-click the "Hydrus Pipeline" Desktop shortcut.
+    2. Double-click the "Undertow" Desktop shortcut.
     3. The dashboard should open at http://127.0.0.1:8765 with Hydrus, the daemon and
        the systray showing their usual status, and your subscriptions intact - they
        live in the database, which never moved.

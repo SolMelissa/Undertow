@@ -1,9 +1,9 @@
-# The Pipeline (Hydrus Pipeline)
+# Undertow (Hydrus Pipeline)
 
 A Python TUI app that manages **Hydrus** (media manager) + **hydownloader** (its subscription
 downloader daemon) as one cockpit, so daily use is "double-click a shortcut" instead of
 juggling two separate programs. This folder is the app itself, not the Hydrus/hydownloader
-installs — those live under `%USERPROFILE%\HydrusPipeline\` (see `hydrus_pipeline/config.py`
+installs — those live under `%USERPROFILE%\HydrusPipeline\` (see `undertow/config.py`
 for exact paths).
 
 This project has no git repo. Treat file state on disk as the source of truth.
@@ -11,17 +11,17 @@ This project has no git repo. Treat file state on disk as the source of truth.
 ## Architecture: Python port superseded the PowerShell version
 
 Daily-use logic used to be PowerShell (`Launch-HydrusPipeline.ps1` and friends). It was ported
-to the `hydrus_pipeline/` Python package to fix JSON-serialization and error-handling issues
+to the `undertow/` Python package to fix JSON-serialization and error-handling issues
 that kept recurring in PS1. **The `.ps1` scripts for daily use are legacy** — untouched,
 kept only as a fallback, not where active work happens. See `docs/PYTHON_PORT_SETUP.md` for the
 full history/rationale.
 
 | Old (legacy, don't edit for feature work) | New (active) |
 |---|---|
-| `legacy/Launch-HydrusPipeline.ps1` | `hydrus_pipeline/menu.py` (startup wiring) + `hydrus_pipeline/webui.py` (primary interface, a web dashboard) |
-| `legacy/Configure-ApiKeys.ps1` | `hydrus_pipeline/api_keys.py` |
-| `legacy/Stop-HydrusPipelineServices.ps1` | `hydrus_pipeline/stop_services.py` |
-| `legacy/Create-DesktopShortcut.ps1` | `hydrus_pipeline/shortcut.py` |
+| `legacy/Launch-HydrusPipeline.ps1` | `undertow/menu.py` (startup wiring) + `undertow/webui.py` (primary interface, a web dashboard) |
+| `legacy/Configure-ApiKeys.ps1` | `undertow/api_keys.py` |
+| `legacy/Stop-HydrusPipelineServices.ps1` | `undertow/stop_services.py` |
+| `legacy/Create-DesktopShortcut.ps1` | `undertow/shortcut.py` |
 
 **Exception: `scripts/Setup-HydrusPipeline.ps1` is still the active, correct tool.** It's a run-once
 first-time install/provisioning script (installs Hydrus, clones hydownloader, creates the
@@ -31,8 +31,8 @@ port it or route setup questions to the Python package.
 ## What to use for what
 
 - **Daily-use bugs/features (subscriptions, TUI, watchdog, web dashboard, service
-  start/stop/health checks, API key config)** → edit inside `hydrus_pipeline/`. Entry point is
-  `python -m hydrus_pipeline` (via `run.bat`, which prefers `.venv\Scripts\python.exe` if
+  start/stop/health checks, API key config)** → edit inside `undertow/`. Entry point is
+  `python -m undertow` (via `run.bat`, which prefers `.venv\Scripts\python.exe` if
   present). Key modules:
   - `menu.py` — startup wiring: starts services/watchdog, then launches the web dashboard and
     hides this process's own console window (falls back to the TUI if `flask` isn't installed)

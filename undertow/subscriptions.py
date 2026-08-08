@@ -1,7 +1,7 @@
 """
 Subscription management core logic: add a subscription (single URL, or several comma-
 separated - the TUI splits those before calling in). This is presentation-free by design - the
-TUI (hydrus_pipeline/tui/) is the only caller now, and it drives these directly rather than
+TUI (undertow/tui/) is the only caller now, and it drives these directly rather than
 through an interactive console loop (the old Add-Subscription/Import-SubscriptionsBatch/
 Manage-Subscriptions/Show-QueueStatus/Watch-WorkerStatus PS1 equivalents, all of which were
 input()/print() driven and got removed along with the console menu they belonged to).

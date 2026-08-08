@@ -1,7 +1,7 @@
-# Hydrus Pipeline - Python port setup
+# Undertow - Python port setup
 
 This replaces `Launch-HydrusPipeline.ps1`, `Configure-ApiKeys.ps1`, `Stop-HydrusPipelineServices.ps1`,
-and `Create-DesktopShortcut.ps1` with a Python package (`hydrus_pipeline/`), without PowerShell's
+and `Create-DesktopShortcut.ps1` with a Python package (`undertow/`), without PowerShell's
 JSON-serialization and error-detail footguns that kept biting the subscription-add flow.
 
 The interface itself has since moved past a straight 1:1 port: instead of a numbered
@@ -17,15 +17,15 @@ we hit actually lived.
 
 This folder lives at `F:\Apple\iCloudDrive\0Docs\AI\Claude\The Pipeline` (it used to be
 `C:\0Docs\AI\Claude\The Pipeline`). Only this app moved - the Hydrus install, the
-hydownloader clone, and all databases and media stay at `%USERPROFILE%\HydrusPipeline`,
-which is what `hydrus_pipeline/config.py` still points at.
+hydownloader clone, and all databases and media stay at `%USERPROFILE%\Undertow`,
+which is what `undertow/config.py` still points at.
 
 Because the folder is now cloud-synced, the venv lives **outside** it. Open a terminal
 (PowerShell or Command Prompt) in this folder and run:
 
 ```
-python -m venv "%LOCALAPPDATA%\HydrusPipeline\venv"
-"%LOCALAPPDATA%\HydrusPipeline\venv\Scripts\pip" install -r requirements.txt
+python -m venv "%LOCALAPPDATA%\Undertow\venv"
+"%LOCALAPPDATA%\Undertow\venv\Scripts\pip" install -r requirements.txt
 ```
 
 A venv is thousands of small files plus native binaries - kept inside an iCloud folder it
@@ -36,22 +36,22 @@ first, so the old layout keeps working if you'd rather go back to it.
 Then recreate the Desktop shortcut so it points at the new launcher instead of PowerShell:
 
 ```
-"%LOCALAPPDATA%\HydrusPipeline\venv\Scripts\python" -m hydrus_pipeline.shortcut
+"%LOCALAPPDATA%\Undertow\venv\Scripts\python" -m undertow.shortcut
 ```
 
-This overwrites the existing "Hydrus Pipeline" Desktop shortcut in place - same name, same
+This overwrites the existing "Undertow" Desktop shortcut in place - same name, same
 icon, same double-click habit, just pointing at `run.bat` now instead of
 `powershell.exe -File Launch-HydrusPipeline.ps1`.
 
 ## Daily use
 
-Nothing changes from your side - double-click the "Hydrus Pipeline" Desktop shortcut like
+Nothing changes from your side - double-click the "Undertow" Desktop shortcut like
 always. It runs `run.bat`, which uses the venv if it finds one next to it, falls back to
 system Python otherwise.
 
 **This changed from the TUI-first design described further down in this doc's history:**
 once services are checked/started, `menu.main()` now launches the **web dashboard**
-(`hydrus_pipeline/webui.py`, http://127.0.0.1:8765) as the primary interface and hides its own
+(`undertow/webui.py`, http://127.0.0.1:8765) as the primary interface and hides its own
 console window - there's nothing left to interact with in the console day to day. The
 dashboard has a **Shutdown** button (stops the daemon/systray if idle, then exits the process)
 since there's no window left to close or Ctrl+C once it's hidden.
@@ -59,7 +59,7 @@ since there's no window left to close or Ctrl+C once it's hidden.
 The Textual "cockpit" TUI described below is still fully implemented and still the automatic
 fallback if `flask` isn't installed - and it's one click away from the dashboard's **Console
 UI** button, which opens it in a fresh console window (running `python -m
-hydrus_pipeline.tui`) without re-running the startup sequence, since services are already up
+undertow.tui`) without re-running the startup sequence, since services are already up
 by the time the dashboard exists. Both interfaces call the exact same backend functions, so
 using one doesn't desync the other.
 
@@ -135,7 +135,7 @@ Press `m` for Throttle Control to handle both cases:
 
 ## If something's off
 
-- `python -m hydrus_pipeline.stop_services` - stops just the daemon + systray (leaves Hydrus
+- `python -m undertow.stop_services` - stops just the daemon + systray (leaves Hydrus
   running), for when `hydownloader-config.json` changed and the running daemon needs to pick
   up fresh values. Same as the old Stop-HydrusPipelineServices.ps1.
 - The old `.ps1` scripts are untouched and still work if you need to fall back - nothing was

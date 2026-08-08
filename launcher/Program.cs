@@ -1,4 +1,4 @@
-// App-frame launcher for the Hydrus Pipeline: starts the Python backend headless (no browser
+// App-frame launcher for Undertow: starts the Python backend headless (no browser
 // tab), then shows its web dashboard inside a native window via WebView2 - so pinning this
 // .exe to Start/Taskbar behaves like a real app instead of "opens a browser tab". Closing the
 // window triggers a full shutdown (Hydrus, daemon, systray, VeraCrypt dismount) via the
@@ -7,7 +7,7 @@ using System.Diagnostics;
 using System.Net.Http;
 using Microsoft.Web.WebView2.WinForms;
 
-namespace HydrusPipelineLauncher;
+namespace UndertowLauncher;
 
 internal static class Program
 {
@@ -33,7 +33,7 @@ internal static class Program
 
         string venvPython = Path.Combine(baseDir, ".venv", "Scripts", "python.exe");
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string fallbackVenvPython = Path.Combine(localAppData, "HydrusPipeline", "venv", "Scripts", "python.exe");
+        string fallbackVenvPython = Path.Combine(localAppData, "Undertow", "venv", "Scripts", "python.exe");
 
         string python = File.Exists(venvPython) ? venvPython
             : File.Exists(fallbackVenvPython) ? fallbackVenvPython
@@ -42,12 +42,12 @@ internal static class Program
         var psi = new ProcessStartInfo
         {
             FileName = python,
-            Arguments = "-m hydrus_pipeline",
+            Arguments = "-m undertow",
             WorkingDirectory = baseDir,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        psi.EnvironmentVariables["HYDRUS_PIPELINE_NO_BROWSER"] = "1";
+        psi.EnvironmentVariables["UNDERTOW_NO_BROWSER"] = "1";
 
         return Process.Start(psi);
     }
@@ -90,7 +90,7 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
             Font = new Font(Font.FontFamily, 12),
-            Text = "Starting Hydrus Pipeline...",
+            Text = "Starting Undertow...",
         };
         Controls.Add(_statusLabel);
 
@@ -148,7 +148,7 @@ internal sealed class MainForm : Form
 
     private async Task ShutdownAndCloseAsync()
     {
-        _statusLabel.Text = "Shutting down Hydrus Pipeline...";
+        _statusLabel.Text = "Shutting down Undertow...";
         _statusLabel.Visible = true;
         _webView.Visible = false;
 

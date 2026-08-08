@@ -67,7 +67,7 @@ def find_systray_exe() -> Path | None:
 
 # ---------------------------------------------------------------------- settings-aware getters
 # The constants above are the ultimate hardcoded fallbacks; these getters check settings.json
-# (via hydrus_pipeline.settings) for a user override first. Each imports `settings` inside the
+# (via undertow.settings) for a user override first. Each imports `settings` inside the
 # function body rather than at module top - config.py is imported by nearly every other module
 # in the package, and settings.py itself imports config.py for path/default construction, so a
 # top-level `config -> settings -> config` cycle would break imports everywhere. Deferring the

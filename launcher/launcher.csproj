@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Undertow</AssemblyName>
-    <RootNamespace>HydrusPipelineLauncher</RootNamespace>
+    <RootNamespace>UndertowLauncher</RootNamespace>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>

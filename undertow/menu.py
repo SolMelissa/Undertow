@@ -2,13 +2,13 @@
 Startup/shutdown wiring - equivalent of the STARTUP section at the bottom of
 Launch-HydrusPipeline.ps1. Makes sure Hydrus, the hydownloader daemon, and the systray are all
 running (starting only whatever isn't already up), starts the background watchdog, then hands
-off to the web dashboard (hydrus_pipeline/webui.py) as the primary interface - the console
+off to the web dashboard (undertow/webui.py) as the primary interface - the console
 window is hidden once it's up, since there's nothing left to interact with there day to day.
 
-The Textual TUI (hydrus_pipeline/tui/) is still fully functional - it's the automatic fallback
+The Textual TUI (undertow/tui/) is still fully functional - it's the automatic fallback
 if Flask isn't installed, and otherwise stays one click away via the web dashboard's own
 "Console UI" button (which launches it in a fresh, visible console window without re-running
-any of the startup steps below - see hydrus_pipeline/tui/__main__.py).
+any of the startup steps below - see undertow/tui/__main__.py).
 
 Does NOT reinstall anything - for first-time setup, use Setup-HydrusPipeline.ps1 (still
 PowerShell; it's a one-time provisioning script, not part of daily use, so it wasn't
@@ -94,9 +94,9 @@ def main() -> None:
 
     from . import webui
 
-    # Set by HydrusPipelineLauncher.cs when it's about to show the dashboard in its own
+    # Set by UndertowLauncher.cs when it's about to show the dashboard in its own
     # WebView2 frame - skips opening a redundant browser tab alongside the app window.
-    open_browser = os.environ.get("HYDRUS_PIPELINE_NO_BROWSER") != "1"
+    open_browser = os.environ.get("UNDERTOW_NO_BROWSER") != "1"
     port = webui.run_webui(open_browser=open_browser)
     if port is None:
         print("  'flask' isn't installed (pip install -r requirements.txt) - falling back to the console UI.")

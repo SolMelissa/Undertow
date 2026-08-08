@@ -75,7 +75,7 @@ function twoColTable(rows, headers, widths) {
 
 const bodyChildren = [
   new Paragraph({
-    children: [new TextRun({ text: "Hydrus Pipeline", bold: true, size: 48, font: FONT })],
+    children: [new TextRun({ text: "Undertow", bold: true, size: 48, font: FONT })],
     spacing: { after: 80 },
   }),
   new Paragraph({
@@ -98,7 +98,7 @@ const bodyChildren = [
   h1("Usage"),
 
   h2("Opening the Pipeline"),
-  p("Double-click the “Hydrus Pipeline” shortcut on the Desktop. This runs Launch-HydrusPipeline.ps1, which:"),
+  p("Double-click the “Undertow” shortcut on the Desktop. This runs Launch-HydrusPipeline.ps1, which:"),
   bullet("Starts Hydrus, the hydownloader daemon, and hydownloader-systray - but only whichever of these isn't already running. It never opens a second copy of anything."),
   bullet("Drops you into a text menu in the PowerShell window with four choices."),
   ...code("[1] Search / Discover   - add new subscriptions or single downloads (opens the systray)\n[2] Organize / Tag      - bring Hydrus to the front to tag and sort files\n[3] View / Browse       - bring Hydrus to the front to search and view your library\n[4] Configure API keys  - see/set Reddit and Hydrus credentials\n[Q] Quit - shuts down anything idle, leaves anything busy running"),
@@ -242,7 +242,7 @@ const bodyChildren = [
       ["  \\logs\\", "Daemon/systray stdout+stderr logs and per-URL gallery-dl logs"],
       ["C:\\Users\\Matt\\HydrusPipeline\\hydownloader-systray\\", "The separate, prebuilt native systray app + its settings.ini"],
       ["C:\\Users\\Matt\\gallery-dl\\config.json", "Base gallery-dl config (directory layout, site extractor settings)"],
-      ["Desktop\\Hydrus Pipeline.lnk", "The shortcut - runs Launch-HydrusPipeline.ps1"],
+      ["Desktop\\Undertow.lnk", "The shortcut - runs Launch-HydrusPipeline.ps1"],
     ],
     ["Path", "What it is"],
     [5500, 4200]

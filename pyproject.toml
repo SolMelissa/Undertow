@@ -1,5 +1,5 @@
 [project]
-name = "hydrus-pipeline"
+name = "undertow"
 version = "1.0.0"
 description = "Cockpit launcher/dashboard for Hydrus + hydownloader"
 requires-python = ">=3.11"
@@ -13,4 +13,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["hydrus_pipeline"]
+packages = ["undertow"]

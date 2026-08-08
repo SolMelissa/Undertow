@@ -1,4 +1,4 @@
-# Hydrus Pipeline
+# Undertow
 
 A cockpit that manages [Hydrus Network](https://hydrusnetwork.github.io/hydrus/)
 (a local media manager/tagger) together with
@@ -27,7 +27,7 @@ under `%USERPROFILE%\HydrusPipeline\` once set up (see [Configuration](#configur
 
 ## Quick start
 
-**Already set up?** Just double-click the "Hydrus Pipeline" Desktop shortcut (or run
+**Already set up?** Just double-click the "Undertow" Desktop shortcut (or run
 `run.bat`). It starts whatever services aren't already running, opens the web dashboard in your
 browser, and hides its own console window. Use the dashboard's **Shutdown** button to stop the
 whole pipeline cleanly — there's no window left to close or Ctrl+C once it's hidden.
@@ -44,14 +44,14 @@ to re-run if it's interrupted.
 ```
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python -m hydrus_pipeline.shortcut
+.venv\Scripts\python -m undertow.shortcut
 ```
 
-The last command (re)creates the "Hydrus Pipeline" Desktop shortcut pointing at `run.bat`.
+The last command (re)creates the "Undertow" Desktop shortcut pointing at `run.bat`.
 
 ## Daily use: the web dashboard
 
-`run.bat` (via `python -m hydrus_pipeline`) checks/starts services, then opens
+`run.bat` (via `python -m undertow`) checks/starts services, then opens
 `http://127.0.0.1:8765` in your browser: real-time Hydrus/daemon/systray status, the
 subscriptions table (click a row to pause/resume/delete/force-check/view history), a
 quick-subscribe bar, a live-colorized tail of hydownloader's log, and a column of instrument
@@ -65,7 +65,7 @@ pipeline now that the launcher's own console window hides itself).
 
 ### Fallback: the console TUI
 
-Click **Console UI** in the dashboard (or run `python -m hydrus_pipeline.tui` directly) to open
+Click **Console UI** in the dashboard (or run `python -m undertow.tui` directly) to open
 the original full-screen Textual cockpit in its own console window — it connects to the same
 already-running services rather than starting them again, so both interfaces can be used side
 by side. It's also what launches automatically instead of the web dashboard if `flask` isn't
@@ -93,7 +93,7 @@ still describes the TUI as the primary interface and is due for an update to mat
 
 ### If something's off
 
-- `python -m hydrus_pipeline.stop_services` — stops just the daemon + systray (leaves Hydrus
+- `python -m undertow.stop_services` — stops just the daemon + systray (leaves Hydrus
   running). Use this after editing `hydownloader-config.json` by hand, so the daemon picks up
   the new values on its next start.
 - Diagnostics (the dashboard's **Diag** button, or `c` in the TUI) checks service status,
@@ -103,8 +103,8 @@ still describes the TUI as the primary interface and is due for an update to mat
 ## Project layout
 
 ```
-hydrus_pipeline/
-  __main__.py       entry point (python -m hydrus_pipeline)
+undertow/
+  __main__.py       entry point (python -m undertow)
   menu.py           startup/shutdown wiring: start services, run the watchdog, launch the web
                      dashboard and hide the console (falls back to the TUI if flask is missing)
   config.py         all install paths/constants (equivalent of the old PS1's path variables)
@@ -123,7 +123,7 @@ hydrus_pipeline/
   templates/        Jinja2 templates for the web dashboard (htmx + Alpine.js + Tailwind/daisyUI,
                      all from CDNs - no build step)
   tui/
-    __main__.py     lets `python -m hydrus_pipeline.tui` launch just the TUI, used by the
+    __main__.py     lets `python -m undertow.tui` launch just the TUI, used by the
                      dashboard's "Console UI" button (skips the service-start sequence)
     app.py          the Textual application (the fallback interface)
     modals.py       dialogs (add subscription, add download, confirm, health check, help, row actions)
@@ -149,7 +149,7 @@ Everything Hydrus/hydownloader-related lives under `%USERPROFILE%\HydrusPipeline
 | `HydrusPipeline\hydownloader-data\logs\daemon.txt` | The live log the TUI/web UI tail |
 | `HydrusPipeline\hydownloader-systray\` | The systray GUI (exe path varies by commit hash, so it's searched for at runtime) |
 
-See [`hydrus_pipeline/config.py`](hydrus_pipeline/config.py) for the exact constants.
+See [`undertow/config.py`](undertow/config.py) for the exact constants.
 
 ## Requirements
 
@@ -159,7 +159,7 @@ See [`hydrus_pipeline/config.py`](hydrus_pipeline/config.py) for the exact const
 - `nvidia-smi` on `PATH` is optional — the dashboard's GPU widget uses it if present and shows
   "not detected" otherwise. No equivalent exists for AMD/Intel GPUs today.
 - No automated test suite by design — verify changes by running the app directly
-  (`python -m hydrus_pipeline`).
+  (`python -m undertow`).
 
 ## Further reading
 

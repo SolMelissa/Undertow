@@ -21,7 +21,7 @@ try:
 except ImportError:
     HAVE_WIN32 = False
 
-_WNDCLASS_NAME = "HydrusPipelineAlertWnd"
+_WNDCLASS_NAME = "UndertowAlertWnd"
 _WM_TRAYICON = win32con.WM_USER + 20 if HAVE_WIN32 else 0
 _class_registered = False
 _class_lock = threading.Lock()
@@ -67,11 +67,11 @@ def send_windows_toast(title: str, message: str) -> bool:
     try:
         _ensure_window_class()
         hinst = win32api.GetModuleHandle(None)
-        hwnd = win32gui.CreateWindow(_WNDCLASS_NAME, "Hydrus Pipeline Alert", 0, 0, 0, 0, 0, 0, 0, hinst, None)
+        hwnd = win32gui.CreateWindow(_WNDCLASS_NAME, "Undertow Alert", 0, 0, 0, 0, 0, 0, 0, hinst, None)
         try:
             hicon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
             flags = win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP | win32gui.NIF_INFO
-            nid = (hwnd, 0, flags, _WM_TRAYICON, hicon, "Hydrus Pipeline", message[:255], 10000, title[:63])
+            nid = (hwnd, 0, flags, _WM_TRAYICON, hicon, "Undertow", message[:255], 10000, title[:63])
             win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, nid)
             # Give the shell a moment to actually render the balloon before the icon (and the
             # balloon riding on it) gets torn back down again.
@@ -86,7 +86,7 @@ def send_windows_toast(title: str, message: str) -> bool:
         return False
 
 
-def notify(events: list[str], title: str = "Hydrus Pipeline") -> None:
+def notify(events: list[str], title: str = "Undertow") -> None:
     """Fire-and-forget: dispatches `events` (already-formatted one-line strings - the same
     shape as watchdog.py's own `actions` list) as a single batched toast rather than one
     notification per event, so a cycle where several things break at once doesn't spam a burst
