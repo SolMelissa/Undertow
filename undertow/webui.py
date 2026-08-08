@@ -1119,24 +1119,26 @@ if HAVE_FLASK:
         if not entries:
             return render_template("partials/media_error_modal.html", message="file not found")
         file_meta = entries[0]
-        tags_by_service = file_meta.get("tags") or {}
-        # Flatten every tag service's "storage_tags" (current + pending) into one namespace-
-        # colored list for display - this app only ever writes to the local service (see
-        # hydrus_client.get_local_tag_service_key), but should still show tags from any service
-        # the file happens to have (e.g. a PTR) rather than hiding them.
-        all_tags: set[str] = set()
-        for svc_data in tags_by_service.values():
-            storage = svc_data.get("storage_tags") or {}
-            for tag_list in storage.values():
-                all_tags.update(tag_list)
+        # This app only ever writes to the local tag service (see
+        # hydrus_client.get_local_tag_service_key), but flatten_tags still shows tags from any
+        # service the file happens to have (e.g. a PTR) rather than hiding them.
         tag_rows = sorted(
-            ({"tag": t, "color": media.namespace_color(t)} for t in all_tags),
+            ({"tag": t, "color": media.namespace_color(t)} for t in media.flatten_tags(file_meta)),
             key=lambda r: r["tag"],
         )
         return render_template(
             "partials/media_detail.html",
             file_id=file_id, meta=file_meta, tags=tag_rows,
         )
+
+    @app.route("/media/<int:file_id>/similar")
+    def media_similar(file_id: int):
+        """Lazy-loaded strip inside the detail modal (see media_detail.html's hx-trigger="load")
+        rather than computed inline with the rest of the modal - it costs several extra Hydrus
+        API round trips (see media.get_similar_files), so a file the user just glances at and
+        closes shouldn't pay for it if the strip hasn't rendered yet."""
+        results, err = media.get_similar_files(file_id)
+        return render_template("partials/media_similar.html", results=results, error=err)
 
     @app.route("/media/<int:file_id>/tags/add", methods=["POST"])
     def media_tags_add(file_id: int):
@@ -1154,52 +1156,25 @@ if HAVE_FLASK:
             hydrus_client.delete_tags([file_id], [tag], service_key)
         return media_detail(file_id)
 
-    # ------------------------------------------------------------ tag siblings/parents manager
+    # --------------------------------------------------------- tag siblings/parents (read-only)
+    # Hydrus's Client API has no write endpoint for tag siblings/parents yet (confirmed live -
+    # see hydrus_client.get_siblings_and_parents's docstring), so this is lookup-only. Editing
+    # still has to happen in Hydrus's own client for now.
 
-    def _tag_relationships_ctx(searched_tag: str = "", message: str | None = None, message_error: bool = False) -> dict:
-        ctx = {"searched_tag": searched_tag, "siblings": [], "parents": [], "message": message, "message_error": message_error}
+    def _tag_relationships_ctx(searched_tag: str = "") -> dict:
+        ctx = {"searched_tag": searched_tag, "ideal_tag": "", "siblings": [], "parents": [], "children": [], "message": None}
         if not searched_tag:
             return ctx
-        sib_resp = hydrus_client.get_tag_siblings([searched_tag])
-        par_resp = hydrus_client.get_tag_parents([searched_tag])
-        if sib_resp.success:
-            entry = (sib_resp.data or {}).get("tags", {}).get(searched_tag, {})
-            ctx["siblings"] = entry.get("ideal_tags") if isinstance(entry, dict) else entry
-        if par_resp.success:
-            entry = (par_resp.data or {}).get("tags", {}).get(searched_tag, {})
-            ctx["parents"] = entry.get("parent_tags") if isinstance(entry, dict) else entry
-        if not sib_resp.success and not par_resp.success:
-            ctx["message"] = sib_resp.error or par_resp.error
-            ctx["message_error"] = True
+        relationships, err = media.get_tag_relationships(searched_tag)
+        if err:
+            ctx["message"] = err
+        else:
+            ctx.update(relationships)
         return ctx
 
     @app.route("/media/tag-relationships")
     def media_tag_relationships():
         return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(request.args.get("tag", "").strip()))
-
-    @app.route("/media/tag-relationships/sibling", methods=["POST"])
-    def media_tag_relationships_sibling():
-        tag = (request.form.get("tag") or "").strip()
-        other = (request.form.get("other") or "").strip()
-        remove = request.form.get("remove") == "1"
-        service_key, err = hydrus_client.get_local_tag_service_key()
-        if not service_key:
-            return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag, message=err, message_error=True))
-        if tag and other:
-            hydrus_client.set_tag_siblings([(tag, other)], service_key, remove=remove)
-        return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag))
-
-    @app.route("/media/tag-relationships/parent", methods=["POST"])
-    def media_tag_relationships_parent():
-        tag = (request.form.get("tag") or "").strip()
-        other = (request.form.get("other") or "").strip()
-        remove = request.form.get("remove") == "1"
-        service_key, err = hydrus_client.get_local_tag_service_key()
-        if not service_key:
-            return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag, message=err, message_error=True))
-        if tag and other:
-            hydrus_client.set_tag_parents([(tag, other)], service_key, remove=remove)
-        return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag))
 
     # ---------------------------------------------------------------- API keys
 

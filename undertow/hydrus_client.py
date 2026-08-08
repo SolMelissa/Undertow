@@ -165,11 +165,17 @@ def get_hydrus_stats() -> HydrusStats:
 # ------------------------------------------------------------------------------ media browsing
 # Everything below backs the Media tab (undertow/media.py + webui.py's /media/* and
 # /partials/media routes) - searching, thumbnails/file bytes, and tag/tag-relationship CRUD.
-# Route names/payload shapes for the write endpoints (add_tags, tag siblings/parents) follow
-# Hydrus's documented Client API naming convention (mirroring the already-confirmed
-# /get_files/search_files and /verify_access_key above), but haven't been re-confirmed against a
-# live instance the way this module's docstring says the existing routes were - do that first
-# against a running Hydrus (see the plan's "spike" note) if anything here 404s.
+# Confirmed against a live instance (Hydrus 665 / API v88) and against the official docs at
+# hydrusnetwork.github.io/hydrus/developer_api.html - two things an earlier pass guessed wrong
+# and that are worth knowing if this ever needs revisiting:
+#   - /add_tags/search_tags has NO way to scope counts to an arbitrary in-progress search - only
+#     `file_service_key`/`tag_service_key`/`tag_display_type`. Counts are always whole-tag-domain,
+#     not "how many of my current search results have this tag". Hydrus silently ignores unknown
+#     query params instead of erroring, so a wrong param name here looks like it "works" until
+#     you compare the numbers.
+#   - There is no write endpoint for tag siblings/parents at all yet - only the read-only
+#     GET /add_tags/get_siblings_and_parents. Hydrus's own docs say pair-based editing "will
+#     appear in a different API request in future" - it doesn't exist today, on any route name.
 
 def search_files(predicates: list[str], return_hashes: bool = False) -> ApiResult:
     """General-purpose search, unlike _search_file_count (which only returns a length). Callers
@@ -200,17 +206,16 @@ def get_file_metadata(file_ids: list[int]) -> ApiResult:
     )
 
 
-def search_tags(query: str, context_predicates: list[str] | None = None, tag_service_key: str | None = None) -> ApiResult:
-    """Tag autocomplete with counts - the mechanism behind the Media tab's suggestion pool and
-    live in-context counts (see media.get_suggested_tags). `context_predicates`, when given, is
-    the current active search - Hydrus's own client search box narrows autocomplete counts to
-    the current search the same way; this needs confirming against the live API (see module
-    docstring above) for the exact param name it expects for that context."""
+def search_tags(query: str, tag_service_key: str | None = None) -> ApiResult:
+    """Tag autocomplete with counts - the mechanism behind the Media tab's suggestion pool. Counts
+    are whole-tag-domain (or whatever `tag_service_key` scopes to), NOT narrowed by any active
+    search - confirmed live that /add_tags/search_tags has no parameter for that (see module
+    docstring above). Still useful for "what tags exist / are common", just not "what tags would
+    actually narrow my current results", which would need a much more expensive per-candidate
+    search_files call to compute and isn't done here."""
     params: dict = {"search": query}
     if tag_service_key:
         params["tag_service_key"] = tag_service_key
-    if context_predicates:
-        params["tags"] = str(context_predicates).replace("'", '"')
     return invoke_hydrus_api("/add_tags/search_tags", params=params)
 
 
@@ -249,53 +254,26 @@ def add_tags(file_ids: list[int], tags: list[str], tag_service_key: str) -> ApiR
 
 def delete_tags(file_ids: list[int], tags: list[str], tag_service_key: str) -> ApiResult:
     """Hydrus's add_tags route also handles deletes - actions are passed per-tag-service as
-    {tag: action} where 1=add, 2=delete (petition actions for non-local services aren't
-    exposed here since this app only ever writes to the local tag service)."""
+    {action_code: [tags]}. Confirmed against the official docs: 0=add/local, 1=delete/local,
+    2=pend, 3=rescind pend, 4=petition, 5=rescind petition (2-5 are repository-only actions this
+    app never uses, since it only ever writes to the local tag service)."""
     return invoke_hydrus_api_post(
         "/add_tags/add_tags",
         {
             "file_ids": file_ids,
-            "service_keys_to_actions_to_tags": {tag_service_key: {"2": tags}},
+            "service_keys_to_actions_to_tags": {tag_service_key: {"1": tags}},
         },
     )
 
 
-def get_tag_siblings(tags: list[str]) -> ApiResult:
-    return invoke_hydrus_api("/add_tag_siblings/get_tag_siblings", params={"tags": str(tags).replace("'", '"')})
-
-
-def set_tag_siblings(pairs: list[tuple[str, str]], tag_service_key: str, remove: bool = False) -> ApiResult:
-    """`pairs` is [(bad_tag, ideal_tag), ...] - searching for bad_tag then behaves as if the
-    file were tagged ideal_tag instead, same relationship Hydrus's own sibling manager edits."""
-    action = "delete" if remove else "add"
-    return invoke_hydrus_api_post(
-        "/add_tag_siblings/set_tag_siblings",
-        {
-            "pairs": [
-                {"bad_tag": bad, "ideal_tag": ideal, "action": action, "tag_service_key": tag_service_key}
-                for bad, ideal in pairs
-            ]
-        },
-    )
-
-
-def get_tag_parents(tags: list[str]) -> ApiResult:
-    return invoke_hydrus_api("/add_tag_parents/get_tag_parents", params={"tags": str(tags).replace("'", '"')})
-
-
-def set_tag_parents(pairs: list[tuple[str, str]], tag_service_key: str, remove: bool = False) -> ApiResult:
-    """`pairs` is [(child_tag, parent_tag), ...] - a file tagged child_tag automatically gains
-    parent_tag too, same relationship Hydrus's own parent manager edits."""
-    action = "delete" if remove else "add"
-    return invoke_hydrus_api_post(
-        "/add_tag_parents/set_tag_parents",
-        {
-            "pairs": [
-                {"child_tag": child, "parent_tag": parent, "action": action, "tag_service_key": tag_service_key}
-                for child, parent in pairs
-            ]
-        },
-    )
+def get_siblings_and_parents(tags: list[str]) -> ApiResult:
+    """Read-only - confirmed live that Hydrus's Client API has no write endpoint for tag
+    siblings/parents yet (Hydrus's own docs: pair-based editing "will appear in a different API
+    request in future"). Response is keyed by tag, then by tag service, each holding
+    {siblings, ideal_tag, descendants (children), ancestors (parents)} - see
+    media.get_tag_relationships for how the Media tab's read-only relationships modal
+    consumes this."""
+    return invoke_hydrus_api("/add_tags/get_siblings_and_parents", params={"tags": str(tags).replace("'", '"')})
 
 
 def thumbnail_response(file_id: int) -> tuple[object | None, str | None]:

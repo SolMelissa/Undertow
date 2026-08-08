@@ -36,6 +36,9 @@
     <button type="submit" class="btn btn-sm btn-primary">Add tag</button>
   </form>
 
+  <div class="text-sm font-bold" style="margin-top:0.5rem;">Files like this</div>
+  <div hx-get="/media/{{ file_id }}/similar" hx-trigger="load" hx-swap="innerHTML">loading&hellip;</div>
+
   <div class="flex justify-end gap-2 mt-2">
     <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
   </div>
