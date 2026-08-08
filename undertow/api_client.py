@@ -133,14 +133,18 @@ def invoke_daemon_api(route: str, body: Any = None, timeout: float = 8) -> ApiRe
     headers = {"HyDownloader-Access-Key": api.access_key} if api.access_key else {}
     url = f"{api.base_url}{route}"
     verify = False if api.scheme == "https" else True
+    # This is always a loopback call, but requests trusts env/Windows-registry proxy settings
+    # by default - a VPN client or corporate proxy tool configured system-wide will otherwise
+    # intercept the request and break the connection instead of letting it go direct.
+    no_proxy = {"http": None, "https": None}
 
     start = time.monotonic()
     success = False
     try:
         if body is not None:
-            resp = requests.post(url, json=body, headers=headers, timeout=timeout, verify=verify)
+            resp = requests.post(url, json=body, headers=headers, timeout=timeout, verify=verify, proxies=no_proxy)
         else:
-            resp = requests.post(url, headers=headers, timeout=timeout, verify=verify)
+            resp = requests.post(url, headers=headers, timeout=timeout, verify=verify, proxies=no_proxy)
         resp.raise_for_status()
         data = resp.json() if resp.content else None
         success = True

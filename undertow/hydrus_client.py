@@ -56,8 +56,11 @@ def invoke_hydrus_api(route: str, params: dict | None = None, timeout: float = 8
 
     headers = {"Hydrus-Client-API-Access-Key": api.access_key}
     url = f"{api.base_url}{route}"
+    # Bypass system/IE proxy config, same reasoning as api_client.invoke_daemon_api - this is
+    # always a loopback call and shouldn't be routed through a VPN/corporate proxy.
+    no_proxy = {"http": None, "https": None}
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=timeout, verify=False)
+        resp = requests.get(url, params=params, headers=headers, timeout=timeout, verify=False, proxies=no_proxy)
         resp.raise_for_status()
         data = resp.json() if resp.content else None
         return ApiResult(True, data, None)
