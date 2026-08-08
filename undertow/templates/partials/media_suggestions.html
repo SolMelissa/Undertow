@@ -1,0 +1,6 @@
+{% for s in suggestions %}
+<button class="kawaii-pill" style="border-color:{{ s.color }}; color:{{ s.color }};"
+        hx-post="/media/search/add" hx-vals='{"predicate": "{{ s.tag }}"}' hx-target="#media-panel" hx-swap="outerHTML">
+  {{ s.tag }}{% if s.count %} ({{ s.count }}){% endif %}
+</button>
+{% endfor %}

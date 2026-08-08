@@ -1,0 +1,14 @@
+{% if error %}
+<div class="text-xs" style="color:var(--k-danger-text);">couldn't load suggestions: {{ error }}</div>
+{% elif not results %}
+<div class="text-xs text-[#8aa0a8]">no similar files found</div>
+{% else %}
+<div style="display:flex; gap:0.5rem; overflow-x:auto; padding-bottom:0.25rem;">
+  {% for r in results %}
+  <div style="flex:0 0 auto; width:84px; cursor:pointer;" title="shared tags: {{ r.shared_tags|join(', ') }}"
+       hx-get="/media/{{ r.file_id }}/detail" hx-target="#modal-content" hx-swap="innerHTML">
+    <img src="/media/thumbnail/{{ r.file_id }}" loading="lazy" style="width:84px; height:84px; object-fit:cover; border-radius:8px;">
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

@@ -1,0 +1,56 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">TAG RELATIONSHIPS</div>
+  <p class="text-xs text-[#8aa0a8]">
+    Siblings: searching any of these behaves as if files were tagged with the ideal tag instead.
+    Parents: files tagged with this tag automatically gain its parent tags too.
+    Hydrus's Client API doesn't support editing siblings/parents yet - this is view-only; make
+    changes in Hydrus's own tag sibling/parent manager for now.
+  </p>
+
+  <form hx-get="/media/tag-relationships" hx-target="#modal-content" hx-swap="innerHTML" style="display:flex; gap:0.5rem;">
+    <input type="text" name="tag" value="{{ searched_tag }}" placeholder="tag to inspect&hellip;" required
+           class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]" style="flex:1;">
+    <button type="submit" class="btn btn-sm btn-primary">Look up</button>
+  </form>
+
+  {% if message %}
+  <div class="alert alert-error py-2 text-sm">{{ message }}</div>
+  {% endif %}
+
+  {% if searched_tag and not message %}
+  {% if ideal_tag and ideal_tag != searched_tag %}
+  <div class="text-sm">Displays as: <span class="font-bold text-[#39ff88]">{{ ideal_tag }}</span></div>
+  {% endif %}
+
+  <div class="text-sm font-bold" style="margin-top:0.5rem;">Siblings</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+    {% for s in siblings %}
+    <span class="kawaii-pill">{{ s }}</span>
+    {% else %}
+    <span class="text-xs text-[#8aa0a8]">none</span>
+    {% endfor %}
+  </div>
+
+  <div class="text-sm font-bold" style="margin-top:0.5rem;">Parents</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+    {% for p in parents %}
+    <span class="kawaii-pill">{{ p }}</span>
+    {% else %}
+    <span class="text-xs text-[#8aa0a8]">none</span>
+    {% endfor %}
+  </div>
+
+  <div class="text-sm font-bold" style="margin-top:0.5rem;">Children (tags this is a parent of)</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+    {% for c in children %}
+    <span class="kawaii-pill">{{ c }}</span>
+    {% else %}
+    <span class="text-xs text-[#8aa0a8]">none</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="flex justify-end gap-2 mt-2">
+    <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+  </div>
+</div>
