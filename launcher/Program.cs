@@ -55,6 +55,15 @@ internal static class Program
             : File.Exists(fallbackVenvPython) ? fallbackVenvPython
             : "python";
 
+        // Backend output was previously discarded entirely (UseShellExecute=false with no
+        // redirection just sends it nowhere) - if "python -m undertow" failed immediately
+        // (missing dependency, import error, ...) there was no way to tell why the dashboard
+        // never came up. Redirecting to a log file next to the exe makes that diagnosable.
+        string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Undertow", "logs");
+        Directory.CreateDirectory(logDir);
+        string stdoutLog = Path.Combine(logDir, "launcher-backend-stdout.log");
+        string stderrLog = Path.Combine(logDir, "launcher-backend-stderr.log");
+
         var psi = new ProcessStartInfo
         {
             FileName = python,
@@ -75,8 +84,11 @@ internal static class Program
         psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        process.OutputDataReceived += (_, e) => output.Emit(e.Data ?? "");
-        process.ErrorDataReceived += (_, e) => output.Emit(e.Data ?? "");
+        var stdoutWriter = new StreamWriter(File.Open(stdoutLog, FileMode.Create, FileAccess.Write, FileShare.Read)) { AutoFlush = true };
+        var stderrWriter = new StreamWriter(File.Open(stderrLog, FileMode.Create, FileAccess.Write, FileShare.Read)) { AutoFlush = true };
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutWriter.WriteLine(e.Data); output.Emit(e.Data ?? ""); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrWriter.WriteLine(e.Data); output.Emit(e.Data ?? ""); };
+        process.Exited += (_, _) => { stdoutWriter.Dispose(); stderrWriter.Dispose(); };
         process.Start();
         // Attached immediately after Start() (not deferred to MainForm construction) so no
         // startup output is lost to the OS pipe buffer before a reader is listening.
@@ -220,14 +232,20 @@ internal sealed class MainForm : Form
     private async Task WaitForDashboardAndLoadAsync()
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-        var deadline = DateTime.UtcNow.AddSeconds(90);
+        // Backend startup (VeraCrypt mount, Hydrus, hydownloader daemon, subscription sync)
+        // can legitimately run past 60s on a slow/first-time boot - the old fixed 60s deadline
+        // just navigated to the dashboard URL regardless of whether it ever came up, which is
+        // what produced the browser's own ERR_CONNECTION_REFUSED page instead of a real error.
+        var deadline = DateTime.UtcNow.AddSeconds(180);
+        bool up = false;
 
         while (DateTime.UtcNow < deadline)
         {
-            if (_backend is not null && _backend.HasExited)
+            if (_backend is { HasExited: true })
             {
-                _statusLabel.Text = $"Undertow's backend exited unexpectedly (code {_backend.ExitCode}) " +
-                    "before the dashboard came up - check the console/log output for the actual error.";
+                _statusLabel.Text = "Undertow's backend exited unexpectedly (code " + _backend.ExitCode + ") " +
+                    "before the dashboard came up.\n\nCheck %LocalAppData%\\Undertow\\logs\\launcher-backend-stderr.log " +
+                    "for details.";
                 _progressBar.Visible = false;
                 return;
             }
@@ -236,13 +254,24 @@ internal sealed class MainForm : Form
             {
                 var resp = await client.GetAsync(_dashboardUrl);
                 if (resp.IsSuccessStatusCode)
+                {
+                    up = true;
                     break;
+                }
             }
             catch
             {
                 // Not up yet - keep polling.
             }
             await Task.Delay(500);
+        }
+
+        if (!up)
+        {
+            _statusLabel.Text = "Undertow's dashboard didn't come up within 180s.\n\n" +
+                "Check %LocalAppData%\\Undertow\\logs\\launcher-backend-stderr.log for details, " +
+                "or that Hydrus/hydownloader aren't stuck waiting on a VeraCrypt password prompt.";
+            return;
         }
 
         SetProgress(100);
