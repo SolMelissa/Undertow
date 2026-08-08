@@ -575,7 +575,7 @@
 .kawaii-gallery-icon .kawaii-gallery-empty span:not(.kawaii-gallery-empty-icon) { display: none; }
 .kawaii-gallery-avatar .kawaii-gallery-empty-icon,
 .kawaii-gallery-icon .kawaii-gallery-empty-icon { font-size: 1.6rem; }
-.kawaii-gallery-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kawaii-gallery-slot img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .kawaii-gallery-slot:hover { box-shadow: 0 8px 22px rgba(255, 111, 165, 0.24); transform: translateY(-2px) rotate(0deg) !important; }
 
 .kawaii-gallery-icon   { width: 60px;  height: 60px;  border-radius: 16px; flex: 0 0 auto; }
