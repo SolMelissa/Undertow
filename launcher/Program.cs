@@ -45,7 +45,19 @@ internal static class Program
         var output = new BackendOutput();
 
         if (IsDashboardAlreadyUp())
-            return (null, output); // Already running (e.g. launched earlier) - just attach a window to it.
+        {
+            // Already running (e.g. launched earlier) - just attach a window to it. But the
+            // backend process being alive doesn't mean Hydrus/the VeraCrypt volume still are;
+            // either can get closed/dismounted independently (manually, sleep/wake, a crash)
+            // while the headless backend keeps serving the dashboard. Since menu.main()'s
+            // start_required_services() only ever runs once per backend process launch, that
+            // self-healing would otherwise never fire again for the rest of this backend's
+            // life. Re-run it now via the same route the dashboard's own Diagnostics ->
+            // "Restart services" button uses - fire-and-forget, so a slow/unreachable backend
+            // doesn't delay showing the window.
+            _ = TryEnsureServicesRunningAsync();
+            return (null, output);
+        }
 
         string venvPython = Path.Combine(baseDir, ".venv", "Scripts", "python.exe");
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -109,6 +121,20 @@ internal static class Program
         catch
         {
             return false;
+        }
+    }
+
+    private static async Task TryEnsureServicesRunningAsync()
+    {
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            await client.PostAsync(DashboardUrl.TrimEnd('/') + "/diagnostics/restart-services", content: null);
+        }
+        catch
+        {
+            // Best-effort - if the backend is unreachable or slow, the dashboard window still
+            // opens and its own Diagnostics modal remains available to retry manually.
         }
     }
 }
