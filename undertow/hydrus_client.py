@@ -83,8 +83,10 @@ def invoke_hydrus_api_post(route: str, body: dict | None = None, timeout: float 
 
     headers = {"Hydrus-Client-API-Access-Key": api.access_key}
     url = f"{api.base_url}{route}"
+    # Bypass system/IE proxy config, same reasoning as invoke_hydrus_api above.
+    no_proxy = {"http": None, "https": None}
     try:
-        resp = requests.post(url, json=body or {}, headers=headers, timeout=timeout, verify=False)
+        resp = requests.post(url, json=body or {}, headers=headers, timeout=timeout, verify=False, proxies=no_proxy)
         resp.raise_for_status()
         data = resp.json() if resp.content else None
         return ApiResult(True, data, None)
@@ -107,8 +109,10 @@ def invoke_hydrus_api_raw(route: str, params: dict | None = None, timeout: float
         return None, f"Hydrus Client API isn't reachable - {reason}"
     headers = {"Hydrus-Client-API-Access-Key": api.access_key}
     url = f"{api.base_url}{route}"
+    # Bypass system/IE proxy config, same reasoning as invoke_hydrus_api above.
+    no_proxy = {"http": None, "https": None}
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=timeout, verify=False, stream=True)
+        resp = requests.get(url, params=params, headers=headers, timeout=timeout, verify=False, stream=True, proxies=no_proxy)
         resp.raise_for_status()
         return resp, None
     except requests.exceptions.HTTPError as e:
