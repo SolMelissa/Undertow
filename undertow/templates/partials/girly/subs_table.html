@@ -22,6 +22,7 @@
         {% if (s.last_result_status or '')|lower == 'ok' %}<span class="kawaii-pill ok"><span class="dot"></span>last check ok</span>
         {% elif s.last_result_status %}<span class="kawaii-pill bad"><span class="dot"></span>{{ s.last_result_status }}</span>{% endif %}
         <span>last check {{ s.last_check_display }}</span>
+        <span>every {{ s.check_interval_display }}</span>
         <span>next {{ s.next_check_display }}</span>
         {%- for t in (s.tags or []) %} <span class="kawaii-sub-tag">{{ t }}</span>{% endfor -%}
       </div>
