@@ -6,7 +6,12 @@ juggling two separate programs. This folder is the app itself, not the Hydrus/hy
 installs — those live under `%USERPROFILE%\HydrusPipeline\` (see `undertow/config.py`
 for exact paths).
 
-This project has no git repo. Treat file state on disk as the source of truth.
+This project is a git repo (`origin` = `github.com/SolMelissa/Undertow`). When a task changes
+code, commit and push to `master` when done — don't leave finished work sitting only on a
+worktree branch or unpushed local commit. `run.bat` (the Desktop shortcut entry point) does a
+best-effort `git pull --ff-only` on every launch specifically so pushed changes show up next
+time the user runs the app; if you can't push (diverged history, conflicts, offline), say so
+explicitly in your final report rather than reporting the task as done.
 
 ## Architecture: Python port superseded the PowerShell version
 
