@@ -363,28 +363,27 @@
 
     <div class="kawaii-blob-bg"><span></span><span></span><span></span></div>
 
+    <div class="kawaii-ribbon">&#10024; certified 100% girly &#10024; princess-approved dashboard &#10024; extremely cute &amp; extremely online &#10024; &#128142; &#10024; certified 100% girly &#10024; princess-approved dashboard &#10024; extremely cute &amp; extremely online &#10024; &#128142;</div>
     <div class="kawaii-hero">
       <div class="kawaii-hero-art">
         <img src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="" style="width:96px;height:96px;">
       </div>
       <div>
-        <p class="kawaii-hero-title">Undertow</p>
-        <p class="kawaii-hero-sub">Your subscriptions and downloads, at a glance &#10024;</p>
+        <p class="kawaii-hero-title">&#128142; Undertow &#128142;</p>
+        <p class="kawaii-hero-sub">Your subscriptions and downloads, served on a pink little platter &#10024;&#128097;&#127770;</p>
       </div>
       <div class="kawaii-hero-spacer"></div>
-      <a class="kawaii-gallery-slot kawaii-gallery-avatar" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="Drop your own pic in static/kawaii/gallery/avatar/">
-        <img src="/kawaii/gallery/avatar" alt="">
-      </a>
+      <div class="kawaii-gallery-slot kawaii-gallery-avatar" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/avatar" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div>
 
     <!-- Sticker rail: a little corkboard of your own pics, tucked in right under the hero.
-         Each spot independently re-rolls a random file from its gallery folder on every page
-         load - see static/kawaii/gallery/README.md. -->
+         Each spot independently re-rolls a pick from the shared static/images/anime/ pool on
+         every page load - see static/images/anime/README.md. -->
     <div class="kawaii-sticker-rail">
-      <a class="kawaii-gallery-slot kawaii-gallery-icon" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/icon/"><img src="/kawaii/gallery/icon" alt=""></a>
-      <a class="kawaii-gallery-slot kawaii-gallery-icon" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/icon/"><img src="/kawaii/gallery/icon" alt=""></a>
-      <a class="kawaii-gallery-slot kawaii-gallery-icon" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/icon/"><img src="/kawaii/gallery/icon" alt=""></a>
-      <a class="kawaii-gallery-slot kawaii-gallery-icon" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/icon/"><img src="/kawaii/gallery/icon" alt=""></a>
+      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div>
 
     <div class="kawaii-btn-row">
@@ -433,9 +432,7 @@
            hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
 
       <div class="kawaii-divider">&#127807;</div>
-      <a class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/wide/">
-        <img src="/kawaii/gallery/wide" alt="">
-      </a>
+      <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#128150; Subscriptions</p>
       <div style="display:flex; gap:1.25rem; align-items:flex-start;">
@@ -448,12 +445,8 @@
           <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
         </div>
         <div class="kawaii-gallery-flank kawaii-hide-sm">
-          <a class="kawaii-gallery-slot kawaii-gallery-md" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/md/">
-            <img src="/kawaii/gallery/md" alt="">
-          </a>
-          <a class="kawaii-gallery-slot kawaii-gallery-md" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/md/">
-            <img src="/kawaii/gallery/md" alt="">
-          </a>
+          <div class="kawaii-gallery-slot kawaii-gallery-md" hx-get="/images/anime/slot/md" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+          <div class="kawaii-gallery-slot kawaii-gallery-md" hx-get="/images/anime/slot/md" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
         </div>
       </div>
 
@@ -462,14 +455,12 @@
         <div id="girly-log-box">loading activity&hellip;</div>
       </div>
 
-      <a class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 2rem auto 0;" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/lg/">
-        <img src="/kawaii/gallery/lg" alt="">
-      </a>
+      <div class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 2rem auto 0;" hx-get="/images/anime/slot/lg" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div><!-- /girlyTab === 'home' -->
 
     <div x-show="girlyTab === 'metrics'" x-cloak>
       <p class="kawaii-section-title">
-        <a class="kawaii-gallery-slot kawaii-gallery-icon" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/icon/" style="margin-right:0.35rem;"><img src="/kawaii/gallery/icon" alt=""></a>
+        <div class="kawaii-gallery-slot kawaii-gallery-icon" style="margin-right:0.35rem;" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
         System
       </p>
       <div class="kawaii-stat-grid">
@@ -486,9 +477,7 @@
       </div>
 
       <div class="kawaii-divider">&#127807;</div>
-      <a class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/wide/">
-        <img src="/kawaii/gallery/wide" alt="">
-      </a>
+      <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#9889; Top Processes</p>
       <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
@@ -500,16 +489,14 @@
             loading&hellip;
           </div>
         </div>
-        <a class="kawaii-gallery-slot kawaii-gallery-tall kawaii-hide-sm" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/tall/">
-          <img src="/kawaii/gallery/tall" alt="">
-        </a>
+        <div class="kawaii-gallery-slot kawaii-gallery-tall kawaii-hide-sm" hx-get="/images/anime/slot/tall" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
       </div>
     </div><!-- /girlyTab === 'metrics' -->
 
     <div class="kawaii-divider">&#10024;</div>
     <div class="kawaii-sticker-rail" style="margin-bottom:0;">
-      <a class="kawaii-gallery-slot kawaii-gallery-icon" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/icon/"><img src="/kawaii/gallery/icon" alt=""></a>
-      <a class="kawaii-gallery-slot kawaii-gallery-icon" href="{{ url_for('static', filename='kawaii/gallery/README.md') }}" target="_blank" rel="noopener" title="static/kawaii/gallery/icon/"><img src="/kawaii/gallery/icon" alt=""></a>
+      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div>
   </div><!-- /#girly-view -->
 
@@ -814,6 +801,31 @@ setInterval(refreshLog, 1500);
   window.addEventListener('resize', resize);
   resize();
   requestAnimationFrame(draw);
+})();
+
+// Sparkle cursor trail - girly-view-only chrome, mirrors the matrix-rain/radar-scope decorative
+// pattern above. Spawns a tiny heart/star/sparkle glyph at the pointer every ~55ms (not every
+// mousemove - would spam the DOM), which then floats up and fades via a pure-CSS animation and
+// removes itself on animationend. Skips entirely when the tab is hidden or reduced-motion is on.
+(function sparkleTrail() {
+  const glyphs = ['✨', '💖', '💗', '🎀', '💎', '❤️'];
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion) return;
+  let last = 0;
+  document.addEventListener('pointermove', (e) => {
+    if (document.documentElement.getAttribute('data-theme') !== 'kawaii') return;
+    const now = performance.now();
+    if (now - last < 55) return;
+    last = now;
+    const el = document.createElement('span');
+    el.className = 'kawaii-sparkle-particle';
+    el.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+    el.style.left = e.clientX + 'px';
+    el.style.top = e.clientY + 'px';
+    el.style.setProperty('--drift', (Math.random() * 40 - 20).toFixed(0) + 'px');
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }, { passive: true });
 })();
 </script>
 </body>

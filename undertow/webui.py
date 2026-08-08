@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -39,7 +40,7 @@ from .subscriptions import add_single_subscription
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 try:
-    from flask import Flask, Response, jsonify, render_template, request, send_from_directory
+    from flask import Flask, Response, jsonify, render_template, request
     HAVE_FLASK = True
 except ImportError:
     HAVE_FLASK = False
@@ -58,21 +59,30 @@ if app is not None:
 
 _ACTIVE_SUB_RE = re.compile(r"checking subscription:\s*(\d+)")
 
-# Girly-mode user image gallery: each slot is a size/aspect-ratio bucket used by one or more
-# <img> spots in templates/index.html's #girly-view (see kawaii.css's .kawaii-gallery-* classes
-# for the on-page dimensions each slot is displayed at). Drop any number of images into
-# static/kawaii/gallery/<slot>/ and every page load re-rolls which file each spot on the page
-# shows - no code changes needed, same "just drop files in" pattern as static/kawaii/mascots/.
-# Selection isn't pure uniform-random: candidates whose own aspect ratio is close to the slot's
-# target ratio are weighted higher (see _gallery_pick()) so a landscape photo dropped into "tall"
-# doesn't constantly get cropped down to a sliver by the CSS object-fit:cover - it can still be
-# picked, just less often than a better-fitting image in the same folder.
-_GALLERY_DIR = _PROJECT_ROOT / "undertow" / "static" / "kawaii" / "gallery"
-_GALLERY_RATIOS = {
-    "icon": 1.0, "avatar": 1.0, "sm": 1.0, "md": 1.0, "lg": 1.0,
-    "wide": 480 / 150, "tall": 200 / 300,
+# Girly-mode user image gallery: ONE flat drop folder (static/images/anime/ - no per-slot
+# subfolders) shared by every image spot in templates/index.html's #girly-view. Each spot just
+# asks for a slot name (a target aspect ratio + on-page size, see _GALLERY_SLOTS/kawaii.css's
+# .kawaii-gallery-* classes) and _anime_pick() below picks whichever image in the shared pool
+# fits that ratio best - there's no manual sorting into folders, the ratio *is* the sort.
+# If nothing in the pool fits a slot well enough, that spot renders explanatory placeholder text
+# instead of a mis-cropped image (see partials/girly/gallery_slot.html) - "add a picture shaped
+# like this" rather than silently cramming a square photo into a wide banner.
+_ANIME_DIR = _PROJECT_ROOT / "undertow" / "static" / "images" / "anime"
+_GALLERY_SLOTS = {
+    "icon":   {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 200×200)"},
+    "avatar": {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 300×300)"},
+    "sm":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 400×400)"},
+    "md":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 500×500)"},
+    "lg":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 700×700)"},
+    "wide":   {"ratio": 480 / 150,  "label": "wide banner, ~3.2:1 (e.g. 960×300)"},
+    "tall":   {"ratio": 200 / 300,  "label": "tall portrait, ~2:3 (e.g. 500×750)"},
 }
-_GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+_GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+# How forgiving the ratio match is: log-distance beyond this means "doesn't fit this slot at
+# all" (falls back to placeholder text) rather than just "less likely to be picked". log(2.6)
+# lets e.g. a 4:3 photo still count for "icon" (~1:1) but keeps a true wide/tall shot out of a
+# square slot and vice versa.
+_GALLERY_FIT_CUTOFF = math.log(2.6)
 
 
 def _image_aspect_ratio(path: Path) -> float | None:
@@ -138,65 +148,71 @@ def _image_aspect_ratio(path: Path) -> float | None:
     return None
 
 
-def _gallery_stats_path(folder: Path) -> Path:
-    return folder / ".gallery_stats.json"
+_ANIME_STATS_PATH = _ANIME_DIR / ".gallery_stats.json"
 
 
-def _load_gallery_stats(folder: Path) -> dict:
-    """Per-slot-folder show-count tracker, one JSON file per folder (dotfile, so it never shows
-    up as a "candidate" image itself). Missing/corrupt file just means "nothing tracked yet"."""
+def _load_gallery_stats() -> dict:
+    """Show-count tracker for the shared pool, keyed by filename (dotfile, so it's never itself
+    picked up as a candidate image). Missing/corrupt file just means "nothing tracked yet"."""
     try:
-        return json.loads(_gallery_stats_path(folder).read_text(encoding="utf-8"))
+        return json.loads(_ANIME_STATS_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
-def _save_gallery_stats(folder: Path, stats: dict) -> None:
+def _save_gallery_stats(stats: dict) -> None:
     try:
-        _gallery_stats_path(folder).write_text(json.dumps(stats), encoding="utf-8")
+        _ANIME_DIR.mkdir(parents=True, exist_ok=True)
+        _ANIME_STATS_PATH.write_text(json.dumps(stats), encoding="utf-8")
     except OSError:
         pass  # best-effort - a failed write just means balancing resets, nothing user-visible
 
 
-def _gallery_pick(slot: str) -> tuple[Path, str]:
-    """Returns (folder, filename) to serve for `slot`. Weighted random, not uniform: candidates
-    are favored by (a) how closely their own aspect ratio matches the slot's target (see
-    _GALLERY_RATIOS - avoids a badly-cropped object-fit:cover result) and (b) how rarely they've
-    been shown so far, tracked per-folder in .gallery_stats.json - so a folder of 10 images
-    settles into roughly even rotation instead of random chance favoring the same couple of
-    files run after run."""
-    folder = _GALLERY_DIR / slot
-    target = _GALLERY_RATIOS.get(slot, 1.0)
-    candidates = [
-        p for p in (folder.iterdir() if folder.is_dir() else [])
-        if p.is_file() and p.suffix.lower() in _GALLERY_EXTS and p.name != "default.svg"
+def _anime_pool() -> list[Path]:
+    if not _ANIME_DIR.is_dir():
+        return []
+    return [
+        p for p in _ANIME_DIR.iterdir()
+        if p.is_file() and p.suffix.lower() in _GALLERY_EXTS
     ]
-    if not candidates:
-        return folder, "default.svg"
 
-    import math
-    stats = _load_gallery_stats(folder)
-    weights = []
-    for p in candidates:
+
+def _anime_pick(slot: str) -> str | None:
+    """Picks a filename from the shared static/images/anime/ pool for `slot`, purely by aspect
+    ratio - there's no per-slot folder to sort into. Returns None if the pool is empty or
+    nothing in it fits this slot's ratio closely enough (see _GALLERY_FIT_CUTOFF); the caller
+    renders placeholder text explaining what shape image would fill the spot instead.
+
+    Among images that DO fit, selection is weighted random: better ratio match wins out over
+    worse, and rarely-shown images win out over frequently-shown ones (tracked in
+    .gallery_stats.json) - the same image pool feeding 14 different-shaped spots should still
+    settle into every photo getting roughly even overall exposure, not just whichever one
+    happens to be squarest."""
+    target = _GALLERY_SLOTS.get(slot, {}).get("ratio", 1.0)
+    pool = _anime_pool()
+    if not pool:
+        return None
+
+    fits = []
+    for p in pool:
         ratio = _image_aspect_ratio(p)
-        if ratio is None or ratio <= 0:
-            fit = 1.0  # unknown aspect ratio - neither penalized nor favored
-        else:
-            # log-distance so over- and under-wide mismatches are penalized symmetrically;
-            # +0.15 floor keeps even a badly-mismatched image pickable, just rarely.
-            fit = 1.0 / (abs(math.log(ratio / target)) + 0.15)
-        balance = 1.0 / (stats.get(p.name, 0) + 1)  # decays as an image gets shown more
-        weights.append(fit * balance)
-    chosen = random.choices(candidates, weights=weights, k=1)[0]
+        fits.append(0.0 if (ratio is None or ratio <= 0) else abs(math.log(ratio / target)))
 
-    # Drop stats for files that no longer exist in the folder (deleted/renamed since last pick)
-    # so the tracker file doesn't grow stale entries forever.
-    current_names = {p.name for p in candidates}
+    if min(fits) > _GALLERY_FIT_CUTOFF:
+        return None
+
+    good = [(p, d) for p, d in zip(pool, fits) if d <= _GALLERY_FIT_CUTOFF]
+    stats = _load_gallery_stats()
+    weights = [(1.0 / (dist + 0.15)) * (1.0 / (stats.get(p.name, 0) + 1)) for p, dist in good]
+    chosen = random.choices([p for p, _ in good], weights=weights, k=1)[0]
+
+    # Drop stats for files no longer in the pool so the tracker doesn't grow stale entries.
+    current_names = {p.name for p in pool}
     stats = {name: count for name, count in stats.items() if name in current_names}
     stats[chosen.name] = stats.get(chosen.name, 0) + 1
-    _save_gallery_stats(folder, stats)
+    _save_gallery_stats(stats)
 
-    return folder, chosen.name
+    return chosen.name
 
 # Activity history for the sparkline/queue-graph widgets - one (urls_queued, subscriptions_due)
 # sample per /partials/status poll (the page polls that every 2s, so this is a rolling ~96s
@@ -381,16 +397,21 @@ if HAVE_FLASK:
     def index():
         return render_template("index.html")
 
-    @app.route("/kawaii/gallery/<slot>")
-    def kawaii_gallery_image(slot):
-        if slot not in _GALLERY_RATIOS:
+    @app.route("/images/anime/slot/<slot>")
+    def images_anime_slot(slot):
+        """HTML fragment (not a raw image) for one girly-view gallery spot - htmx hx-gets this
+        on load and swaps in either an <img> pointing at the chosen file under
+        static/images/anime/ (served by Flask's normal static route, no custom bytes-serving
+        route needed here) or a placeholder telling the user what shape image to drop in."""
+        slot_info = _GALLERY_SLOTS.get(slot)
+        if slot_info is None:
             return "", 404
-        folder, filename = _gallery_pick(slot)
-        resp = send_from_directory(folder, filename)
-        # Never cache - each <img> request (i.e. every page load) should be free to re-roll a
-        # different file, not get pinned to whatever the browser cached from the first visit.
-        resp.headers["Cache-Control"] = "no-store"
-        return resp
+        filename = _anime_pick(slot)
+        resp = render_template(
+            "partials/girly/gallery_slot.html",
+            filename=filename, label=slot_info["label"],
+        )
+        return Response(resp, headers={"Cache-Control": "no-store"})
 
     # ---------------------------------------------------------------- polled partials
 

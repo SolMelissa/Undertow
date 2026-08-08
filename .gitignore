@@ -15,9 +15,14 @@ __pycache__/
 launcher/bin/
 launcher/obj/
 
-# Runtime state for the girly-mode image gallery's usage-balancing (see _gallery_pick() in
+# Runtime state for the girly-mode image gallery's usage-balancing (see _anime_pick() in
 # undertow/webui.py) - regenerated automatically, not something to track in source control.
-undertow/static/kawaii/gallery/*/.gallery_stats.json
+undertow/static/images/anime/.gallery_stats.json
+
+# User-dropped girly-mode gallery images themselves aren't tracked (they're the user's own
+# pictures, not app assets) - only the README explaining the folder is.
+undertow/static/images/anime/*
+!undertow/static/images/anime/README.md
 
 # Deprecated hacker/terminal-mode dashboard partials - girly mode is now the default and only
 # mode under active development. These are the non-girly counterparts _themed_template() in

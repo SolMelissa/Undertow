@@ -1,0 +1,8 @@
+{% if filename %}
+<img src="{{ url_for('static', filename='images/anime/' + filename) }}" alt="">
+{% else %}
+<div class="kawaii-gallery-empty">
+  <span class="kawaii-gallery-empty-icon">&#128142;</span>
+  <span>need a picture shaped like<br><strong>{{ label }}</strong><br>drop one in<br><code>static/images/anime/</code></span>
+</div>
+{% endif %}

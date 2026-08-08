@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300">
-  <rect x="3" y="3" width="194" height="294" rx="26" fill="#fff5f9" stroke="#ffc2dd" stroke-width="2.5" stroke-dasharray="7 5"/>
-  <text x="100" y="150" font-family="Quicksand, sans-serif" font-size="42" text-anchor="middle" fill="#ff6fa5">&#127799;</text>
-  <text x="100" y="196" font-family="Quicksand, sans-serif" font-size="13" text-anchor="middle" fill="#b98aa8">drop a tall image in</text>
-  <text x="100" y="215" font-family="Quicksand, sans-serif" font-size="12" text-anchor="middle" fill="#b98aa8">static/kawaii/gallery/tall</text>
-</svg>
