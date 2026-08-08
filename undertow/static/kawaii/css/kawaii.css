@@ -447,6 +447,27 @@
 .kawaii-sub-newfiles { font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 1.3rem; color: var(--k-accent-text); min-width: 2.5rem; text-align: right; }
 .kawaii-empty { text-align: center; color: var(--k-text-dim-text); padding: 2rem 1rem; }
 
+/* subscriptions grouped-by-source view */
+.kawaii-group { margin-bottom: 0.65rem; }
+.kawaii-group-header {
+  display: flex; align-items: center; gap: 0.75rem;
+  background: var(--k-panel); border: 1px solid var(--k-border); border-radius: 16px;
+  padding: 0.7rem 1.1rem; cursor: pointer;
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+.kawaii-group-header:hover { box-shadow: 0 4px 14px rgba(255, 111, 165, 0.18); transform: translateY(-1px); }
+.kawaii-group-caret { font-size: 0.75rem; color: var(--k-text-dim-text); transition: transform 150ms ease; flex: 0 0 auto; }
+.kawaii-group.open .kawaii-group-caret { transform: rotate(90deg); }
+.kawaii-group-name {
+  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 1.02rem; color: var(--k-text);
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kawaii-group-subs {
+  display: none; flex-direction: column; gap: 0.5rem;
+  margin: 0.5rem 0 0 1.6rem; padding-left: 0.9rem; border-left: 2px solid var(--k-border);
+}
+.kawaii-group.open .kawaii-group-subs { display: flex; }
+
 .kawaii-pagebar {
   display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
   margin-top: 0.85rem; font-size: 0.85rem; color: var(--k-text-dim-text);

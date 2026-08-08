@@ -669,6 +669,38 @@ def paginate(items: list, page: int = 1, page_size: int = 25) -> tuple[list, dic
     return items[start:start + page_size], meta
 
 
+GROUP_SORT_KEYS: dict[str, Callable[[dict], object]] = {
+    "name": lambda g: g["name"].lower(),
+    "count": lambda g: g["count"],
+    "failing": lambda g: g["failing"],
+    "due": lambda g: g["due"],
+}
+
+
+def group_by_downloader(subs: list[dict], sort_by: str = "name", sort_dir: str = "asc") -> list[dict]:
+    """Buckets subscriptions by their `downloader` (source) field for the girly-mode grouped
+    view - each group carries its own subs (sorted by keywords) plus count/failing/due summary
+    stats, so a collapsed header alone answers "is this source healthy" without expanding it.
+    Expects each sub to already have `flagged` (see get_failure_status) and `is_due` set."""
+    buckets: dict[str, list[dict]] = {}
+    for s in subs:
+        name = str(s.get("downloader") or "unknown")
+        buckets.setdefault(name, []).append(s)
+    groups = []
+    for name, items in buckets.items():
+        items_sorted = sorted(items, key=lambda s: str(s.get("keywords") or "").lower())
+        groups.append({
+            "name": name,
+            "subs": items_sorted,
+            "count": len(items_sorted),
+            "failing": sum(1 for s in items_sorted if s.get("flagged")),
+            "due": sum(1 for s in items_sorted if s.get("is_due")),
+        })
+    key_fn = GROUP_SORT_KEYS.get(sort_by, GROUP_SORT_KEYS["name"])
+    groups.sort(key=key_fn, reverse=(sort_dir == "desc"))
+    return groups
+
+
 def fleet_counts(subs: list[dict]) -> dict[str, int]:
     """total/active/paused/due counts - the same handful of numbers both the TUI's FLEET
     STATUS panel and the web dashboard's fleet widget show, computed once here so a change to

@@ -512,6 +512,9 @@ if HAVE_FLASK:
         page = request.args.get("page", 1, type=int) or 1
         page_size = request.args.get("page_size", 25, type=int) or 25
         tag_query = (request.args.get("tag") or "").strip().lower()
+        grouped = request.args.get("grouped") in ("1", "true", "True")
+        group_sort = request.args.get("group_sort") or "name"
+        group_dir = request.args.get("group_dir") or "asc"
 
         subs_resp = api_client.get_subscriptions()
         status_resp = api_client.get_status_info()
@@ -521,6 +524,21 @@ if HAVE_FLASK:
             tags_by_id = tags.load_tags()
             if tag_query:
                 all_subs = [s for s in all_subs if any(tag_query in t.lower() for t in tags_by_id.get(s.get("id"), []))]
+            failure_status = subscriptions.get_failure_status(all_subs) if grouped else {}
+            for s in all_subs:
+                s["last_check_display"] = _format_last_check_column(s)
+                s["check_interval_display"] = _format_check_interval_column(s)
+                s["next_check_display"] = _format_next_check(s)
+                s["tags"] = tags_by_id.get(s.get("id"), [])
+                s["flagged"] = bool(failure_status.get(s.get("id"), {}).get("flagged"))
+
+            if grouped:
+                groups = subscriptions.group_by_downloader(all_subs, sort_by=group_sort, sort_dir=group_dir)
+                return render_template(
+                    "partials/girly/subs_grouped.html", groups=groups, active_id=active_id, error=None,
+                    total=len(all_subs), group_sort=group_sort, group_dir=group_dir,
+                )
+
             totals = None
             if sort_by == "total_dls":
                 ids = [s.get("id") for s in all_subs if s.get("id") is not None]
@@ -528,12 +546,10 @@ if HAVE_FLASK:
             ordered = subscriptions.sort_subscriptions(all_subs, sort_by, sort_dir, totals=totals)
             subs, meta = subscriptions.paginate(ordered, page, page_size)
             meta["sort_by"], meta["sort_dir"] = sort_by, sort_dir
-            for s in subs:
-                s["last_check_display"] = _format_last_check_column(s)
-                s["check_interval_display"] = _format_check_interval_column(s)
-                s["next_check_display"] = _format_next_check(s)
-                s["tags"] = tags_by_id.get(s.get("id"), [])
             return render_template(_themed_template("subs_table.html"), subs=subs, active_id=active_id, error=None, meta=meta)
+        if grouped:
+            return render_template("partials/girly/subs_grouped.html", groups=[], active_id=None, error=subs_resp.error, total=0,
+                                    group_sort=group_sort, group_dir=group_dir)
         return render_template(_themed_template("subs_table.html"), subs=[], active_id=None, error=subs_resp.error, meta=None)
 
     @app.route("/partials/new-files")
