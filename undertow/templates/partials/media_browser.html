@@ -1,0 +1,68 @@
+<div id="media-panel">
+{% if not reachable %}
+  <div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+    Hydrus isn't reachable yet - {{ reason }}. Configure the Hydrus Client API key in the Keys panel.
+  </div>
+{% else %}
+
+  <form hx-post="/media/search/add" hx-target="#media-panel" hx-swap="outerHTML"
+        hx-on::after-request="if(event.detail.successful) this.reset()"
+        style="display:flex; gap:0.6rem; margin-bottom:0.6rem;">
+    <input type="text" name="predicate" placeholder="tag, namespace:value, or system:predicate&hellip;" autocomplete="off"
+           class="kawaii-input" style="flex:1;"
+           hx-get="/media/search/suggest" hx-trigger="keyup changed delay:250ms" hx-target="#media-suggest-dropdown" hx-swap="innerHTML"
+           hx-vals="js:{q: event.target.value}">
+    <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
+    <button type="button" class="kawaii-btn" hx-get="/media/tag-relationships" hx-target="#modal-content" hx-swap="innerHTML">Tag Relationships</button>
+  </form>
+
+  {% if search_error %}
+  <div class="text-xs" style="color:var(--k-danger-text); margin-bottom:0.5rem;">{{ search_error }}</div>
+  {% endif %}
+
+  {% if predicates %}
+  <div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.75rem;">
+    {% for p in predicates %}
+    <button class="kawaii-pill" style="border-color:{{ p.color }}; color:{{ p.color }};"
+            hx-post="/media/search/remove" hx-vals='{"predicate": "{{ p.tag }}"}' hx-target="#media-panel" hx-swap="outerHTML"
+            title="click to remove">
+      {{ p.tag }} &times;
+    </button>
+    {% endfor %}
+    <button class="kawaii-pill" hx-post="/media/search/clear" hx-target="#media-panel" hx-swap="outerHTML">clear all</button>
+  </div>
+  {% endif %}
+
+  <div id="media-suggest-dropdown" style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:1rem;">
+    {% include "partials/media_suggestions.html" %}
+  </div>
+
+  {% if not predicates %}
+  <div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+    Add a tag or system predicate above to start browsing.
+  </div>
+  {% elif not file_ids %}
+  <div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+    No files match this search.
+  </div>
+  {% else %}
+  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:0.6rem;">
+    {% for fid in file_ids %}
+    <div class="kawaii-gallery-slot" style="aspect-ratio:1; cursor:pointer;"
+         hx-get="/media/{{ fid }}/detail" hx-target="#modal-content" hx-swap="innerHTML">
+      <img src="/media/thumbnail/{{ fid }}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:12px;">
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="display:flex; justify-content:center; align-items:center; gap:0.75rem; margin-top:1rem; font-size:0.85rem; color:var(--k-text-dim-text);">
+    <button class="kawaii-btn" {{ 'disabled' if page <= 1 }}
+            hx-get="/partials/media?page={{ page - 1 }}" hx-target="#media-panel" hx-swap="outerHTML">&larr; Prev</button>
+    <span>page {{ page }} / {{ total_pages }} &middot; {{ total }} files</span>
+    <button class="kawaii-btn" {{ 'disabled' if page >= total_pages }}
+            hx-get="/partials/media?page={{ page + 1 }}" hx-target="#media-panel" hx-swap="outerHTML">Next &rarr;</button>
+  </div>
+  {% endif %}
+
+{% endif %}
+</div>

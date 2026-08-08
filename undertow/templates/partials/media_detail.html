@@ -1,0 +1,42 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">FILE #{{ file_id }}</div>
+
+  {% set mime = meta.mime or '' %}
+  <div style="display:flex; justify-content:center; background:#000; border-radius:8px; overflow:hidden; max-height:60vh;">
+    {% if mime.startswith('video') or mime.startswith('audio') %}
+    <video src="/media/file/{{ file_id }}" controls style="max-width:100%; max-height:60vh;"></video>
+    {% else %}
+    <img src="/media/file/{{ file_id }}" style="max-width:100%; max-height:60vh; object-fit:contain;">
+    {% endif %}
+  </div>
+
+  <div class="text-xs text-[#8aa0a8]">
+    {{ meta.width }}&times;{{ meta.height }} &middot; {{ mime }} &middot; {{ (meta.size / 1024)|round(1) if meta.size else '?' }} KB
+  </div>
+
+  <div class="text-sm font-bold" style="margin-top:0.25rem;">Tags</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+    {% for t in tags %}
+    <form hx-post="/media/{{ file_id }}/tags/remove" hx-target="#modal-content" hx-swap="innerHTML" style="display:inline;">
+      <input type="hidden" name="tag" value="{{ t.tag }}">
+      <button type="submit" class="kawaii-pill" style="border-color:{{ t.color }}; color:{{ t.color }};" title="click to remove">
+        {{ t.tag }} &times;
+      </button>
+    </form>
+    {% else %}
+    <span class="text-xs text-[#8aa0a8]">no tags yet</span>
+    {% endfor %}
+  </div>
+
+  <form hx-post="/media/{{ file_id }}/tags/add" hx-target="#modal-content" hx-swap="innerHTML"
+        hx-on::after-request="if(event.detail.successful) this.reset()"
+        style="display:flex; gap:0.5rem; margin-top:0.4rem;">
+    <input type="text" name="tag" placeholder="namespace:value or tag&hellip;" required
+           class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]" style="flex:1;">
+    <button type="submit" class="btn btn-sm btn-primary">Add tag</button>
+  </form>
+
+  <div class="flex justify-end gap-2 mt-2">
+    <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+  </div>
+</div>

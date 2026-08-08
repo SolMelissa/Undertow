@@ -1,0 +1,65 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">TAG RELATIONSHIPS</div>
+  <p class="text-xs text-[#8aa0a8]">
+    Siblings: searching the left tag behaves as if files were tagged with the right (ideal) tag instead.
+    Parents: files tagged with the left (child) tag automatically gain the right (parent) tag too.
+  </p>
+
+  <form hx-get="/media/tag-relationships" hx-target="#modal-content" hx-swap="innerHTML" style="display:flex; gap:0.5rem;">
+    <input type="text" name="tag" value="{{ searched_tag }}" placeholder="tag to inspect&hellip;" required
+           class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]" style="flex:1;">
+    <button type="submit" class="btn btn-sm btn-primary">Look up</button>
+  </form>
+
+  {% if message %}
+  <div class="alert {{ 'alert-error' if message_error else 'alert-success' }} py-2 text-sm">{{ message }}</div>
+  {% endif %}
+
+  {% if searched_tag %}
+  <div class="text-sm font-bold" style="margin-top:0.5rem;">Siblings of "{{ searched_tag }}"</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+    {% for s in (siblings or []) %}
+    <form hx-post="/media/tag-relationships/sibling" hx-target="#modal-content" hx-swap="innerHTML" style="display:inline;">
+      <input type="hidden" name="tag" value="{{ searched_tag }}">
+      <input type="hidden" name="other" value="{{ s }}">
+      <input type="hidden" name="remove" value="1">
+      <button type="submit" class="kawaii-pill" title="click to remove this sibling">{{ s }} &times;</button>
+    </form>
+    {% else %}
+    <span class="text-xs text-[#8aa0a8]">none</span>
+    {% endfor %}
+  </div>
+  <form hx-post="/media/tag-relationships/sibling" hx-target="#modal-content" hx-swap="innerHTML"
+        hx-on::after-request="if(event.detail.successful) this.reset()" style="display:flex; gap:0.5rem;">
+    <input type="hidden" name="tag" value="{{ searched_tag }}">
+    <input type="text" name="other" placeholder="ideal tag&hellip;" required
+           class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]" style="flex:1;">
+    <button type="submit" class="btn btn-sm">Add sibling</button>
+  </form>
+
+  <div class="text-sm font-bold" style="margin-top:0.5rem;">Parents of "{{ searched_tag }}"</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+    {% for p in (parents or []) %}
+    <form hx-post="/media/tag-relationships/parent" hx-target="#modal-content" hx-swap="innerHTML" style="display:inline;">
+      <input type="hidden" name="tag" value="{{ searched_tag }}">
+      <input type="hidden" name="other" value="{{ p }}">
+      <input type="hidden" name="remove" value="1">
+      <button type="submit" class="kawaii-pill" title="click to remove this parent">{{ p }} &times;</button>
+    </form>
+    {% else %}
+    <span class="text-xs text-[#8aa0a8]">none</span>
+    {% endfor %}
+  </div>
+  <form hx-post="/media/tag-relationships/parent" hx-target="#modal-content" hx-swap="innerHTML"
+        hx-on::after-request="if(event.detail.successful) this.reset()" style="display:flex; gap:0.5rem;">
+    <input type="hidden" name="tag" value="{{ searched_tag }}">
+    <input type="text" name="other" placeholder="parent tag&hellip;" required
+           class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]" style="flex:1;">
+    <button type="submit" class="btn btn-sm">Add parent</button>
+  </form>
+  {% endif %}
+
+  <div class="flex justify-end gap-2 mt-2">
+    <button class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+  </div>
+</div>

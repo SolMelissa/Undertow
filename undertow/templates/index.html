@@ -423,6 +423,7 @@
          #hacker-view/#girly-view pattern above), so switching tabs is instant with no re-fetch. -->
     <div class="kawaii-tabs">
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'home' }" @click="girlyTab = 'home'">&#127968; Home</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'media' }" @click="girlyTab = 'media'">&#128444; Media</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; System Metrics</button>
     </div>
 
@@ -457,6 +458,11 @@
 
       <div class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 2rem auto 0;" hx-get="/images/anime/slot/lg" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div><!-- /girlyTab === 'home' -->
+
+    <div x-show="girlyTab === 'media'" x-cloak>
+      <p class="kawaii-section-title">&#128444; Media</p>
+      <div hx-get="/partials/media" hx-trigger="load" hx-swap="innerHTML">loading media&hellip;</div>
+    </div><!-- /girlyTab === 'media' -->
 
     <div x-show="girlyTab === 'metrics'" x-cloak>
       <p class="kawaii-section-title">

@@ -29,18 +29,19 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-from . import api_client, api_keys, hydrus_client, logtail, services, settings, subscriptions, tags, watchdog
+from . import api_client, api_keys, hydrus_client, logtail, media, services, settings, subscriptions, tags, watchdog
 from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 try:
-    from flask import Flask, Response, jsonify, render_template, request
+    from flask import Flask, Response, jsonify, make_response, render_template, request
     HAVE_FLASK = True
 except ImportError:
     HAVE_FLASK = False
@@ -1005,6 +1006,200 @@ if HAVE_FLASK:
             "windows_toast_enabled": form.get("windows_toast_enabled") == "on",
         })
         return render_template("partials/settings_modal.html", s=settings.load_settings(), message="Settings saved.", message_error=False)
+
+    # ---------------------------------------------------------------- Media (Hydrus browse/tag)
+    # Search state lives server-side per browser session (see media.py's module docstring) -
+    # identified by an unsigned cookie, fine for a single-user localhost dashboard. Every route
+    # below re-renders the same media_browser.html panel after mutating that state, so the
+    # panel's htmx target always ends up showing the current predicates/results/suggestions.
+
+    _MEDIA_SID_COOKIE = "undertow_media_sid"
+    _MEDIA_PAGE_SIZE = 48
+
+    def _media_sid() -> tuple[str, bool]:
+        """Returns (session_id, is_new) - is_new tells the caller to set the cookie on its
+        response, since reading request.cookies can't itself set anything on the way out."""
+        sid = request.cookies.get(_MEDIA_SID_COOKIE)
+        if sid:
+            return sid, False
+        return uuid.uuid4().hex, True
+
+    def _media_panel_ctx(sid: str) -> dict:
+        api, reason = hydrus_client.get_hydrus_api_info()
+        if not api:
+            return {"reachable": False, "reason": reason}
+
+        predicates = media.get_session_predicates(sid)
+        file_ids, search_error = media.get_current_results(predicates)
+        suggestions, suggest_error = media.get_suggested_tags(predicates, query=request.args.get("q", ""))
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+        except ValueError:
+            page = 1
+        total = len(file_ids)
+        total_pages = max(1, math.ceil(total / _MEDIA_PAGE_SIZE))
+        page = min(page, total_pages)
+        start = (page - 1) * _MEDIA_PAGE_SIZE
+        return {
+            "reachable": True,
+            "predicates": [{"tag": p, "color": media.namespace_color(p)} for p in predicates],
+            "file_ids": file_ids[start:start + _MEDIA_PAGE_SIZE],
+            "total": total, "page": page, "total_pages": total_pages,
+            "suggestions": [{"tag": t, "count": c, "color": media.namespace_color(t)} for t, c in suggestions],
+            "search_error": search_error or suggest_error,
+            "query": request.args.get("q", ""),
+        }
+
+    def _media_panel_response(sid: str, is_new: bool):
+        resp = make_response(render_template("partials/media_browser.html", **_media_panel_ctx(sid)))
+        if is_new:
+            resp.set_cookie(_MEDIA_SID_COOKIE, sid, max_age=60 * 60 * 24 * 30, httponly=True, samesite="Lax")
+        return resp
+
+    @app.route("/partials/media")
+    def partial_media():
+        sid, is_new = _media_sid()
+        return _media_panel_response(sid, is_new)
+
+    @app.route("/media/search/add", methods=["POST"])
+    def media_search_add():
+        sid, is_new = _media_sid()
+        predicate = (request.form.get("predicate") or "").strip()
+        if predicate:
+            media.add_predicate(sid, predicate)
+        return _media_panel_response(sid, is_new)
+
+    @app.route("/media/search/remove", methods=["POST"])
+    def media_search_remove():
+        sid, is_new = _media_sid()
+        predicate = (request.form.get("predicate") or "").strip()
+        if predicate:
+            media.remove_predicate(sid, predicate)
+        return _media_panel_response(sid, is_new)
+
+    @app.route("/media/search/clear", methods=["POST"])
+    def media_search_clear():
+        sid, is_new = _media_sid()
+        media.clear_predicates(sid)
+        return _media_panel_response(sid, is_new)
+
+    @app.route("/media/search/suggest")
+    def media_search_suggest():
+        """Just the suggestion-pill fragment, refreshed as the user types in the search input -
+        separate from /partials/media (which re-renders the whole panel including the grid) so
+        keystrokes don't re-fetch thumbnails on every keystroke."""
+        sid, _ = _media_sid()
+        predicates = media.get_session_predicates(sid)
+        suggestions, _err = media.get_suggested_tags(predicates, query=request.args.get("q", ""))
+        return render_template(
+            "partials/media_suggestions.html",
+            suggestions=[{"tag": t, "count": c, "color": media.namespace_color(t)} for t, c in suggestions],
+        )
+
+    @app.route("/media/thumbnail/<int:file_id>")
+    def media_thumbnail(file_id: int):
+        resp, err = hydrus_client.thumbnail_response(file_id)
+        if resp is None:
+            return "", 502
+        return Response(resp.content, mimetype=resp.headers.get("Content-Type", "image/png"))
+
+    @app.route("/media/file/<int:file_id>")
+    def media_file(file_id: int):
+        resp, err = hydrus_client.file_response(file_id)
+        if resp is None:
+            return "", 502
+        return Response(resp.content, mimetype=resp.headers.get("Content-Type", "application/octet-stream"))
+
+    @app.route("/media/<int:file_id>/detail")
+    def media_detail(file_id: int):
+        meta_resp = hydrus_client.get_file_metadata([file_id])
+        if not meta_resp.success:
+            return render_template("partials/media_error_modal.html", message=f"couldn't load file: {meta_resp.error}")
+        entries = (meta_resp.data or {}).get("metadata") or []
+        if not entries:
+            return render_template("partials/media_error_modal.html", message="file not found")
+        file_meta = entries[0]
+        tags_by_service = file_meta.get("tags") or {}
+        # Flatten every tag service's "storage_tags" (current + pending) into one namespace-
+        # colored list for display - this app only ever writes to the local service (see
+        # hydrus_client.get_local_tag_service_key), but should still show tags from any service
+        # the file happens to have (e.g. a PTR) rather than hiding them.
+        all_tags: set[str] = set()
+        for svc_data in tags_by_service.values():
+            storage = svc_data.get("storage_tags") or {}
+            for tag_list in storage.values():
+                all_tags.update(tag_list)
+        tag_rows = sorted(
+            ({"tag": t, "color": media.namespace_color(t)} for t in all_tags),
+            key=lambda r: r["tag"],
+        )
+        return render_template(
+            "partials/media_detail.html",
+            file_id=file_id, meta=file_meta, tags=tag_rows,
+        )
+
+    @app.route("/media/<int:file_id>/tags/add", methods=["POST"])
+    def media_tags_add(file_id: int):
+        tag = (request.form.get("tag") or "").strip()
+        service_key, err = hydrus_client.get_local_tag_service_key()
+        if tag and service_key:
+            hydrus_client.add_tags([file_id], [tag], service_key)
+        return media_detail(file_id)
+
+    @app.route("/media/<int:file_id>/tags/remove", methods=["POST"])
+    def media_tags_remove(file_id: int):
+        tag = (request.form.get("tag") or "").strip()
+        service_key, err = hydrus_client.get_local_tag_service_key()
+        if tag and service_key:
+            hydrus_client.delete_tags([file_id], [tag], service_key)
+        return media_detail(file_id)
+
+    # ------------------------------------------------------------ tag siblings/parents manager
+
+    def _tag_relationships_ctx(searched_tag: str = "", message: str | None = None, message_error: bool = False) -> dict:
+        ctx = {"searched_tag": searched_tag, "siblings": [], "parents": [], "message": message, "message_error": message_error}
+        if not searched_tag:
+            return ctx
+        sib_resp = hydrus_client.get_tag_siblings([searched_tag])
+        par_resp = hydrus_client.get_tag_parents([searched_tag])
+        if sib_resp.success:
+            entry = (sib_resp.data or {}).get("tags", {}).get(searched_tag, {})
+            ctx["siblings"] = entry.get("ideal_tags") if isinstance(entry, dict) else entry
+        if par_resp.success:
+            entry = (par_resp.data or {}).get("tags", {}).get(searched_tag, {})
+            ctx["parents"] = entry.get("parent_tags") if isinstance(entry, dict) else entry
+        if not sib_resp.success and not par_resp.success:
+            ctx["message"] = sib_resp.error or par_resp.error
+            ctx["message_error"] = True
+        return ctx
+
+    @app.route("/media/tag-relationships")
+    def media_tag_relationships():
+        return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(request.args.get("tag", "").strip()))
+
+    @app.route("/media/tag-relationships/sibling", methods=["POST"])
+    def media_tag_relationships_sibling():
+        tag = (request.form.get("tag") or "").strip()
+        other = (request.form.get("other") or "").strip()
+        remove = request.form.get("remove") == "1"
+        service_key, err = hydrus_client.get_local_tag_service_key()
+        if not service_key:
+            return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag, message=err, message_error=True))
+        if tag and other:
+            hydrus_client.set_tag_siblings([(tag, other)], service_key, remove=remove)
+        return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag))
+
+    @app.route("/media/tag-relationships/parent", methods=["POST"])
+    def media_tag_relationships_parent():
+        tag = (request.form.get("tag") or "").strip()
+        other = (request.form.get("other") or "").strip()
+        remove = request.form.get("remove") == "1"
+        service_key, err = hydrus_client.get_local_tag_service_key()
+        if not service_key:
+            return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag, message=err, message_error=True))
+        if tag and other:
+            hydrus_client.set_tag_parents([(tag, other)], service_key, remove=remove)
+        return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(tag))
 
     # ---------------------------------------------------------------- API keys
 
