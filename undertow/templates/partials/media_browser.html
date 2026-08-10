@@ -19,7 +19,7 @@
   <div class="text-xs" style="color:var(--k-danger-text); margin-bottom:0.5rem;">{{ search_error }}</div>
   {% endif %}
 
-  {% if predicates or (related and (related.siblings or related.parents or related.children)) %}
+  {% if predicates or connected %}
   <div style="display:flex; flex-wrap:wrap; align-items:flex-start; gap:1rem; margin-bottom:0.75rem;">
     {% if predicates %}
     <div style="display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center;">
@@ -31,36 +31,31 @@
       </button>
       {% endfor %}
       <button class="kawaii-pill" hx-post="/media/search/clear" hx-target="#media-panel" hx-swap="outerHTML">clear all</button>
+      {% if predicates %}
+      <span class="text-xs" style="color:var(--k-text-dim-text);" title="files matching every active tag/predicate above">
+        <strong style="color:var(--k-text);">{{ total }}</strong> result{{ 's' if total != 1 else '' }}
+      </span>
+      {% endif %}
     </div>
     {% endif %}
 
-    {% if related and (related.siblings or related.parents or related.children) %}
-    <!-- Tags directly connected (1 level: siblings/parents/children) to the most-recently-
-         searched tag, shown right beside the active predicate pills. Clicking adds it to the
-         active search, same as clicking a suggestion pill. Deliberately lightweight/inline -
-         the full explorable family-tree view lives in the Tag Relations tab's "Tag Map"
-         (see the girlyTab='tags' panel in index.html). -->
-    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem; font-size:0.78rem; color:var(--k-text-dim-text); border-left:1px solid var(--k-border); padding-left:0.75rem;">
-      <span>Connected to <strong style="color:var(--k-text);">{{ related.tag }}</strong>:</span>
-      {% for s in related.siblings %}
-      <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-2); color:var(--k-accent-2-text);"
-              title="sibling - clicking searches as if files were tagged {{ related.tag }}"
-              hx-post="/media/search/add" hx-vals='{"predicate": "{{ s }}"}' hx-target="#media-panel" hx-swap="outerHTML">
-        &#8646; {{ s }}
-      </button>
-      {% endfor %}
-      {% for p in related.parents %}
-      <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-3); color:var(--k-accent-3-text);"
-              title="parent - files tagged {{ related.tag }} automatically have this too"
-              hx-post="/media/search/add" hx-vals='{"predicate": "{{ p }}"}' hx-target="#media-panel" hx-swap="outerHTML">
-        &#8593; {{ p }}
-      </button>
-      {% endfor %}
-      {% for c in related.children %}
-      <button type="button" class="kawaii-pill" style="border-color:var(--k-accent); color:var(--k-accent-text);"
-              title="child - implied by {{ related.tag }}"
-              hx-post="/media/search/add" hx-vals='{"predicate": "{{ c }}"}' hx-target="#media-panel" hx-swap="outerHTML">
-        &#8595; {{ c }}
+    {% if connected %}
+    <!-- Union of siblings/parents/children (1 level) of every active tag predicate, sorted by
+         whole-library reference count so the most-used related tags surface first regardless
+         of which active tag they came from. Each pill's title previews how many results
+         adding it would produce (only computed for the top-N by count - see
+         media.get_connected_tags). Clicking adds it to the active search. Deliberately
+         lightweight/inline - the full explorable family-tree view lives in the Tag Relations
+         tab's "Tag Map" (see the girlyTab='tags' panel in index.html). -->
+    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.35rem; font-size:0.78rem; color:var(--k-text-dim-text); border-left:1px solid var(--k-border); padding-left:0.75rem; max-width:40rem;">
+      <span>Connected:</span>
+      {% for c in connected %}
+      {% set icon = {'sibling': '&#8646;', 'parent': '&#8593;', 'child': '&#8595;'}[c.kind] %}
+      {% set color = {'sibling': 'var(--k-accent-2)', 'parent': 'var(--k-accent-3)', 'child': 'var(--k-accent)'}[c.kind] %}
+      <button type="button" class="kawaii-pill" style="border-color:{{ color }}; color:{{ color }};"
+              title="{{ c.kind }} of {{ c.via }} &middot; {{ c.count }} file(s) total{% if c.preview_count is not none %} &middot; {{ c.preview_count }} if added{% endif %}"
+              hx-post="/media/search/add" hx-vals='{"predicate": "{{ c.tag }}"}' hx-target="#media-panel" hx-swap="outerHTML">
+        {{ icon|safe }} {{ c.tag }} <span style="opacity:0.7;">({{ c.count }}{% if c.preview_count is not none %}&nbsp;&rarr;&nbsp;{{ c.preview_count }}{% endif %})</span>
       </button>
       {% endfor %}
     </div>
@@ -79,18 +74,23 @@
   <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block; margin-top:1rem;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
   {% elif not file_ids %}
   <div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
-    No files match this search.
+    No files match this search{{ ' (' ~ total ~ ' total, none on this page)' if total else '' }}.
   </div>
   {% else %}
-  <!-- Shape filter: each thumbnail classifies itself square/portrait/landscape once its
-       actual pixel size is known client-side (see undertowClassifyMediaCard() in index.html) -
-       no extra Hydrus API round trip needed, since the thumbnail bytes are already being
-       fetched anyway. Exclusive filter (window.mediaShapeFilter, plain JS not server-side) -
-       clicking a shape shows only that shape; clicking it again clears back to showing all. -->
+  <!-- Shape filter is now a real server-side re-search (system:ratio predicate(s) swapped into
+       the session's active predicates - see media.set_shape_filter), not a client-side hide, so
+       switching shapes fills a whole page with that shape instead of pruning an already-loaded
+       page down further. active_shape drives which button shows as pressed. -->
   <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
-    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="square" onclick="undertowSetMediaShapeFilter('square', this)">&#9633; Square</button>
-    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="portrait" onclick="undertowSetMediaShapeFilter('portrait', this)">&#9647; Portrait</button>
-    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="landscape" onclick="undertowSetMediaShapeFilter('landscape', this)">&#9645; Landscape</button>
+    <button type="button" class="kawaii-btn media-shape-toggle {{ 'active' if active_shape == 'square' else '' }}"
+            hx-post="/media/search/shape" hx-vals='{"shape": "square"}' hx-target="#media-panel" hx-swap="outerHTML">&#9633; Square</button>
+    <button type="button" class="kawaii-btn media-shape-toggle {{ 'active' if active_shape == 'portrait' else '' }}"
+            hx-post="/media/search/shape" hx-vals='{"shape": "portrait"}' hx-target="#media-panel" hx-swap="outerHTML">&#9647; Portrait</button>
+    <button type="button" class="kawaii-btn media-shape-toggle {{ 'active' if active_shape == 'landscape' else '' }}"
+            hx-post="/media/search/shape" hx-vals='{"shape": "landscape"}' hx-target="#media-panel" hx-swap="outerHTML">&#9645; Landscape</button>
+    {% if active_shape %}
+    <button type="button" class="kawaii-btn" hx-post="/media/search/shape" hx-vals='{"shape": ""}' hx-target="#media-panel" hx-swap="outerHTML">&times; clear shape</button>
+    {% endif %}
   </div>
   <div id="media-grid" class="media-grid">
     {% for fid in file_ids %}

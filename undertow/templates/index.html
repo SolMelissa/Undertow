@@ -650,17 +650,12 @@ document.body.addEventListener('htmx:afterSwap', (e) => {
   }
 });
 
-// Media tab shape filter (Square/Portrait/Landscape) - see .media-card/.media-grid in
-// kawaii.css and media_browser.html. Classification happens per-thumbnail on <img onload>
-// rather than server-side, since the shape is just "this image's own pixel aspect ratio" and
-// the thumbnail bytes are already being fetched anyway - no extra Hydrus API round trip needed.
-// Exclusive, not inclusive: clicking a shape filters the grid DOWN to just that shape (a
-// single active filter, not 3 independent on/off toggles) - clicking the already-active shape
-// again clears the filter back to "show everything". window.mediaShapeFilter is null (no
-// filter) or one of 'square'/'portrait'/'landscape'. Plain JS state, not server-side, so
-// filtering is instant and persists across this panel's htmx outerHTML swaps (search add/
-// remove/clear, paging).
-window.mediaShapeFilter = null;
+// Media tab per-card shape class (Square/Portrait/Landscape) - purely cosmetic CSS fit now,
+// see .media-card/.media-grid in kawaii.css. The actual shape *filter* (which files get
+// searched for at all) is server-side - see media.set_shape_filter and the shape toggle
+// buttons' hx-post="/media/search/shape" in media_browser.html - so a full page of the
+// requested shape loads instead of a client-side prune of whatever page was already fetched.
+// This just classifies each thumbnail once its real pixel size is known, for the CSS fit.
 function undertowClassifyMediaCard(img) {
   const card = img.closest('.media-card');
   if (!card || !img.naturalWidth || !img.naturalHeight) return;
@@ -668,27 +663,7 @@ function undertowClassifyMediaCard(img) {
   const shape = ratio > 1.15 ? 'landscape' : (ratio < 0.87 ? 'portrait' : 'square');
   card.classList.remove('shape-square', 'shape-portrait', 'shape-landscape');
   card.classList.add('shape-' + shape);
-  card.dataset.shape = shape;
-  card.style.display = (!window.mediaShapeFilter || window.mediaShapeFilter === shape) ? '' : 'none';
 }
-function undertowSyncMediaShapeButtons(root) {
-  (root || document).querySelectorAll('.media-shape-toggle').forEach((btn) => {
-    btn.classList.toggle('active', !window.mediaShapeFilter || window.mediaShapeFilter === btn.dataset.shape);
-  });
-}
-function undertowSetMediaShapeFilter(shape, btn) {
-  window.mediaShapeFilter = (window.mediaShapeFilter === shape) ? null : shape;
-  undertowSyncMediaShapeButtons(btn.closest('#media-panel'));
-  document.querySelectorAll('.media-card').forEach((card) => {
-    const s = card.dataset.shape;
-    card.style.display = (!window.mediaShapeFilter || window.mediaShapeFilter === s) ? '' : 'none';
-  });
-}
-document.body.addEventListener('htmx:afterSwap', (e) => {
-  if (e.detail.target && e.detail.target.id === 'media-panel') {
-    undertowSyncMediaShapeButtons(e.detail.target);
-  }
-});
 
 document.body.addEventListener('htmx:afterSwap', (e) => {
   if (e.detail.target && e.detail.target.id === 'modal-content') {

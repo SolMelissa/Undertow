@@ -78,6 +78,45 @@ def clear_predicates(session_id: str) -> None:
     _session_predicates.pop(session_id, None)
 
 
+# Shape filter: system:ratio predicates rather than a client-side hide, so switching shapes
+# re-runs the actual Hydrus search and fills a whole page with that shape instead of pruning
+# down whatever page of unfiltered results happened to already be loaded. Thresholds (ratio
+# >1.15 landscape, <0.87 portrait, else square) match undertowClassifyMediaCard()'s client-side
+# per-thumbnail classification in index.html, expressed as the nearest clean ratio fractions.
+_SHAPE_PREDICATES: dict[str, list[str]] = {
+    "square": ["system:ratio wider than 20:23", "system:ratio taller than 23:20"],
+    "portrait": ["system:ratio taller than 20:23"],
+    "landscape": ["system:ratio wider than 23:20"],
+}
+_ALL_SHAPE_PREDICATES: set[str] = {p for preds in _SHAPE_PREDICATES.values() for p in preds}
+
+
+def set_shape_filter(session_id: str, shape: str | None) -> None:
+    """Swaps out any previously-applied shape predicate(s) for the ones matching `shape` (None
+    clears the filter back to showing every shape)."""
+    for p in list(get_session_predicates(session_id)):
+        if p in _ALL_SHAPE_PREDICATES:
+            remove_predicate(session_id, p)
+    for p in _SHAPE_PREDICATES.get(shape or "", []):
+        add_predicate(session_id, p)
+
+
+def is_shape_predicate(predicate: str) -> bool:
+    """Whether `predicate` is one of set_shape_filter's system:ratio predicates - used to hide
+    it from the visible predicate-pill row (it's represented by the shape toggle buttons
+    instead) while still keeping it in the actual search."""
+    return predicate in _ALL_SHAPE_PREDICATES
+
+
+def active_shape_filter(active_predicates: list[str]) -> str | None:
+    """Which shape's predicate(s) (if any) are currently active, for highlighting the right
+    shape button - inverse of set_shape_filter."""
+    for shape, preds in _SHAPE_PREDICATES.items():
+        if all(p in active_predicates for p in preds):
+            return shape
+    return None
+
+
 # --------------------------------------------------------------------------------------- search
 
 def get_current_results(active_predicates: list[str]) -> tuple[list[int], str | None]:
@@ -146,6 +185,73 @@ def get_tag_relationships(tag: str) -> tuple[dict, str | None]:
         "parents": sorted(parents),
         "children": sorted(children),
     }, None
+
+
+def _tag_reference_count(tag: str) -> int:
+    """Whole-tag-domain reference count for one exact tag, via the same autocomplete endpoint
+    get_suggested_tags uses - Hydrus's search_tags matches on substring, so this hunts the
+    response for the entry whose value is an exact match rather than trusting the first hit."""
+    resp = hydrus_client.search_tags(tag)
+    if not resp.success:
+        return 0
+    for entry in (resp.data or {}).get("tags", []):
+        if isinstance(entry, dict) and entry.get("value") == tag:
+            return entry.get("count", 0) or 0
+    return 0
+
+
+_CONNECTED_TAGS_MAX_CANDIDATES = 30
+_CONNECTED_TAGS_PREVIEW_TOP_N = 8
+
+
+def get_connected_tags(active_predicates: list[str]) -> tuple[list[dict], str | None]:
+    """Union of every active tag predicate's siblings/parents/children (1 level, system:
+    predicates skipped since they have no tag relationships), each annotated with its
+    whole-library reference count and sorted by that count descending - so the Media tab's
+    "Connected" section surfaces the most-used related tags first regardless of which of your
+    several active tags they came from. Capped at _CONNECTED_TAGS_MAX_CANDIDATES tags (each
+    needs its own count lookup) and, since a preview add-count needs a full search_files call
+    per candidate, that preview is only computed for the top _CONNECTED_TAGS_PREVIEW_TOP_N by
+    reference count. Returns ([{"tag", "kind", "via", "count", "preview_count"}, ...], None) or
+    ([], reason) - a lookup failure on one predicate is skipped rather than failing the whole
+    section, since partial connections are still useful."""
+    tag_predicates = [p for p in active_predicates if not p.startswith("system:")]
+    if not tag_predicates:
+        return [], None
+
+    active_set = set(active_predicates)
+    seen: dict[str, dict] = {}
+    last_err: str | None = None
+    for p in tag_predicates:
+        if len(seen) >= _CONNECTED_TAGS_MAX_CANDIDATES:
+            break
+        relationships, err = get_tag_relationships(p)
+        if err:
+            last_err = err
+            continue
+        for kind, key in (("sibling", "siblings"), ("parent", "parents"), ("child", "children")):
+            for t in relationships.get(key, []):
+                if t in active_set or t in seen:
+                    continue
+                seen[t] = {"tag": t, "kind": kind, "via": p}
+                if len(seen) >= _CONNECTED_TAGS_MAX_CANDIDATES:
+                    break
+
+    if not seen:
+        return [], (last_err if last_err else None)
+
+    candidates = list(seen.values())
+    for c in candidates:
+        c["count"] = _tag_reference_count(c["tag"])
+    candidates.sort(key=lambda c: c["count"], reverse=True)
+
+    for c in candidates[:_CONNECTED_TAGS_PREVIEW_TOP_N]:
+        resp = hydrus_client.search_files(active_predicates + [c["tag"]])
+        c["preview_count"] = len((resp.data or {}).get("file_ids") or []) if resp.success else None
+    for c in candidates[_CONNECTED_TAGS_PREVIEW_TOP_N:]:
+        c["preview_count"] = None
+
+    return candidates, None
 
 
 _TAG_MAP_MAX_LOOKUPS = 60

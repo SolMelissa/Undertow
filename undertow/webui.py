@@ -1176,32 +1176,28 @@ if HAVE_FLASK:
         page = min(page, total_pages)
         start = (page - 1) * _MEDIA_PAGE_SIZE
 
-        # Related-tag display (see media_browser.html): siblings/parents of the most recently
-        # added predicate, so the search bar can suggest "here's what's directly connected to
-        # what you just searched" without a separate lookup step. Only for a plain tag/
-        # namespace:value predicate - a system: predicate (system:inbox, ...) has no tag
-        # relationships to look up.
-        related = None
-        if predicates and not predicates[-1].startswith("system:"):
-            last_tag = predicates[-1]
-            relationships, rel_err = media.get_tag_relationships(last_tag)
-            if not rel_err and (relationships.get("siblings") or relationships.get("parents") or relationships.get("children")):
-                related = {
-                    "tag": last_tag,
-                    "siblings": [s for s in relationships["siblings"] if s not in predicates],
-                    "parents": [p for p in relationships["parents"] if p not in predicates],
-                    "children": [c for c in relationships["children"] if c not in predicates],
-                }
+        # Shape (square/portrait/landscape) is implemented as system:ratio predicate(s) mixed
+        # into the same session predicate list the search actually runs against (see
+        # media.set_shape_filter), but shown to the user via the shape toggle buttons instead of
+        # as a removable tag pill - so it's excluded from the visible predicate pills here.
+        visible_predicates = [p for p in predicates if not media.is_shape_predicate(p)]
+        active_shape = media.active_shape_filter(predicates)
+
+        # Connected-tags display (see media_browser.html): union of every active tag predicate's
+        # siblings/parents/children, sorted by whole-library reference count, with a preview of
+        # how many results adding each one would produce.
+        connected, connected_err = media.get_connected_tags(predicates)
 
         return {
             "reachable": True,
-            "predicates": [{"tag": p, "color": media.namespace_color(p)} for p in predicates],
+            "predicates": [{"tag": p, "color": media.namespace_color(p)} for p in visible_predicates],
             "file_ids": file_ids[start:start + _MEDIA_PAGE_SIZE],
             "total": total, "page": page, "total_pages": total_pages,
             "suggestions": [{"tag": t, "count": c, "color": media.namespace_color(t)} for t, c in suggestions],
-            "search_error": search_error or suggest_error,
+            "search_error": search_error or suggest_error or connected_err,
             "query": request.args.get("q", ""),
-            "related": related,
+            "connected": connected,
+            "active_shape": active_shape,
         }
 
     def _media_panel_response(sid: str, is_new: bool):
@@ -1235,6 +1231,17 @@ if HAVE_FLASK:
     def media_search_clear():
         sid, is_new = _media_sid()
         media.clear_predicates(sid)
+        return _media_panel_response(sid, is_new)
+
+    @app.route("/media/search/shape", methods=["POST"])
+    def media_search_shape():
+        """Shape (square/portrait/landscape) toggle - reruns the Hydrus search with a
+        system:ratio predicate swapped in/out instead of just hiding already-loaded thumbnails
+        client-side, so a full page of the requested shape actually loads."""
+        sid, is_new = _media_sid()
+        shape = (request.form.get("shape") or "").strip()
+        current = media.active_shape_filter(media.get_session_predicates(sid))
+        media.set_shape_filter(sid, None if shape == current else shape)
         return _media_panel_response(sid, is_new)
 
     @app.route("/media/search/suggest")
