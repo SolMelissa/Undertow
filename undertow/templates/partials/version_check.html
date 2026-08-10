@@ -1,0 +1,21 @@
+{% if not checked %}
+<button id="version-check-btn" type="button" class="kawaii-btn kawaii-only" style="font-size:0.72rem; padding:0.22rem 0.65rem;"
+        hx-post="/version/check" hx-target="#version-check-btn" hx-swap="outerHTML">
+  check for updates
+</button>
+{% elif error %}
+<button id="version-check-btn" type="button" class="kawaii-btn kawaii-only" style="font-size:0.72rem; padding:0.22rem 0.65rem;"
+        title="{{ error }}"
+        hx-post="/version/check" hx-target="#version-check-btn" hx-swap="outerHTML">
+  couldn't check &middot; retry
+</button>
+{% elif update_available %}
+<button id="version-check-btn" type="button" class="kawaii-btn kawaii-btn-primary kawaii-only" style="font-size:0.72rem; padding:0.22rem 0.65rem;"
+        onclick="location.reload()">
+  &#11014; reload to update
+</button>
+{% else %}
+<span id="version-check-btn" class="kawaii-pill ok kawaii-only" style="font-size:0.7rem; padding:0.2rem 0.6rem;">
+  <span class="dot"></span>up to date
+</span>
+{% endif %}

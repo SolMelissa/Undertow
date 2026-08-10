@@ -26,6 +26,17 @@ from .api_client import ApiResult
 # trusted" situation api_client.py already suppresses the warning for.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Shared, connection-pooled session instead of bare requests.get/post - the Media tab's grid can
+# fire off dozens of thumbnail requests for a single page view (see webui.py's /media/thumbnail
+# proxy), and each of those used to open a brand new TCP connection to Hydrus's local API before
+# this. A pooled Session keeps those connections alive and reuses them, which is the difference
+# between "48 fresh handshakes" and "48 requests over a handful of warm connections" on every
+# Media tab page load - the single biggest win available here since the actual byte transfer is
+# already loopback-fast. Thread-safe for concurrent requests (this Flask app runs threaded=True;
+# requests.Session's connection pool is designed for exactly this).
+_session = requests.Session()
+_session.mount("http://", requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=16))
+
 
 @dataclass
 class HydrusApiInfo:
@@ -60,7 +71,7 @@ def invoke_hydrus_api(route: str, params: dict | None = None, timeout: float = 8
     # always a loopback call and shouldn't be routed through a VPN/corporate proxy.
     no_proxy = {"http": None, "https": None}
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=timeout, verify=False, proxies=no_proxy)
+        resp = _session.get(url, params=params, headers=headers, timeout=timeout, verify=False, proxies=no_proxy)
         resp.raise_for_status()
         data = resp.json() if resp.content else None
         return ApiResult(True, data, None)
@@ -86,7 +97,7 @@ def invoke_hydrus_api_post(route: str, body: dict | None = None, timeout: float 
     # Bypass system/IE proxy config, same reasoning as invoke_hydrus_api above.
     no_proxy = {"http": None, "https": None}
     try:
-        resp = requests.post(url, json=body or {}, headers=headers, timeout=timeout, verify=False, proxies=no_proxy)
+        resp = _session.post(url, json=body or {}, headers=headers, timeout=timeout, verify=False, proxies=no_proxy)
         resp.raise_for_status()
         data = resp.json() if resp.content else None
         return ApiResult(True, data, None)
@@ -112,7 +123,7 @@ def invoke_hydrus_api_raw(route: str, params: dict | None = None, timeout: float
     # Bypass system/IE proxy config, same reasoning as invoke_hydrus_api above.
     no_proxy = {"http": None, "https": None}
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=timeout, verify=False, stream=True, proxies=no_proxy)
+        resp = _session.get(url, params=params, headers=headers, timeout=timeout, verify=False, stream=True, proxies=no_proxy)
         resp.raise_for_status()
         return resp, None
     except requests.exceptions.HTTPError as e:

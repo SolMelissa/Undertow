@@ -173,12 +173,43 @@
     [ OK ] daemon api client ready<span class="cursor-blink">&nbsp;</span>
   </div>
 
-  <div class="navbar bg-[#030805] border-b border-[var(--term-dim)] px-4 py-1 min-h-0">
-    <div class="flex-1 flex items-baseline gap-3">
+  <div class="navbar bg-[#030805] border-b border-[var(--term-dim)] px-4 py-1.5 min-h-0 flex-wrap gap-y-1.5">
+    <div class="flex items-center gap-3 flex-wrap">
       <img id="mascot-header" class="kawaii-mascot" src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="">
-      <span class="glitch vt text-2xl font-bold text-[var(--term-green)]" data-text="HYDRUS//PIPELINE">HYDRUS//PIPELINE</span>
+      <span class="glitch vt text-2xl font-bold text-[var(--term-green)] kawaii-hide" data-text="UNDERTOW">UNDERTOW</span>
+      <span class="kawaii-only" style="font-family:'Baloo 2',sans-serif; font-weight:700; font-size:1.35rem;
+            background:linear-gradient(90deg,#ff3d94,#ff85c2,#ffd1e8,#ff85c2,#ff3d94); background-size:250% auto;
+            -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+            animation:kawaii-shimmer 5s linear infinite;">&#128142; Undertow</span>
       <span class="text-[10px] text-[#ff9d3c] hidden sm:inline tracking-widest kawaii-hide">::UPLINK_ESTABLISHED::</span>
+
+      <span id="version-pill" class="kawaii-pill {{ 'ok' if version_info.status == 'current' else ('warn' if version_info.status == 'stale' else 'info') }}"
+            title="{% if version_info.status == 'current' %}Running the latest pushed commit{% elif version_info.status == 'stale' %}Running code that differs from origin/master{% else %}Version freshness couldn't be determined{% endif %}"
+            style="font-size:0.72rem; padding:0.2rem 0.65rem;">
+        <span class="dot"></span>
+        v{{ version_info.version }} &middot; {{ version_info.commit }}{% if version_info.dirty %}+{% endif %}
+      </span>
+      {% include "partials/version_check.html" %}
+      {% if is_first_run %}
+      <span class="kawaii-pill info kawaii-only" style="font-size:0.7rem; padding:0.2rem 0.6rem;" title="First run since updating to v{{ version_info.version }} - see the Changelog tab.">
+        &#10024; new in v{{ version_info.version }}
+      </span>
+      {% endif %}
     </div>
+
+    <div id="girly-status-badges-nav" class="kawaii-only flex flex-wrap gap-2 items-center" style="font-size:0.78rem;"
+         hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+      loading&hellip;
+    </div>
+    <div id="status-badges" class="kawaii-hide flex flex-wrap gap-3"
+         hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+      loading...
+    </div>
+
+    <div class="kawaii-ribbon kawaii-only" id="version-ribbon" style="flex:1 1 220px; min-width:180px; margin:0; padding:0.3rem 0.8rem;">
+      {{ ribbon_text }}&nbsp;&nbsp;{{ ribbon_text }}
+    </div>
+
     <span id="clock" class="text-xs text-[var(--term-dim)] tabular-nums hidden md:inline"></span>
     <button id="kawaii-dark-toggle" type="button" onclick="toggleKawaiiDark()"
             class="kawaii-only ml-2 text-[10px] px-2 py-1"
@@ -363,20 +394,14 @@
 
     <div class="kawaii-blob-bg"><span></span><span></span><span></span></div>
 
-    <div class="kawaii-ribbon">&#10024; certified 100% girly &#10024; princess-approved dashboard &#10024; extremely cute &amp; extremely online &#10024; &#128142; &#10024; certified 100% girly &#10024; princess-approved dashboard &#10024; extremely cute &amp; extremely online &#10024; &#128142;</div>
-    <div class="kawaii-hero">
-      <div class="kawaii-hero-art">
-        <img src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="" style="width:96px;height:96px;">
+    <!-- The old hero's title/subtitle/version-pill card was folded into the shared top
+         navbar (see index.html's .navbar block) - kept here is just the mascot art and the
+         rotating avatar image slot, now a slim strip instead of a whole redundant card. -->
+    <div class="kawaii-hero" style="padding:0.85rem 1.5rem;">
+      <div class="kawaii-hero-art" style="width:56px; height:56px;">
+        <img src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="" style="width:56px;height:56px;">
       </div>
-      <div>
-        <p class="kawaii-hero-title">&#128142; Undertow &#128142;</p>
-        <p class="kawaii-hero-sub">Your subscriptions and downloads, served on a pink little platter &#10024;&#128097;&#127770;</p>
-        <span class="kawaii-pill {{ 'ok' if version_info.status == 'current' else ('warn' if version_info.status == 'stale' else 'info') }}"
-              title="{% if version_info.status == 'current' %}Running the latest pushed commit{% elif version_info.status == 'stale' %}Running code that differs from origin/master{% else %}Version freshness couldn't be determined{% endif %}">
-          <span class="dot"></span>
-          v{{ version_info.version }} &middot; {{ version_info.commit }}{% if version_info.dirty %}+{% endif %}{% if version_info.status == 'stale' %} &middot; update available{% endif %}
-        </span>
-      </div>
+      <p class="kawaii-hero-sub" style="margin:0;">Your subscriptions and downloads, served on a pink little platter &#10024;&#128097;&#127770;</p>
       <div class="kawaii-hero-spacer"></div>
       <div class="kawaii-gallery-slot kawaii-gallery-avatar" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/avatar" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div>
@@ -413,13 +438,9 @@
       <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
     </form>
 
-    <!-- Status badges sit above the tabs, shared by both - service up/down plus queue/due
-         counts are the single most useful glance at all times, so they're never buried inside
-         a tab. -->
-    <div id="girly-status-badges" class="kawaii-card" style="margin-bottom:0.75rem;"
-         hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
-      loading&hellip;
-    </div>
+    <!-- Status badges used to live here as their own card; they now live in the shared top
+         navbar next to the version number (#girly-status-badges-nav) so they're visible no
+         matter which tab is open, not just Home. -->
 
     <!-- Two-tab layout: Home keeps the girly view calm and subscription-focused (the thing you
          actually came here to look at); System Metrics is where all the host/queue/network
@@ -430,6 +451,7 @@
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'home' }" @click="girlyTab = 'home'">&#127968; Home</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'media' }" @click="girlyTab = 'media'">&#128444; Media</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; System Metrics</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'changelog' }" @click="girlyTab = 'changelog'">&#128220; Changelog</button>
     </div>
 
     <div x-show="girlyTab === 'home'">
@@ -516,6 +538,11 @@
         <div class="kawaii-gallery-slot kawaii-gallery-tall kawaii-hide-sm" hx-get="/images/anime/slot/tall" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
       </div>
     </div><!-- /girlyTab === 'metrics' -->
+
+    <div x-show="girlyTab === 'changelog'" x-cloak>
+      <p class="kawaii-section-title">&#128220; Changelog</p>
+      <div hx-get="/partials/changelog" hx-trigger="load" hx-swap="innerHTML">loading changelog&hellip;</div>
+    </div><!-- /girlyTab === 'changelog' -->
 
     <div class="kawaii-divider">&#10024;</div>
     <div class="kawaii-sticker-rail" style="margin-bottom:0;">
@@ -648,6 +675,38 @@ function applyGroupExpandState(root) {
 document.body.addEventListener('htmx:afterSwap', (e) => {
   if (e.detail.target && e.detail.target.id === 'girly-subs-panel') {
     applyGroupExpandState(e.detail.target);
+  }
+});
+
+// Media tab shape toggles (Square/Portrait/Landscape) - see .media-card/.media-grid in
+// kawaii.css and media_browser.html. Classification happens per-thumbnail on <img onload>
+// rather than server-side, since the shape is just "this image's own pixel aspect ratio" and
+// the thumbnail bytes are already being fetched anyway - no extra Hydrus API round trip needed.
+// Toggle state is plain JS (window.mediaShapeState), not server state, so it's instant and
+// persists across this panel's htmx outerHTML swaps (search add/remove/clear, paging).
+window.mediaShapeState = { square: true, portrait: true, landscape: true };
+function undertowClassifyMediaCard(img) {
+  const card = img.closest('.media-card');
+  if (!card || !img.naturalWidth || !img.naturalHeight) return;
+  const ratio = img.naturalWidth / img.naturalHeight;
+  const shape = ratio > 1.15 ? 'landscape' : (ratio < 0.87 ? 'portrait' : 'square');
+  card.classList.remove('shape-square', 'shape-portrait', 'shape-landscape');
+  card.classList.add('shape-' + shape);
+  card.dataset.shape = shape;
+  card.style.display = window.mediaShapeState[shape] ? '' : 'none';
+}
+function undertowToggleMediaShape(shape, btn) {
+  window.mediaShapeState[shape] = !window.mediaShapeState[shape];
+  btn.classList.toggle('active', window.mediaShapeState[shape]);
+  document.querySelectorAll('.media-card[data-shape="' + shape + '"]').forEach((card) => {
+    card.style.display = window.mediaShapeState[shape] ? '' : 'none';
+  });
+}
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  if (e.detail.target && e.detail.target.id === 'media-panel') {
+    e.detail.target.querySelectorAll('.media-shape-toggle').forEach((btn) => {
+      btn.classList.toggle('active', window.mediaShapeState[btn.dataset.shape]);
+    });
   }
 });
 

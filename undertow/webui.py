@@ -73,6 +73,14 @@ _ACTIVE_SUB_RE = re.compile(r"checking subscription:\s*(\d+)")
 # instead of a mis-cropped image (see partials/girly/gallery_slot.html) - "add a picture shaped
 # like this" rather than silently cramming a square photo into a wide banner.
 _ANIME_DIR = _PROJECT_ROOT / "undertow" / "static" / "images" / "anime"
+# Ratios were re-tuned against an actual scan of static/images/anime/'s real stock (mostly tall
+# full-body character cutouts, width:height commonly 1:2 to 1:3) rather than the square-heavy
+# guess this started as - "tall" moved from a 2:3 target to ~1:1.8, which is what most of the
+# pool actually looks like, so those images now land their best-fit slot instead of missing the
+# cutoff on every square/avatar/icon spot and only weakly qualifying for "tall" too. Pixel sizes
+# (kept in sync by hand with .kawaii-gallery-* in kawaii.css) were bumped up across the board -
+# the old icon/avatar/sm sizes shrank real character art down to favicon-sized thumbnails, which
+# wasted stock that's often 1000px+ on a side.
 _GALLERY_SLOTS = {
     "icon":   {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 200×200)"},
     "avatar": {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 300×300)"},
@@ -80,7 +88,7 @@ _GALLERY_SLOTS = {
     "md":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 500×500)"},
     "lg":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 700×700)"},
     "wide":   {"ratio": 480 / 150,  "label": "wide banner, ~3.2:1 (e.g. 960×300)"},
-    "tall":   {"ratio": 200 / 300,  "label": "tall portrait, ~2:3 (e.g. 500×750)"},
+    "tall":   {"ratio": 1 / 1.8,    "label": "tall portrait, ~1:1.8 (e.g. 500×900)"},
 }
 _GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 # How forgiving the ratio match is: log-distance beyond this means "doesn't fit this slot at
@@ -151,6 +159,45 @@ def _image_aspect_ratio(path: Path) -> float | None:
     except (OSError, ValueError, IndexError):
         return None
     return None
+
+
+def _image_has_transparency(path: Path) -> bool:
+    """Pure-stdlib alpha-channel sniffer (same "no Pillow" constraint as _image_aspect_ratio
+    above) - true only when the file actually carries transparent/semi-transparent pixels, not
+    just "is a format that's capable of it" (a .png without alpha is still opaque). Covers PNG
+    (by far the common case for "cutout" gallery images - see static/images/anime/README.md)
+    and GIF's single-color transparency; WEBP and JPEG fall back to False (undecided/opaque)
+    rather than trying to fully decode a VP8L bitstream just to answer this one question -
+    those slots just keep the normal card framing, which is a safe default either way."""
+    try:
+        suffix = path.suffix.lower()
+        if suffix == ".png":
+            with open(path, "rb") as f:
+                data = f.read()
+            if data[:8] != b"\x89PNG\r\n\x1a\n":
+                return False
+            color_type = data[25]
+            if color_type in (4, 6):  # grayscale+alpha, RGBA
+                return True
+            if color_type == 3:  # palette - only transparent if a tRNS chunk is present
+                return b"tRNS" in data
+            return False
+        if suffix == ".gif":
+            with open(path, "rb") as f:
+                data = f.read()
+            # Graphic Control Extension: 0x21 0xF9 0x04 <flags> ... - bit 0 of flags is the
+            # transparent-color flag. Good enough for "does this GIF use transparency at all".
+            idx = data.find(b"\x21\xf9\x04")
+            return idx != -1 and idx + 3 < len(data) and (data[idx + 3] & 0x01)
+        if suffix == ".webp":
+            with open(path, "rb") as f:
+                head = f.read(32)
+            if head[:4] == b"RIFF" and head[8:12] == b"WEBP" and head[12:16] == b"VP8X":
+                return bool(head[20] & 0x10)
+            return False
+        return False
+    except OSError:
+        return False
 
 
 _ANIME_STATS_PATH = _ANIME_DIR / ".gallery_stats.json"
@@ -400,7 +447,34 @@ if HAVE_FLASK:
 
     @app.route("/")
     def index():
-        return render_template("index.html")
+        info = version.get_version_info()
+        st = settings.load_settings()
+        last_seen = st.get("last_seen_version")
+        is_first_run = last_seen != info["version"]
+        changes = version.get_changes_since(last_seen)
+        if is_first_run:
+            # Mark seen immediately - "first run of this version" means the first page load
+            # after an update, not "every load until someone dismisses a banner". A manual
+            # browser refresh a moment later should already show the caught-up state.
+            settings.save_settings({"last_seen_version": info["version"]})
+        ribbon_text = "  ✦  ".join(
+            entry for section in changes for entry in section["entries"]
+        ) or "✨ certified 100% girly ✨ princess-approved dashboard ✨ extremely cute & extremely online ✨ \U0001F48E"
+        return render_template(
+            "index.html", is_first_run=is_first_run, ribbon_text=ribbon_text,
+        )
+
+    @app.route("/version/check", methods=["POST"])
+    def version_check():
+        result = version.check_for_update()
+        return render_template(
+            "partials/version_check.html", checked=True,
+            update_available=result["update_available"], error=result["error"],
+        )
+
+    @app.route("/partials/changelog")
+    def partial_changelog():
+        return render_template("partials/changelog.html", sections=version.get_changelog())
 
     @app.route("/images/anime/slot/<slot>")
     def images_anime_slot(slot):
@@ -415,6 +489,7 @@ if HAVE_FLASK:
         resp = render_template(
             "partials/girly/gallery_slot.html",
             filename=filename, label=slot_info["label"],
+            transparent=_image_has_transparency(_ANIME_DIR / filename) if filename else False,
         )
         return Response(resp, headers={"Cache-Control": "no-store"})
 
@@ -1116,19 +1191,26 @@ if HAVE_FLASK:
             suggestions=[{"tag": t, "count": c, "color": media.namespace_color(t)} for t, c in suggestions],
         )
 
+    # Thumbnails/files are immutable for a given file_id (Hydrus doesn't re-thumbnail a file
+    # under the same id), so the browser can cache them hard - this is what actually cuts
+    # perceived Media tab load time on repeat visits: paging back and forth, or re-rendering
+    # the panel after a search-predicate change, redraws thumbnails already on disk in the
+    # browser's cache instead of round-tripping to Hydrus again for bytes it already has.
+    _MEDIA_CACHE_HEADERS = {"Cache-Control": "public, max-age=604800, immutable"}
+
     @app.route("/media/thumbnail/<int:file_id>")
     def media_thumbnail(file_id: int):
         resp, err = hydrus_client.thumbnail_response(file_id)
         if resp is None:
             return "", 502
-        return Response(resp.content, mimetype=resp.headers.get("Content-Type", "image/png"))
+        return Response(resp.content, mimetype=resp.headers.get("Content-Type", "image/png"), headers=_MEDIA_CACHE_HEADERS)
 
     @app.route("/media/file/<int:file_id>")
     def media_file(file_id: int):
         resp, err = hydrus_client.file_response(file_id)
         if resp is None:
             return "", 502
-        return Response(resp.content, mimetype=resp.headers.get("Content-Type", "application/octet-stream"))
+        return Response(resp.content, mimetype=resp.headers.get("Content-Type", "application/octet-stream"), headers=_MEDIA_CACHE_HEADERS)
 
     @app.route("/media/<int:file_id>/detail")
     def media_detail(file_id: int):

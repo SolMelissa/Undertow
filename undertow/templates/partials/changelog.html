@@ -1,0 +1,20 @@
+{% if not sections %}
+<div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+  No changelog found.
+</div>
+{% else %}
+<div style="display:flex; flex-direction:column; gap:1rem;">
+  {% for section in sections %}
+  <div class="kawaii-card">
+    <p style="font-family:'Baloo 2',sans-serif; font-weight:700; font-size:1.05rem; color:var(--k-accent-text); margin:0 0 0.5rem;">
+      v{{ section.version }}{% if loop.first %} <span class="kawaii-pill info" style="font-size:0.65rem; padding:0.1rem 0.5rem;">current</span>{% endif %}
+    </p>
+    <ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.3rem; color:var(--k-text);">
+      {% for entry in section.entries %}
+      <li>{{ entry }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

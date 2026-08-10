@@ -1,5 +1,5 @@
 {% if filename %}
-<img src="{{ url_for('static', filename='images/anime/' + filename) }}" alt="">
+<img src="{{ url_for('static', filename='images/anime/' + filename) }}" alt="" class="{{ 'kawaii-img-transparent' if transparent else '' }}">
 {% else %}
 <div class="kawaii-gallery-empty">
   <span class="kawaii-gallery-empty-icon">&#128142;</span>

@@ -578,13 +578,15 @@
 .kawaii-gallery-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .kawaii-gallery-slot:hover { box-shadow: 0 8px 22px rgba(255, 111, 165, 0.24); transform: translateY(-2px) rotate(0deg) !important; }
 
-.kawaii-gallery-icon   { width: 60px;  height: 60px;  border-radius: 16px; flex: 0 0 auto; }
-.kawaii-gallery-avatar { width: 110px; height: 110px; border-radius: 50%; flex: 0 0 auto; }
-.kawaii-gallery-sm     { width: 160px; height: 160px; border-radius: 20px; }
-.kawaii-gallery-md     { width: 220px; height: 220px; border-radius: 22px; }
-.kawaii-gallery-lg     { width: 320px; height: 320px; border-radius: 26px; margin: 0 auto; }
-.kawaii-gallery-wide   { width: 100%; max-width: 480px; height: 150px; border-radius: 22px; margin: 0 auto; }
-.kawaii-gallery-tall   { width: 200px; height: 300px; border-radius: 24px; }
+/* Sizes tuned to the actual static/images/anime/ stock, not favicon-scale placeholders - see
+   the _GALLERY_SLOTS comment in webui.py for the dimension scan behind these numbers. */
+.kawaii-gallery-icon   { width: 92px;  height: 92px;  border-radius: 20px; flex: 0 0 auto; }
+.kawaii-gallery-avatar { width: 140px; height: 140px; border-radius: 50%; flex: 0 0 auto; }
+.kawaii-gallery-sm     { width: 190px; height: 190px; border-radius: 20px; }
+.kawaii-gallery-md     { width: 260px; height: 260px; border-radius: 22px; }
+.kawaii-gallery-lg     { width: 380px; height: 380px; border-radius: 26px; margin: 0 auto; }
+.kawaii-gallery-wide   { width: 100%; max-width: 560px; height: 190px; border-radius: 22px; margin: 0 auto; }
+.kawaii-gallery-tall   { width: 260px; height: 468px; border-radius: 24px; }
 
 /* Washi-tape sticker rail: a horizontal strip of small squares, each nudged to its own gentle
    tilt so it reads as "photos tucked onto a corkboard" instead of a rigid icon row. */
@@ -598,12 +600,55 @@
 .kawaii-gallery-flank { display: flex; flex-direction: column; gap: 1.1rem; }
 
 @media (max-width: 640px) {
-  .kawaii-gallery-tall { width: 140px; height: 210px; }
-  .kawaii-gallery-lg { width: 220px; height: 220px; }
+  .kawaii-gallery-tall { width: 170px; height: 306px; }
+  .kawaii-gallery-lg { width: 260px; height: 260px; }
 }
 @media (max-width: 900px) {
   .kawaii-hide-sm { display: none !important; }
 }
+
+/* ------------------------------------------------------------------------------- media grid
+   Media tab search results. Each card starts as .shape-square (the template's default) and is
+   reclassified client-side once its thumbnail's real pixel size is known (see
+   undertowClassifyMediaCard() in index.html) into one of 3 fixed sizes - not a uniform grid of
+   square crops, so a wide screenshot or a tall comic page keeps its actual shape instead of
+   being cropped to fit a square cell. The 3 toggle buttons above the grid (.media-shape-toggle)
+   hide/show cards of one shape at a time by flipping display:none - see
+   undertowToggleMediaShape() in index.html. */
+.media-grid { display: flex; flex-wrap: wrap; gap: 0.65rem; }
+.media-card {
+  overflow: hidden; cursor: pointer; flex: 0 0 auto;
+  border: 1px solid var(--k-border); border-radius: 14px;
+  background: var(--k-panel);
+  box-shadow: 0 3px 14px rgba(255, 111, 165, 0.14);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.media-card:hover { box-shadow: 0 8px 22px rgba(255, 111, 165, 0.24); transform: translateY(-2px); }
+.media-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-card.shape-square { width: 150px; height: 150px; }
+.media-card.shape-portrait { width: 132px; height: 198px; }
+.media-card.shape-landscape { width: 216px; height: 144px; }
+@media (max-width: 640px) {
+  .media-card.shape-square { width: 110px; height: 110px; }
+  .media-card.shape-portrait { width: 98px; height: 147px; }
+  .media-card.shape-landscape { width: 160px; height: 107px; }
+}
+.media-shape-toggle { opacity: 0.4; font-size: 0.85rem; padding: 0.4rem 0.9rem; }
+.media-shape-toggle.active { opacity: 1; }
+
+/* ---------------------------------------------------------------------- transparent images
+   User-provided images that already have a transparent background (see the Image Stock section
+   of static/images/anime/README.md) should sit directly on the page like a sticker, not get
+   boxed in a card - .kawaii-gallery-slot's border/background/shadow is exactly the "framed
+   photo" look that's wrong for those. gallery_slot.html tags the <img> itself with
+   .kawaii-img-transparent only when it detects real alpha-channel transparency in the chosen
+   file (see _image_has_transparency() in webui.py); :has() lets the *parent* slot's framing
+   react to that without needing JS to reach up and toggle a class on it. */
+.kawaii-gallery-slot:has(img.kawaii-img-transparent) {
+  border: none; background: none; box-shadow: none; backdrop-filter: none;
+}
+.kawaii-gallery-slot:has(img.kawaii-img-transparent) img { object-fit: contain; }
+.kawaii-gallery-slot:has(img.kawaii-img-transparent):hover { box-shadow: none; transform: none !important; }
 
 /* Sparkle cursor trail particles - spawned/removed by sparkleTrail() in index.html. Fixed +
    pointer-events:none so they never interfere with clicks; float up, drift sideways by a random
