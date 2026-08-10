@@ -56,6 +56,12 @@ def get_call_stats() -> dict:
 # suppression the PS1 did with -SkipCertificateCheck.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# One shared Session for the process's lifetime instead of a bare requests.post() per call -
+# every route above is polled every 2-10s by the web dashboard, and a fresh call previously
+# paid a new TCP connect + (for https) TLS handshake every single time instead of reusing a
+# keep-alive connection to the same loopback daemon.
+_session = requests.Session()
+
 
 @dataclass
 class ApiResult:
@@ -142,9 +148,9 @@ def invoke_daemon_api(route: str, body: Any = None, timeout: float = 8) -> ApiRe
     success = False
     try:
         if body is not None:
-            resp = requests.post(url, json=body, headers=headers, timeout=timeout, verify=verify, proxies=no_proxy)
+            resp = _session.post(url, json=body, headers=headers, timeout=timeout, verify=verify, proxies=no_proxy)
         else:
-            resp = requests.post(url, headers=headers, timeout=timeout, verify=verify, proxies=no_proxy)
+            resp = _session.post(url, headers=headers, timeout=timeout, verify=verify, proxies=no_proxy)
         resp.raise_for_status()
         data = resp.json() if resp.content else None
         success = True
@@ -202,6 +208,19 @@ def get_queued_urls() -> ApiResult:
     return invoke_daemon_api("/get_queued_urls")
 
 
+# Short-TTL caches for the two calls that get fetched multiple times per poll cycle:
+# get_subscription_checks(ids) is called independently (same ids) by get_latest_checks,
+# get_total_downloads, and get_failure_status within a single /partials/new-files request, and
+# get_status_info() is polled every 2s by three separate DOM elements in the girly layout
+# (index.html's triplicated /partials/status widgets). Caching means only the first caller in
+# a burst actually hits the network; everyone else in the same tick reuses that result. TTL is
+# short enough that it never returns data staler than the poll interval it's serving.
+_subscription_checks_cache: dict[tuple[int, ...], tuple[float, ApiResult]] = {}
+_SUBSCRIPTION_CHECKS_TTL = 2.0
+_status_info_cache: tuple[float, ApiResult] | None = None
+_STATUS_INFO_TTL = 1.5
+
+
 def get_subscription_checks(ids: list[int]) -> ApiResult:
     # hydownloader's subscription_checks table is the per-run history (new/skipped file counts,
     # status, start/end time) behind a subscription's single "last result" summary - there's no
@@ -209,11 +228,24 @@ def get_subscription_checks(ids: list[int]) -> ApiResult:
     # for the given IDs and reduce client-side (see subscriptions.get_latest_checks/
     # get_check_history). Not filtering by ID at all (empty list) would return the whole
     # history table, which nothing here wants, so ids is required rather than optional.
-    return invoke_daemon_api("/get_subscription_checks", {"ids": ids})
+    key = tuple(sorted(ids))
+    now = time.monotonic()
+    cached = _subscription_checks_cache.get(key)
+    if cached is not None and now - cached[0] < _SUBSCRIPTION_CHECKS_TTL:
+        return cached[1]
+    result = invoke_daemon_api("/get_subscription_checks", {"ids": ids})
+    _subscription_checks_cache[key] = (now, result)
+    return result
 
 
 def get_status_info() -> ApiResult:
-    return invoke_daemon_api("/get_status_info")
+    global _status_info_cache
+    now = time.monotonic()
+    if _status_info_cache is not None and now - _status_info_cache[0] < _STATUS_INFO_TTL:
+        return _status_info_cache[1]
+    result = invoke_daemon_api("/get_status_info")
+    _status_info_cache = (now, result)
+    return result
 
 
 def shutdown() -> ApiResult:

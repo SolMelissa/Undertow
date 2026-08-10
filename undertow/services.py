@@ -52,17 +52,25 @@ def find_process_by_name(name: str) -> psutil.Process | None:
 def find_hydownloader_daemon_proc() -> psutil.Process | None:
     """Equivalent of Get-RunningHydownloaderProc -Match "hydownloader-daemon" - the daemon
     runs as python.exe/pythonw.exe, so it has to be found by matching its command line, not
-    its process name (which is indistinguishable from any other python.exe)."""
-    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+    its process name (which is indistinguishable from any other python.exe).
+
+    Requesting "cmdline" as a process_iter() attr forces psutil to fetch it for *every* process
+    on the system before the name filter below ever runs - on a busy Windows box that's a
+    multi-second scan (each cmdline read opens a process handle) just to find one process.
+    Filtering by name first with a cheap process_iter(["pid", "name"]) and only reading
+    .cmdline() on the handful of python.exe/pythonw.exe candidates cuts that from "every
+    process" to "every Python interpreter" - the actual expensive part measured at 2s+ before
+    this fix, now effectively instant on a normal process count."""
+    for proc in psutil.process_iter(["pid", "name"]):
         try:
             name = (proc.info["name"] or "").lower()
             if name not in ("python.exe", "pythonw.exe"):
                 continue
-            cmdline = proc.info["cmdline"] or []
-            if any("hydownloader-daemon" in part for part in cmdline):
-                return proc
+            cmdline = proc.cmdline()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
+        if any("hydownloader-daemon" in part for part in cmdline):
+            return proc
     return None
 
 
@@ -89,11 +97,24 @@ def kill_orphaned_gallery_dl_processes() -> int:
     return killed
 
 
+# The girly web layout polls /partials/status from three separate DOM elements every 2s
+# (index.html's mobile/desktop-duplicated status widgets), each of which calls this - without
+# caching, that's 3x the psutil.process_iter() scans (including a full cmdline read of every
+# python.exe on the box, in find_hydownloader_daemon_proc) every 2 seconds. TTL is short enough
+# that no caller ever sees data staler than the poll interval it's serving.
+_service_status_cache: tuple[float, "ServiceStatus"] | None = None
+_SERVICE_STATUS_TTL = 1.5
+
+
 def get_service_status() -> ServiceStatus:
+    global _service_status_cache
+    now = time.monotonic()
+    if _service_status_cache is not None and now - _service_status_cache[0] < _SERVICE_STATUS_TTL:
+        return _service_status_cache[1]
     hydrus = find_process_by_name("hydrus_client.exe")
     daemon = find_hydownloader_daemon_proc()
     systray = find_process_by_name("hydownloader-systray.exe")
-    return ServiceStatus(
+    status = ServiceStatus(
         hydrus_running=hydrus is not None,
         hydrus_pid=hydrus.pid if hydrus else None,
         daemon_running=daemon is not None,
@@ -101,6 +122,8 @@ def get_service_status() -> ServiceStatus:
         systray_running=systray is not None,
         systray_pid=systray.pid if systray else None,
     )
+    _service_status_cache = (now, status)
+    return status
 
 
 def _start_hidden(args: list[str], cwd: Path, stdout_path: Path, stderr_path: Path) -> None:
@@ -386,6 +409,39 @@ def start_required_services() -> None:
         print("  hydownloader systray already running.")
 
 
+def restart_hydrus_service(timeout: float = 15.0) -> str | None:
+    """Force-restarts Hydrus itself (terminate + relaunch minimized) - used by the dashboard's
+    clickable service status pill. Returns None on success, or an error string."""
+    hydrus = find_process_by_name("hydrus_client.exe")
+    if hydrus:
+        try:
+            hydrus.terminate()
+            hydrus.wait(timeout=timeout)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+            pass
+    if not config.HYDRUS_EXE.exists():
+        return f"Hydrus not found at {config.HYDRUS_EXE}"
+    _start_gui_minimized([str(config.HYDRUS_EXE)])
+    return None
+
+
+def restart_systray_service(timeout: float = 10.0) -> str | None:
+    """Force-restarts the hydownloader systray (terminate + relaunch minimized) - used by the
+    dashboard's clickable service status pill. Returns None on success, or an error string."""
+    systray = find_process_by_name("hydownloader-systray.exe")
+    if systray:
+        try:
+            systray.terminate()
+            systray.wait(timeout=timeout)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+            pass
+    systray_exe = config.find_systray_exe()
+    if not systray_exe or not systray_exe.exists():
+        return "hydownloader-systray not found"
+    start_systray()
+    return None
+
+
 def show_process_window(process_name: str) -> bool:
     """Brings a running process's main window to the front - the equivalent of
     Show-ProcessWindow (the PS1's P/Invoke SetForegroundWindow/ShowWindow/IsIconic calls)."""
@@ -609,12 +665,18 @@ def get_hydrus_storage_disk_usage() -> dict | None:
     two Hydrus storage locations on the same physical drive aren't double-counted. Returns None
     if Hydrus's API isn't reachable (no key configured, Hydrus not running, ...) - callers
     should fall back to not showing a disk widget rather than a wrong one."""
+    global _disk_usage_cache
+    now = time.monotonic()
+    if _disk_usage_cache is not None and now - _disk_usage_cache[0] < _DISK_USAGE_TTL:
+        return _disk_usage_cache[1]
     result = hydrus_client.invoke_hydrus_api("/get_files/local_file_storage_locations")
     if not result.success or not result.data:
+        _disk_usage_cache = (now, None)
         return None
     locations = result.data.get("locations") or []
     drives = {Path(loc["path"]).anchor for loc in locations if loc.get("path")}
     if not drives:
+        _disk_usage_cache = (now, None)
         return None
     used = total = 0
     for drive in drives:
@@ -625,8 +687,18 @@ def get_hydrus_storage_disk_usage() -> dict | None:
         used += du.used
         total += du.total
     if total == 0:
+        _disk_usage_cache = (now, None)
         return None
-    return {"disk_pct": used / total * 100, "disk_used_gb": used / 1e9, "disk_total_gb": total / 1e9}
+    stats = {"disk_pct": used / total * 100, "disk_used_gb": used / 1e9, "disk_total_gb": total / 1e9}
+    _disk_usage_cache = (now, stats)
+    return stats
+
+
+# Disk usage costs a live Hydrus Client API round-trip (see docstring above) - the web
+# dashboard's hoststats widget polls this every 3s but disk usage doesn't change fast enough
+# to need sub-second freshness, so a longer TTL than the other caches here is fine.
+_disk_usage_cache: tuple[float, dict | None] | None = None
+_DISK_USAGE_TTL = 10.0
 
 
 def get_host_stats() -> dict:
@@ -680,6 +752,10 @@ def get_gpu_stats() -> dict | None:
     this through their own separate tooling), so "not detected" is the honest answer rather
     than faking a number. Unlike CPU temperature (sensors_temperatures() is a no-op on
     Windows), nvidia-smi reliably reports GPU temp on Windows too, straight from the driver."""
+    global _gpu_stats_cache
+    now = time.monotonic()
+    if _gpu_stats_cache is not None and now - _gpu_stats_cache[0] < _GPU_STATS_TTL:
+        return _gpu_stats_cache[1]
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
@@ -687,14 +763,25 @@ def get_gpu_stats() -> dict | None:
             capture_output=True, text=True, timeout=3,
         )
         if result.returncode != 0 or not result.stdout.strip():
+            _gpu_stats_cache = (now, None)
             return None
         util, mem_used, mem_total, temp = (p.strip() for p in result.stdout.strip().splitlines()[0].split(","))
-        return {
+        stats = {
             "util_pct": float(util), "mem_used_mb": float(mem_used), "mem_total_mb": float(mem_total),
             "temp_c": float(temp),
         }
+        _gpu_stats_cache = (now, stats)
+        return stats
     except (FileNotFoundError, subprocess.TimeoutExpired, ValueError, OSError):
+        _gpu_stats_cache = (now, None)
         return None
+
+
+# Spawning nvidia-smi is a real subprocess launch (50-150ms+ on Windows) - the hoststats widget
+# polls this every 3s, so an uncached call means a fresh process spawn every 3 seconds purely
+# to refresh a gauge that doesn't need sub-second freshness.
+_gpu_stats_cache: tuple[float, dict | None] | None = None
+_GPU_STATS_TTL = 5.0
 
 
 # Persistent across polls (module-level, not re-created per call) so cpu_percent() has a
@@ -767,7 +854,11 @@ def get_network_connections(limit: int = 60) -> list[dict]:
         if not c.pid or not c.raddr:
             continue  # skip listening/local-only sockets - "connections" implies a remote peer
         try:
-            name = psutil.Process(c.pid).name()
+            # Reuse get_top_processes' Process cache when it already has this pid, instead of
+            # constructing (and opening a handle for) a brand-new Process object per connection
+            # per poll - cheap when it hits, no behavior change when it doesn't.
+            proc = _proc_cache.get(c.pid) or psutil.Process(c.pid)
+            name = proc.name()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
         rows.append({
