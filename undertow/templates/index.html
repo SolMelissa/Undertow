@@ -199,10 +199,6 @@
       loading...
     </div>
 
-    <div class="kawaii-ribbon kawaii-only" id="version-ribbon" style="flex:1 1 220px; min-width:180px; margin:0; padding:0.3rem 0.8rem;">
-      {{ ribbon_text }}&nbsp;&nbsp;{{ ribbon_text }}
-    </div>
-
     <span id="clock" class="text-xs text-[var(--term-dim)] tabular-nums hidden md:inline"></span>
     <button id="kawaii-dark-toggle" type="button" onclick="toggleKawaiiDark()"
             class="kawaii-only ml-2 text-[10px] px-2 py-1"
@@ -394,26 +390,15 @@
     <div id="girly-toast-stack" style="position:fixed; top:4.5rem; right:1rem; z-index:60; display:flex; flex-direction:column; gap:0.5rem; width:20rem; max-width:90vw;"></div>
 
     <div class="kawaii-btn-row">
-      <button class="kawaii-btn kawaii-btn-primary" hx-get="/subscriptions/add-modal" hx-target="#modal-content" hx-swap="innerHTML">+ Subscribe</button>
       <button class="kawaii-btn" hx-get="/downloads/add-modal" hx-target="#modal-content" hx-swap="innerHTML">One-off Download</button>
       <a class="kawaii-btn" href="/subscriptions/export">Export</a>
       <button class="kawaii-btn" hx-get="/subscriptions/import-modal" hx-target="#modal-content" hx-swap="innerHTML">Import</button>
-      <button class="kawaii-btn" hx-get="/diagnostics" hx-target="#modal-content" hx-swap="innerHTML">Diagnostics</button>
       <button class="kawaii-btn" hx-get="/api-keys" hx-target="#modal-content" hx-swap="innerHTML">Keys</button>
       <button class="kawaii-btn" hx-get="/settings" hx-target="#modal-content" hx-swap="innerHTML">Settings</button>
       <button class="kawaii-btn" onclick="htmx.trigger(document.body, 'refreshSubs')">Sync Now</button>
       <button class="kawaii-btn" hx-post="/launch-tui" hx-target="#toast-stack" hx-swap="beforeend">Console UI</button>
       <button class="kawaii-btn kawaii-btn-danger" hx-get="/shutdown-confirm" hx-target="#modal-content" hx-swap="innerHTML">Shutdown</button>
     </div>
-    <div id="girly-quick-add-result" style="margin-bottom:0.5rem;"></div>
-    <form hx-post="/subscriptions/quick-add" hx-target="#girly-quick-add-result" hx-swap="innerHTML"
-          hx-on::after-request="if(event.detail.successful) this.reset()"
-          style="display:flex; gap:0.6rem; margin-bottom:1rem;">
-      <input type="text" name="url" required placeholder="Paste a subscription URL to add it&hellip;"
-             class="kawaii-input" style="flex:1;">
-      <input type="hidden" name="hours" value="">
-      <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
-    </form>
 
     <!-- Status badges used to live here as their own card; they now live in the shared top
          navbar next to the version number (#girly-status-badges-nav) so they're visible no
@@ -427,7 +412,7 @@
     <div class="kawaii-tabs">
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'home' }" @click="girlyTab = 'home'">&#127968; Home</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'media' }" @click="girlyTab = 'media'">&#128444; Media</button>
-      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; System Metrics</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; Status</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'tags' }" @click="girlyTab = 'tags'">&#127991; Tag Relations</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'changelog' }" @click="girlyTab = 'changelog'">&#128220; Changelog</button>
     </div>
@@ -436,6 +421,22 @@
       <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block; margin-top:1rem;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#128150; Subscriptions</p>
+      <div class="kawaii-card" style="margin-bottom:1rem;">
+        <div style="display:flex; gap:0.6rem; margin-bottom:0.6rem;">
+          <button class="kawaii-btn kawaii-btn-primary" hx-get="/subscriptions/add-modal" hx-target="#modal-content" hx-swap="innerHTML">+ Subscribe&hellip;</button>
+          <span class="text-xs" style="align-self:center; color:var(--k-text-dim-text);">or paste a URL for quick defaults:</span>
+        </div>
+        <div id="girly-quick-add-result" style="margin-bottom:0.5rem;"></div>
+        <form hx-post="/subscriptions/quick-add" hx-target="#girly-quick-add-result" hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) this.reset()"
+              style="display:flex; gap:0.6rem;">
+          <input type="text" name="url" required placeholder="Paste a subscription URL to add it&hellip;"
+                 class="kawaii-input" style="flex:1;">
+          <input type="hidden" name="hours" value="">
+          <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
+        </form>
+      </div>
+
       <div style="display:flex; gap:0.6rem; margin-bottom:0.6rem; flex-wrap:wrap;"
            x-data="{ filter: '', _lastTagQuery: '' }"
            x-effect="
@@ -464,6 +465,14 @@
     </div><!-- /girlyTab === 'media' -->
 
     <div x-show="girlyTab === 'metrics'" x-cloak>
+      <p class="kawaii-section-title">&#129505; Health &amp; Actions</p>
+      <div id="girly-status-panel"
+           hx-get="/partials/status-panel" hx-trigger="load [window.girlyTab === 'metrics'], every 10s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML">
+        loading&hellip;
+      </div>
+
+      <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block; margin-top:1.25rem;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+
       <p class="kawaii-section-title">&#128200; Overview</p>
       <div id="girly-fleet-panel" class="kawaii-stat-grid"
            hx-get="/partials/fleet" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
@@ -474,6 +483,8 @@
         <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
         <div id="girly-hydrus-panel" style="display:contents;" hx-get="/partials/hydrus" hx-trigger="load [window.girlyTab === 'metrics'], every 10s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
       </div>
+
+      <div class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 1.5rem auto;" hx-get="/images/anime/slot/lg" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#128202; Queue &amp; Throughput</p>
       <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load [window.girlyTab === 'metrics'], every 2s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
@@ -502,6 +513,8 @@
       <div class="kawaii-card">
         <div id="girly-log-box">loading activity&hellip;</div>
       </div>
+
+      <div class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 1.5rem auto 0;" hx-get="/images/anime/slot/lg" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div><!-- /girlyTab === 'metrics' -->
 
     <div x-show="girlyTab === 'tags'" x-cloak>

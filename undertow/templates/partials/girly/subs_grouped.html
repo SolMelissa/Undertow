@@ -32,7 +32,7 @@
       <span class="kawaii-pill info"><span class="dot"></span>{{ g.count }} sub{{ 's' if g.count != 1 else '' }}</span>
       {% if g.failing %}<span class="kawaii-pill bad"><span class="dot"></span>{{ g.failing }} failing</span>{% endif %}
       {% if g.due %}<span class="kawaii-pill warn"><span class="dot"></span>{{ g.due }} due</span>{% endif %}
-      {% if g.session_new_files %}<span class="kawaii-pill accent" title="downloaded this session">+{{ g.session_new_files }} session</span>{% endif %}
+      <span class="kawaii-pill {{ 'accent' if g.session_new_files or g.queued_count else 'muted' }}" title="downloaded this session / currently queued, summed across this group">{{ g.session_new_files or 0 }}/{{ g.queued_count or 0 }}</span>
     </div>
     <div class="kawaii-group-subs">
       {% for s in g.subs %}

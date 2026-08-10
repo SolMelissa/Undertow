@@ -1,0 +1,64 @@
+<div class="kawaii-card">
+  <p class="kawaii-section-title" style="margin-top:0;">&#129505; Health</p>
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.6rem;">
+    <span class="kawaii-pill {{ 'ok' if report.status.hydrus_running else 'bad' }}"><span class="dot"></span>Hydrus {{ 'running (PID ' ~ report.status.hydrus_pid ~ ')' if report.status.hydrus_running else 'NOT running' }}</span>
+    <span class="kawaii-pill {{ 'ok' if report.status.daemon_running else 'bad' }}"><span class="dot"></span>daemon {{ 'running (PID ' ~ report.status.daemon_pid ~ ')' if report.status.daemon_running else 'NOT running' }}</span>
+    <span class="kawaii-pill {{ 'ok' if report.status.systray_running else 'bad' }}"><span class="dot"></span>systray {{ 'running (PID ' ~ report.status.systray_pid ~ ')' if report.status.systray_running else 'NOT running' }}</span>
+    <span class="kawaii-pill {{ 'ok' if report.api_reachable else 'bad' }}"><span class="dot"></span>daemon API {{ 'reachable' if report.api_reachable else ('unreachable - ' ~ (report.api_reason or 'unknown')) }}</span>
+    <span class="kawaii-pill {{ 'ok' if report.hydrus_api_reachable else 'bad' }}"><span class="dot"></span>Hydrus API {{ 'reachable' if report.hydrus_api_reachable else ('unreachable - ' ~ (report.hydrus_api_reason or 'unknown')) }}</span>
+    <span class="kawaii-pill {{ 'bad' if flagged_error else ('warn' if flagged_count else 'ok') }}" title="{{ 'failing repeatedly or stale - see the subscriptions table' if flagged_count else '' }}">
+      <span class="dot"></span>{% if flagged_error %}flagged subs: couldn't check{% else %}{{ flagged_count }} flagged sub{{ 's' if flagged_count != 1 else '' }}{% endif %}
+    </span>
+    <span class="kawaii-pill {{ 'ok' if report.gallery_dl.on_path else ('warn' if report.gallery_dl.user_install_path else 'bad') }}">
+      <span class="dot"></span>gallery-dl {% if report.gallery_dl.on_path %}found{% elif report.gallery_dl.user_install_path %}installed, not on PATH{% else %}NOT found{% endif %}
+    </span>
+  </div>
+  {% if report.multiple_python_paths %}
+  <div class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.4rem;">Multiple Python installs on PATH: {{ report.multiple_python_paths|join(', ') }}</div>
+  {% endif %}
+  {% if report.watchdog_last_check %}
+  <div class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.4rem;">
+    Background watchdog last ran at {{ report.watchdog_last_check }}.
+    {% if report.watchdog_actions %}
+    Last check took action: {{ report.watchdog_actions|join(', ') }}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if cap_message %}
+  <div class="kawaii-empty" style="color: {{ 'var(--k-danger-text)' if cap_error else 'var(--k-accent-2-text)' }}; text-align:left;">{{ cap_message }}</div>
+  {% endif %}
+  {% if restart_message %}
+  <div class="kawaii-empty" style="color: var(--k-accent-2-text); text-align:left;">{{ restart_message }}</div>
+  {% endif %}
+
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.6rem;">
+    {% set all_up = report.status.hydrus_running and report.status.daemon_running and report.status.systray_running %}
+    <button type="button" class="kawaii-btn" {{ 'disabled' if all_up else '' }}
+            hx-post="/status/restart-services" hx-target="#girly-status-panel" hx-swap="innerHTML">Restart down services</button>
+    <button type="button" class="kawaii-btn"
+            hx-post="/status/cap-existing" hx-target="#girly-status-panel" hx-swap="innerHTML">Cap existing subs' file limits</button>
+    <button type="button" class="kawaii-btn"
+            title="Blocks video files (gifs still allowed) on any existing subscription that has no filter of its own set yet"
+            hx-post="/status/block-video" hx-target="#girly-status-panel" hx-swap="innerHTML">Block video on existing subs</button>
+    <button type="button" class="kawaii-btn"
+            hx-post="/status/fuzz-intervals" hx-vals='{"force_all": "false"}' hx-target="#girly-status-panel" hx-swap="innerHTML"
+            title="Re-randomizes check_interval (12-24h spread) for subs still sitting on the standard band">Fuzz existing intervals</button>
+    <button type="button" class="kawaii-btn kawaii-btn-danger"
+            hx-post="/status/fuzz-intervals" hx-vals='{"force_all": "true"}' hx-target="#girly-status-panel" hx-swap="innerHTML"
+            hx-confirm="Re-randomize check_interval for ALL subscriptions, including any you set to a custom interval on purpose?"
+            title="Same, but also re-randomizes subs with a custom (non-default-band) interval">Fuzz ALL intervals</button>
+  </div>
+</div>
+
+{% if incidents %}
+<p class="kawaii-section-title">&#9888; Recent Incidents</p>
+<div class="kawaii-card" style="max-height:12rem; overflow-y:auto;">
+  {% for inc in incidents %}
+  <div style="border-left:2px solid var(--k-border); padding-left:0.6rem; margin-bottom:0.5rem;">
+    <div class="text-xs" style="color:var(--k-text-dim-text);">{{ inc.ts }}</div>
+    <ul style="margin:0.15rem 0 0 1rem; font-size:0.8rem;">{% for a in inc.actions %}<li>{{ a }}</li>{% endfor %}</ul>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

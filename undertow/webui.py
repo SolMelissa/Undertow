@@ -446,18 +446,12 @@ if HAVE_FLASK:
         st = settings.load_settings()
         last_seen = st.get("last_seen_version")
         is_first_run = last_seen != info["version"]
-        changes = version.get_changes_since(last_seen)
         if is_first_run:
             # Mark seen immediately - "first run of this version" means the first page load
             # after an update, not "every load until someone dismisses a banner". A manual
             # browser refresh a moment later should already show the caught-up state.
             settings.save_settings({"last_seen_version": info["version"]})
-        ribbon_text = "  ✦  ".join(
-            entry for section in changes for entry in section["entries"]
-        ) or "✨ certified 100% girly ✨ princess-approved dashboard ✨ extremely cute & extremely online ✨ \U0001F48E"
-        return render_template(
-            "index.html", is_first_run=is_first_run, ribbon_text=ribbon_text,
-        )
+        return render_template("index.html", is_first_run=is_first_run)
 
     @app.route("/version/check", methods=["POST"])
     def version_check():
@@ -1027,6 +1021,56 @@ if HAVE_FLASK:
     def diagnostics_block_video():
         updated, total, error = subscriptions.block_video_on_existing_subscriptions()
         return _render_diagnostics(
+            updated, total, error,
+            f"Applied the video block to {updated} of {total} subscription(s). Takes effect on each one's "
+            f"next check - no daemon restart needed.",
+        )
+
+    # ------------------------------------------------------------- status tab (girly-mode home
+    # for the same info the old Diagnostics modal showed - see partials/girly/status_panel.html)
+
+    @app.route("/partials/status-panel")
+    def status_panel():
+        return render_template("partials/girly/status_panel.html", **_diagnostics_ctx(), cap_message=None, cap_error=False, restart_message=None)
+
+    @app.route("/status/restart-services", methods=["POST"])
+    def status_restart():
+        services.start_required_services()
+        return render_template(
+            "partials/girly/status_panel.html", **_diagnostics_ctx(),
+            cap_message=None, cap_error=False, restart_message="Restart attempted - see status above.",
+        ), 200, {"HX-Trigger": "refreshSubs"}
+
+    def _render_status_panel(updated: int, total: int, error: str | None, success_message: str) -> str:
+        cap_message, cap_error = (f"Failed: {error}", True) if error else (success_message, False)
+        return render_template(
+            "partials/girly/status_panel.html", **_diagnostics_ctx(),
+            cap_message=cap_message, cap_error=cap_error, restart_message=None,
+        )
+
+    @app.route("/status/cap-existing", methods=["POST"])
+    def status_cap_existing():
+        updated, total, error = subscriptions.cap_existing_subscription_file_limits()
+        return _render_status_panel(
+            updated, total, error,
+            f"Capped {updated} of {total} subscription(s). Takes effect on each one's next check - no daemon restart needed.",
+        )
+
+    @app.route("/status/fuzz-intervals", methods=["POST"])
+    def status_fuzz_intervals():
+        force_all = (request.form.get("force_all") or "") == "true"
+        updated, total, error = subscriptions.fuzz_existing_intervals(force_all=force_all)
+        scope = "every" if force_all else "the standard-band"
+        return _render_status_panel(
+            updated, total, error,
+            f"Re-fuzzed {updated} of {total} subscription(s) ({scope} interval(s) touched, 12-24h spread). "
+            f"Takes effect on each one's next check - no daemon restart needed.",
+        )
+
+    @app.route("/status/block-video", methods=["POST"])
+    def status_block_video():
+        updated, total, error = subscriptions.block_video_on_existing_subscriptions()
+        return _render_status_panel(
             updated, total, error,
             f"Applied the video block to {updated} of {total} subscription(s). Takes effect on each one's "
             f"next check - no daemon restart needed.",

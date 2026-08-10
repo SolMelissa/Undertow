@@ -42,26 +42,47 @@ def _git(*args: str) -> Optional[str]:
     return result.stdout.strip()
 
 
+def _relation_to_remote(head: str, remote: str) -> str:
+    """Where HEAD sits relative to origin/master: "same", "behind" (remote has commits HEAD
+    lacks - a real update is available), "ahead" (HEAD has local commits never pushed - normal
+    day-to-day state for this repo, since CLAUDE.md has Claude commit locally and only push on
+    explicit request; NOT the same thing as being out of date), or "diverged" (both - rare,
+    happens after a force-push or rebase upstream)."""
+    if head == remote:
+        return "same"
+    merge_base = _git("merge-base", head, remote)
+    if merge_base == head:
+        return "behind"
+    if merge_base == remote:
+        return "ahead"
+    return "diverged"
+
+
 def get_version_info() -> dict:
-    """Returns {version, commit, dirty, status} where status is one of
-    "current" (HEAD matches origin/master and no local changes), "stale" (behind/ahead/dirty),
-    or "unknown" (not a git checkout, or git/network info unavailable)."""
+    """Returns {version, commit, dirty, status} where status is one of "current" (HEAD matches
+    or is ahead of origin/master, no local changes to tracked files), "stale" (HEAD is behind or
+    diverged from origin/master - an actual update is available/needed), or "unknown" (not a git
+    checkout, or git/network info unavailable). Being ahead of origin/master (unpushed local
+    commits) is deliberately NOT "stale" - see _relation_to_remote."""
     global _cache
     if _cache is not None:
         return _cache
 
     head = _git("rev-parse", "HEAD")
     remote = _git("rev-parse", "origin/master")
-    dirty = bool(_git("status", "--porcelain"))
+    # --untracked-files=no: this repo always has scratch untracked files lying around (settings.json,
+    # __pycache__, dropped images, logs) that were never meant to affect version freshness - counting
+    # them as "dirty" made the pill report "stale" essentially permanently, even on a checkout that
+    # exactly matched origin/master.
+    dirty = bool(_git("status", "--porcelain", "--untracked-files=no"))
 
     if head is None:
         status = "unknown"
     elif remote is None:
         status = "unknown" if not dirty else "stale"
-    elif head != remote or dirty:
-        status = "stale"
     else:
-        status = "current"
+        relation = _relation_to_remote(head, remote)
+        status = "stale" if (relation in ("behind", "diverged") or dirty) else "current"
 
     _cache = {
         "version": __version__,
@@ -77,7 +98,9 @@ def check_for_update() -> dict:
     real `git fetch` first so this reflects what's actually on the remote right now, not just
     whatever origin/master happened to point at when this process started. Returns
     {update_available, status, error}; status mirrors get_version_info()'s "current"/"stale"/
-    "unknown" values so the caller can reuse the same button copy either way."""
+    "unknown" values so the caller can reuse the same button copy either way. "update_available"
+    is only true when origin/master is genuinely ahead of (or diverged from) HEAD - unpushed
+    local commits (HEAD ahead of origin/master) are never reported as an update being available."""
     fetch_ok = _git("fetch", "--quiet", "origin", "master") is not None
     head = _git("rev-parse", "HEAD")
     remote = _git("rev-parse", "origin/master")
@@ -87,7 +110,8 @@ def check_for_update() -> dict:
     if not fetch_ok or remote is None:
         return {"update_available": False, "status": "unknown", "error": "couldn't reach origin"}
 
-    update_available = head != remote
+    relation = _relation_to_remote(head, remote)
+    update_available = relation in ("behind", "diverged")
     return {
         "update_available": update_available,
         "status": "stale" if update_available else "current",
@@ -130,22 +154,3 @@ def _parse_changelog() -> list[dict]:
 def get_changelog() -> list[dict]:
     """Full changelog, newest version first - backs the Changelog tab."""
     return _parse_changelog()
-
-
-def get_changes_since(last_seen_version: Optional[str]) -> list[dict]:
-    """Changelog sections newer than `last_seen_version` (exclusive), for the top-bar ribbon.
-    If `last_seen_version` is None/unknown or already matches the current version, falls back
-    to just the current version's own entries - the ribbon should always have something
-    concrete to say about "what's new here", not go blank once you're caught up."""
-    sections = _parse_changelog()
-    if not sections:
-        return []
-    if last_seen_version:
-        newer = []
-        for section in sections:
-            if section["version"] == last_seen_version:
-                break
-            newer.append(section)
-        if newer:
-            return newer
-    return sections[:1]

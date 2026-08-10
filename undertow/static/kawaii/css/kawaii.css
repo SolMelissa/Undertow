@@ -151,26 +151,6 @@
 .kawaii-btn-primary:hover { background: linear-gradient(135deg, #ff3d94, var(--k-accent)); }
 @keyframes kawaii-shimmer { to { background-position: -250% center; } }
 
-/* Ticker-tape ribbon above the hero, Barbie-box energy: hot-pink diagonal stripes, gold text,
-   scrolling marquee. Text is doubled in the markup so the loop point is seamless. */
-.kawaii-ribbon {
-  overflow: hidden;
-  white-space: nowrap;
-  background: repeating-linear-gradient(135deg, #ff3d94, #ff3d94 22px, #ff6fa5 22px, #ff6fa5 44px);
-  color: #fff6e0;
-  font-family: 'Baloo 2', sans-serif;
-  font-weight: 700;
-  font-size: 0.78rem;
-  letter-spacing: 0.03em;
-  padding: 0.35rem 0;
-  border-radius: 999px;
-  margin-bottom: 0.85rem;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.25);
-  box-shadow: 0 2px 10px rgba(255, 61, 148, 0.35);
-  animation: kawaii-marquee 22s linear infinite;
-}
-@keyframes kawaii-marquee { from { text-indent: 0; } to { text-indent: -50%; } }
-@media (prefers-reduced-motion: reduce) { .kawaii-ribbon { animation: none; } }
 /* Placeholder art slot - deliberately obvious, not pretending real art exists yet. Used for the
    corner-companion enlargement and any future empty-state illustration slots. */
 .kawaii-art-slot {

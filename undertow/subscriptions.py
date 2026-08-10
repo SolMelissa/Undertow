@@ -696,6 +696,7 @@ def group_by_downloader(subs: list[dict], sort_by: str = "name", sort_dir: str =
             "failing": sum(1 for s in items_sorted if s.get("flagged")),
             "due": sum(1 for s in items_sorted if s.get("is_due")),
             "session_new_files": sum(s.get("session_new_files", 0) for s in items_sorted),
+            "queued_count": sum(s.get("queued_count", 0) for s in items_sorted),
         })
     key_fn = GROUP_SORT_KEYS.get(sort_by, GROUP_SORT_KEYS["name"])
     groups.sort(key=key_fn, reverse=(sort_dir == "desc"))
