@@ -1,12 +1,21 @@
-{% macro pill(name, up) %}
-<span class="kawaii-pill {{ 'ok' if up else 'bad' }}">
-  <span class="dot"></span>{{ name }} {{ 'online' if up else 'offline' }}
-</span>
+{% macro service_pill(name, label, up, pid, restart_name) %}
+<button type="button" class="kawaii-pill {{ 'ok' if up else 'bad' }}"
+        title="{{ label }}{% if up and pid %} - pid {{ pid }}{% elif up %} - running{% else %} - not running{% endif %} - click to restart"
+        hx-post="/services/{{ restart_name }}/restart" hx-target="#girly-toast-stack" hx-swap="afterbegin"
+        hx-confirm="Restart {{ label }}?">
+  <span class="dot"></span>{{ name }}
+</button>
 {% endmacro %}
 <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
-  {{ pill('Hydrus', status.hydrus_running) }}
-  {{ pill('Downloader', status.daemon_running) }}
-  {{ pill('Tray', status.systray_running) }}
+  {{ service_pill('Hydrus', 'Hydrus', status.hydrus_running, status.hydrus_pid, 'hydrus') }}
+  {{ service_pill('Downloader', 'hydownloader daemon', status.daemon_running, status.daemon_pid, 'daemon') }}
+  {{ service_pill('Tray', 'hydownloader systray', status.systray_running, status.systray_pid, 'systray') }}
+  <button type="button" class="kawaii-pill {{ 'ok' if drive_mounted else 'bad' }}"
+          title="A: drive (Hydrus media library) - {{ 'mounted' if drive_mounted else 'not mounted' }} - click to {{ 'dismount' if drive_mounted else 'mount' }}"
+          hx-post="/services/drive/toggle" hx-target="#girly-toast-stack" hx-swap="afterbegin"
+          hx-confirm="{{ 'Dismount' if drive_mounted else 'Mount' }} the A: drive?">
+    <span class="dot"></span>Drive
+  </button>
   {% if not api_ok %}
   <span class="kawaii-pill bad"><span class="dot"></span>API unreachable</span>
   {% else %}

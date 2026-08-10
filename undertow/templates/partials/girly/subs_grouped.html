@@ -6,6 +6,18 @@
   {{ label }}{% if group_sort == col %}{{ ' ▲' if group_dir == 'asc' else ' ▼' }}{% endif %}
 </button>
 {% endmacro %}
+{% if groups %}
+<div class="kawaii-pagebar" style="margin-top:0; margin-bottom:0.6rem;">
+  <div>{{ total }} subscription(s) across {{ groups|length }} source(s)</div>
+  <div style="display:flex; align-items:center; gap:0.5rem;">
+    sort:
+    {{ group_sort_btn('name', 'Name') }}
+    {{ group_sort_btn('count', 'Count') }}
+    {{ group_sort_btn('failing', 'Failing') }}
+    {{ group_sort_btn('due', 'Due') }}
+  </div>
+</div>
+{% endif %}
 <div class="kawaii-groups">
   {% if not groups %}
   <div class="kawaii-empty">
@@ -20,45 +32,30 @@
       <span class="kawaii-pill info"><span class="dot"></span>{{ g.count }} sub{{ 's' if g.count != 1 else '' }}</span>
       {% if g.failing %}<span class="kawaii-pill bad"><span class="dot"></span>{{ g.failing }} failing</span>{% endif %}
       {% if g.due %}<span class="kawaii-pill warn"><span class="dot"></span>{{ g.due }} due</span>{% endif %}
+      {% if g.session_new_files %}<span class="kawaii-pill accent" title="downloaded this session">+{{ g.session_new_files }} session</span>{% endif %}
     </div>
     <div class="kawaii-group-subs">
       {% for s in g.subs %}
       <div class="kawaii-sub-row {{ 'active' if s.id == active_id else '' }}"
            hx-get="/subscriptions/{{ s.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML" @click.stop>
         <div class="kawaii-sub-main">
-          <div class="kawaii-sub-name">
-            {% if s.id == active_id %}&#9654; {% endif %}{{ s.keywords }}
-          </div>
-          <div class="kawaii-sub-meta">
+          <div class="kawaii-sub-line">
+            <span class="kawaii-sub-name">{% if s.id == active_id %}&#9654; {% endif %}{{ s.keywords }}</span>
             {% if s.paused %}<span class="kawaii-pill warn"><span class="dot"></span>paused</span>
             {% elif s.is_due %}<span class="kawaii-pill info"><span class="dot"></span>due now</span>
             {% else %}<span class="kawaii-pill ok"><span class="dot"></span>active</span>{% endif %}
             {% if s.flagged %}<span class="kawaii-pill bad"><span class="dot"></span>failing</span>
             {% elif (s.last_result_status or '')|lower == 'ok' %}<span class="kawaii-pill ok"><span class="dot"></span>last check ok</span>
             {% elif s.last_result_status %}<span class="kawaii-pill bad"><span class="dot"></span>{{ s.last_result_status }}</span>{% endif %}
-            <span>last check {{ s.last_check_display }}</span>
-            <span>next {{ s.next_check_display }}</span>
+            {% if s.session_new_files %}<span class="kawaii-pill accent" title="downloaded this session">+{{ s.session_new_files }} session</span>{% endif %}
+            <span class="kawaii-sub-meta-note">next {{ s.next_check_display }}</span>
             {%- for t in (s.tags or []) %} <span class="kawaii-sub-tag">{{ t }}</span>{% endfor -%}
           </div>
         </div>
-        <div style="text-align:right;">
-          <div class="kawaii-sub-newfiles" id="g-nf-{{ s.id }}" hx-preserve="true">&hellip;</div>
-          <div class="kawaii-stat-note">new files</div>
-        </div>
+        <div class="kawaii-sub-newfiles" id="g-nf-{{ s.id }}" hx-preserve="true">&hellip;</div>
       </div>
       {% endfor %}
     </div>
   </div>
   {% endfor %}
 </div>
-{% if groups %}
-<div class="kawaii-pagebar">
-  <div>{{ total }} subscription(s) across {{ groups|length }} source(s)</div>
-  <div style="display:flex; align-items:center; gap:0.5rem;">
-    {{ group_sort_btn('name', 'Name') }}
-    {{ group_sort_btn('count', 'Count') }}
-    {{ group_sort_btn('failing', 'Failing') }}
-    {{ group_sort_btn('due', 'Due') }}
-  </div>
-</div>
-{% endif %}

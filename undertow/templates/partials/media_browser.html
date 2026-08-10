@@ -13,7 +13,6 @@
            hx-get="/media/search/suggest" hx-trigger="keyup changed delay:250ms" hx-target="#media-suggest-dropdown" hx-swap="innerHTML"
            hx-vals="js:{q: event.target.value}">
     <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
-    <button type="button" class="kawaii-btn" hx-get="/media/tag-relationships" hx-target="#modal-content" hx-swap="innerHTML">Tag Relationships</button>
   </form>
 
   {% if search_error %}
@@ -33,6 +32,31 @@
   </div>
   {% endif %}
 
+  {% if related and (related.siblings or related.parents) %}
+  <!-- Tags directly connected to the most-recently-searched tag - siblings (redirect to the
+       same ideal tag) in one color, parents (implied by this tag) in another. Clicking either
+       adds it to the active search, same as clicking a suggestion pill. This is deliberately
+       lightweight/inline - the full read-only siblings/parents/children lookup tool lives in
+       its own Tag Relations tab now (see the girlyTab='tags' panel in index.html). -->
+  <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem; margin:-0.35rem 0 0.75rem; font-size:0.78rem; color:var(--k-text-dim-text);">
+    <span>related to <strong style="color:var(--k-text);">{{ related.tag }}</strong>:</span>
+    {% for s in related.siblings %}
+    <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-2); color:var(--k-accent-2-text);"
+            title="sibling - clicking searches as if files were tagged {{ related.tag }}"
+            hx-post="/media/search/add" hx-vals='{"predicate": "{{ s }}"}' hx-target="#media-panel" hx-swap="outerHTML">
+      &#8646; {{ s }}
+    </button>
+    {% endfor %}
+    {% for p in related.parents %}
+    <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-3); color:var(--k-accent-3-text);"
+            title="parent - files tagged {{ related.tag }} automatically have this too"
+            hx-post="/media/search/add" hx-vals='{"predicate": "{{ p }}"}' hx-target="#media-panel" hx-swap="outerHTML">
+      &#8593; {{ p }}
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <div id="media-suggest-dropdown" style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:1rem;">
     {% include "partials/media_suggestions.html" %}
   </div>
@@ -46,15 +70,15 @@
     No files match this search.
   </div>
   {% else %}
-  <!-- Shape toggles: each thumbnail classifies itself square/portrait/landscape once its
+  <!-- Shape filter: each thumbnail classifies itself square/portrait/landscape once its
        actual pixel size is known client-side (see undertowClassifyMediaCard() in index.html) -
        no extra Hydrus API round trip needed, since the thumbnail bytes are already being
-       fetched anyway. Toggle state lives in window.mediaShapeState (plain JS, not server-side)
-       so flipping a toggle is instant and survives htmx re-renders of this panel. -->
+       fetched anyway. Exclusive filter (window.mediaShapeFilter, plain JS not server-side) -
+       clicking a shape shows only that shape; clicking it again clears back to showing all. -->
   <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
-    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="square" onclick="undertowToggleMediaShape('square', this)">&#9633; Square</button>
-    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="portrait" onclick="undertowToggleMediaShape('portrait', this)">&#9647; Portrait</button>
-    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="landscape" onclick="undertowToggleMediaShape('landscape', this)">&#9645; Landscape</button>
+    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="square" onclick="undertowSetMediaShapeFilter('square', this)">&#9633; Square</button>
+    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="portrait" onclick="undertowSetMediaShapeFilter('portrait', this)">&#9647; Portrait</button>
+    <button type="button" class="kawaii-btn media-shape-toggle active" data-shape="landscape" onclick="undertowSetMediaShapeFilter('landscape', this)">&#9645; Landscape</button>
   </div>
   <div id="media-grid" class="media-grid">
     {% for fid in file_ids %}

@@ -394,27 +394,10 @@
 
     <div class="kawaii-blob-bg"><span></span><span></span><span></span></div>
 
-    <!-- The old hero's title/subtitle/version-pill card was folded into the shared top
-         navbar (see index.html's .navbar block) - kept here is just the mascot art and the
-         rotating avatar image slot, now a slim strip instead of a whole redundant card. -->
-    <div class="kawaii-hero" style="padding:0.85rem 1.5rem;">
-      <div class="kawaii-hero-art" style="width:56px; height:56px;">
-        <img src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="" style="width:56px;height:56px;">
-      </div>
-      <p class="kawaii-hero-sub" style="margin:0;">Your subscriptions and downloads, served on a pink little platter &#10024;&#128097;&#127770;</p>
-      <div class="kawaii-hero-spacer"></div>
-      <div class="kawaii-gallery-slot kawaii-gallery-avatar" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/avatar" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-    </div>
-
-    <!-- Sticker rail: a little corkboard of your own pics, tucked in right under the hero.
-         Each spot independently re-rolls a pick from the shared static/images/anime/ pool on
-         every page load - see static/images/anime/README.md. -->
-    <div class="kawaii-sticker-rail">
-      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-    </div>
+    <!-- Live toast stack for the girly view's own actions (service restart / drive mount
+         results, etc) - separate from #toast-stack, which lives inside the hidden/deprecated
+         #hacker-view and is never actually visible. -->
+    <div id="girly-toast-stack" style="position:fixed; top:4.5rem; right:1rem; z-index:60; display:flex; flex-direction:column; gap:0.5rem; width:20rem; max-width:90vw;"></div>
 
     <div class="kawaii-btn-row">
       <button class="kawaii-btn kawaii-btn-primary" hx-get="/subscriptions/add-modal" hx-target="#modal-content" hx-swap="innerHTML">+ Subscribe</button>
@@ -451,16 +434,12 @@
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'home' }" @click="girlyTab = 'home'">&#127968; Home</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'media' }" @click="girlyTab = 'media'">&#128444; Media</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; System Metrics</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'tags' }" @click="girlyTab = 'tags'">&#127991; Tag Relations</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'changelog' }" @click="girlyTab = 'changelog'">&#128220; Changelog</button>
     </div>
 
     <div x-show="girlyTab === 'home'">
-      <p class="kawaii-section-title">&#128200; Overview</p>
-      <div id="girly-fleet-panel" class="kawaii-stat-grid"
-           hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
-
-      <div class="kawaii-divider">&#127807;</div>
-      <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+      <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block; margin-top:1rem;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#128150; Subscriptions</p>
       <div style="display:flex; gap:0.6rem; margin-bottom:0.6rem; flex-wrap:wrap;"
@@ -476,25 +455,12 @@
                class="kawaii-input" style="flex:1; min-width:12rem;">
         <button type="button" id="subs-group-toggle-btn" class="kawaii-btn" onclick="toggleSubsGrouping()">Ungroup</button>
       </div>
-      <div style="display:flex; gap:1.25rem; align-items:flex-start;">
-        <div style="flex:1; min-width:0;">
-          <div id="girly-subs-panel"
-               hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
-               hx-vals="js:{...window.subsTableState, ...window.subsGroupState}" hx-swap="innerHTML">
-            loading subscriptions&hellip;
-          </div>
-          <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
-        </div>
-        <div class="kawaii-gallery-flank kawaii-hide-sm">
-          <div class="kawaii-gallery-slot kawaii-gallery-md" hx-get="/images/anime/slot/md" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-          <div class="kawaii-gallery-slot kawaii-gallery-md" hx-get="/images/anime/slot/md" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-        </div>
+      <div id="girly-subs-panel"
+           hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
+           hx-vals="js:{...window.subsTableState, ...window.subsGroupState}" hx-swap="innerHTML">
+        loading subscriptions&hellip;
       </div>
-
-      <p class="kawaii-section-title">&#128172; Activity Feed</p>
-      <div class="kawaii-card">
-        <div id="girly-log-box">loading activity&hellip;</div>
-      </div>
+      <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
 
       <div class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 2rem auto 0;" hx-get="/images/anime/slot/lg" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div><!-- /girlyTab === 'home' -->
@@ -505,10 +471,11 @@
     </div><!-- /girlyTab === 'media' -->
 
     <div x-show="girlyTab === 'metrics'" x-cloak>
-      <p class="kawaii-section-title">
-        <div class="kawaii-gallery-slot kawaii-gallery-icon" style="margin-right:0.35rem;" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-        System
-      </p>
+      <p class="kawaii-section-title">&#128200; Overview</p>
+      <div id="girly-fleet-panel" class="kawaii-stat-grid"
+           hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+
+      <p class="kawaii-section-title">System</p>
       <div class="kawaii-stat-grid">
         <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
         <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
@@ -537,18 +504,25 @@
         </div>
         <div class="kawaii-gallery-slot kawaii-gallery-tall kawaii-hide-sm" hx-get="/images/anime/slot/tall" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
       </div>
+
+      <p class="kawaii-section-title">&#128172; Activity Feed</p>
+      <div class="kawaii-card">
+        <div id="girly-log-box">loading activity&hellip;</div>
+      </div>
     </div><!-- /girlyTab === 'metrics' -->
+
+    <div x-show="girlyTab === 'tags'" x-cloak>
+      <p class="kawaii-section-title">&#127991; Tag Relations</p>
+      <div id="girly-tag-relations-panel" hx-get="/partials/tag-relations" hx-trigger="load" hx-swap="innerHTML">
+        loading&hellip;
+      </div>
+    </div><!-- /girlyTab === 'tags' -->
 
     <div x-show="girlyTab === 'changelog'" x-cloak>
       <p class="kawaii-section-title">&#128220; Changelog</p>
       <div hx-get="/partials/changelog" hx-trigger="load" hx-swap="innerHTML">loading changelog&hellip;</div>
     </div><!-- /girlyTab === 'changelog' -->
 
-    <div class="kawaii-divider">&#10024;</div>
-    <div class="kawaii-sticker-rail" style="margin-bottom:0;">
-      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-      <div class="kawaii-gallery-slot kawaii-gallery-icon" title="drop a square image in static/images/anime/" hx-get="/images/anime/slot/icon" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
-    </div>
   </div><!-- /#girly-view -->
 
   <dialog id="modal" class="modal">
@@ -678,13 +652,17 @@ document.body.addEventListener('htmx:afterSwap', (e) => {
   }
 });
 
-// Media tab shape toggles (Square/Portrait/Landscape) - see .media-card/.media-grid in
+// Media tab shape filter (Square/Portrait/Landscape) - see .media-card/.media-grid in
 // kawaii.css and media_browser.html. Classification happens per-thumbnail on <img onload>
 // rather than server-side, since the shape is just "this image's own pixel aspect ratio" and
 // the thumbnail bytes are already being fetched anyway - no extra Hydrus API round trip needed.
-// Toggle state is plain JS (window.mediaShapeState), not server state, so it's instant and
-// persists across this panel's htmx outerHTML swaps (search add/remove/clear, paging).
-window.mediaShapeState = { square: true, portrait: true, landscape: true };
+// Exclusive, not inclusive: clicking a shape filters the grid DOWN to just that shape (a
+// single active filter, not 3 independent on/off toggles) - clicking the already-active shape
+// again clears the filter back to "show everything". window.mediaShapeFilter is null (no
+// filter) or one of 'square'/'portrait'/'landscape'. Plain JS state, not server-side, so
+// filtering is instant and persists across this panel's htmx outerHTML swaps (search add/
+// remove/clear, paging).
+window.mediaShapeFilter = null;
 function undertowClassifyMediaCard(img) {
   const card = img.closest('.media-card');
   if (!card || !img.naturalWidth || !img.naturalHeight) return;
@@ -693,20 +671,24 @@ function undertowClassifyMediaCard(img) {
   card.classList.remove('shape-square', 'shape-portrait', 'shape-landscape');
   card.classList.add('shape-' + shape);
   card.dataset.shape = shape;
-  card.style.display = window.mediaShapeState[shape] ? '' : 'none';
+  card.style.display = (!window.mediaShapeFilter || window.mediaShapeFilter === shape) ? '' : 'none';
 }
-function undertowToggleMediaShape(shape, btn) {
-  window.mediaShapeState[shape] = !window.mediaShapeState[shape];
-  btn.classList.toggle('active', window.mediaShapeState[shape]);
-  document.querySelectorAll('.media-card[data-shape="' + shape + '"]').forEach((card) => {
-    card.style.display = window.mediaShapeState[shape] ? '' : 'none';
+function undertowSyncMediaShapeButtons(root) {
+  (root || document).querySelectorAll('.media-shape-toggle').forEach((btn) => {
+    btn.classList.toggle('active', !window.mediaShapeFilter || window.mediaShapeFilter === btn.dataset.shape);
+  });
+}
+function undertowSetMediaShapeFilter(shape, btn) {
+  window.mediaShapeFilter = (window.mediaShapeFilter === shape) ? null : shape;
+  undertowSyncMediaShapeButtons(btn.closest('#media-panel'));
+  document.querySelectorAll('.media-card').forEach((card) => {
+    const s = card.dataset.shape;
+    card.style.display = (!window.mediaShapeFilter || window.mediaShapeFilter === s) ? '' : 'none';
   });
 }
 document.body.addEventListener('htmx:afterSwap', (e) => {
   if (e.detail.target && e.detail.target.id === 'media-panel') {
-    e.detail.target.querySelectorAll('.media-shape-toggle').forEach((btn) => {
-      btn.classList.toggle('active', window.mediaShapeState[btn.dataset.shape]);
-    });
+    undertowSyncMediaShapeButtons(e.detail.target);
   }
 });
 

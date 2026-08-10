@@ -11,26 +11,20 @@
   <div class="kawaii-sub-row {{ 'active' if s.id == active_id else '' }}"
        hx-get="/subscriptions/{{ s.id }}/actions" hx-target="#modal-content" hx-swap="innerHTML">
     <div class="kawaii-sub-main">
-      <div class="kawaii-sub-name">
-        {% if s.id == active_id %}&#9654; {% endif %}{{ s.keywords }}
-      </div>
-      <div class="kawaii-sub-meta">
-        <span>{{ s.downloader }}</span>
+      <div class="kawaii-sub-line">
+        <span class="kawaii-sub-name">{% if s.id == active_id %}&#9654; {% endif %}{{ s.keywords }}</span>
+        <span class="kawaii-sub-source">{{ s.downloader }}</span>
         {% if s.paused %}<span class="kawaii-pill warn"><span class="dot"></span>paused</span>
         {% elif s.is_due %}<span class="kawaii-pill info"><span class="dot"></span>due now</span>
         {% else %}<span class="kawaii-pill ok"><span class="dot"></span>active</span>{% endif %}
         {% if (s.last_result_status or '')|lower == 'ok' %}<span class="kawaii-pill ok"><span class="dot"></span>last check ok</span>
         {% elif s.last_result_status %}<span class="kawaii-pill bad"><span class="dot"></span>{{ s.last_result_status }}</span>{% endif %}
-        <span>last check {{ s.last_check_display }}</span>
-        <span>every {{ s.check_interval_display }}</span>
-        <span>next {{ s.next_check_display }}</span>
+        {% if s.session_new_files %}<span class="kawaii-pill accent" title="downloaded this session">+{{ s.session_new_files }} session</span>{% endif %}
+        <span class="kawaii-sub-meta-note">next {{ s.next_check_display }}</span>
         {%- for t in (s.tags or []) %} <span class="kawaii-sub-tag">{{ t }}</span>{% endfor -%}
       </div>
     </div>
-    <div style="text-align:right;">
-      <div class="kawaii-sub-newfiles" id="g-nf-{{ s.id }}" hx-preserve="true">&hellip;</div>
-      <div class="kawaii-stat-note">new files</div>
-    </div>
+    <div class="kawaii-sub-newfiles" id="g-nf-{{ s.id }}" hx-preserve="true">&hellip;</div>
   </div>
   {% endfor %}
 </div>

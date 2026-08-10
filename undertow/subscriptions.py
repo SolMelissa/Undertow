@@ -695,6 +695,7 @@ def group_by_downloader(subs: list[dict], sort_by: str = "name", sort_dir: str =
             "count": len(items_sorted),
             "failing": sum(1 for s in items_sorted if s.get("flagged")),
             "due": sum(1 for s in items_sorted if s.get("is_due")),
+            "session_new_files": sum(s.get("session_new_files", 0) for s in items_sorted),
         })
     key_fn = GROUP_SORT_KEYS.get(sort_by, GROUP_SORT_KEYS["name"])
     groups.sort(key=key_fn, reverse=(sort_dir == "desc"))
@@ -744,6 +745,26 @@ def get_latest_checks(ids: list[int]) -> dict[int, dict]:
         if current is None or (check.get("time_started") or 0) > (current.get("time_started") or 0):
             latest[sub_id] = check
     return latest
+
+
+def get_session_downloads(ids: list[int], since_epoch: float) -> dict[int, int]:
+    """Returns {subscription_id: sum of new_files across checks finished since `since_epoch`} -
+    the "what's come in since I opened the dashboard" figure behind the subs list's "this
+    session" pill, as opposed to get_total_downloads' all-time lifetime sum. Same "supplementary
+    display data" contract as get_total_downloads (missing ids just aren't in the result)."""
+    if not ids:
+        return {}
+    resp = api_client.get_subscription_checks(ids)
+    if not resp.success or not resp.data:
+        return {}
+    totals: dict[int, int] = {}
+    for check in resp.data:
+        sub_id = check.get("subscription_id")
+        finished = check.get("time_finished")
+        if sub_id is None or finished is None or finished < since_epoch:
+            continue
+        totals[sub_id] = totals.get(sub_id, 0) + (check.get("new_files") or 0)
+    return totals
 
 
 def get_total_downloads(ids: list[int]) -> dict[int, int]:

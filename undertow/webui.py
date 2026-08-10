@@ -35,7 +35,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-from . import api_client, api_keys, hydrus_client, logtail, media, services, settings, subscriptions, tags, version, watchdog
+from . import api_client, api_keys, config, hydrus_client, logtail, media, services, settings, subscriptions, tags, version, watchdog
 from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -73,22 +73,13 @@ _ACTIVE_SUB_RE = re.compile(r"checking subscription:\s*(\d+)")
 # instead of a mis-cropped image (see partials/girly/gallery_slot.html) - "add a picture shaped
 # like this" rather than silently cramming a square photo into a wide banner.
 _ANIME_DIR = _PROJECT_ROOT / "undertow" / "static" / "images" / "anime"
-# Ratios were re-tuned against an actual scan of static/images/anime/'s real stock (mostly tall
-# full-body character cutouts, width:height commonly 1:2 to 1:3) rather than the square-heavy
-# guess this started as - "tall" moved from a 2:3 target to ~1:1.8, which is what most of the
-# pool actually looks like, so those images now land their best-fit slot instead of missing the
-# cutoff on every square/avatar/icon spot and only weakly qualifying for "tall" too. Pixel sizes
-# (kept in sync by hand with .kawaii-gallery-* in kawaii.css) were bumped up across the board -
-# the old icon/avatar/sm sizes shrank real character art down to favicon-sized thumbnails, which
-# wasted stock that's often 1000px+ on a side.
+# Only large slots (>=500px on their shortest side, see .kawaii-gallery-* in kawaii.css) - no
+# icon/avatar/thumbnail-scale spots. This is a user's own photo gallery, not favicon decoration,
+# so every slot is meant to actually show the picture, not shrink it into a corner sticker.
 _GALLERY_SLOTS = {
-    "icon":   {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 200×200)"},
-    "avatar": {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 300×300)"},
-    "sm":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 400×400)"},
-    "md":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 500×500)"},
     "lg":     {"ratio": 1.0,        "label": "square, ~1:1 (e.g. 700×700)"},
-    "wide":   {"ratio": 480 / 150,  "label": "wide banner, ~3.2:1 (e.g. 960×300)"},
-    "tall":   {"ratio": 1 / 1.8,    "label": "tall portrait, ~1:1.8 (e.g. 500×900)"},
+    "wide":   {"ratio": 800 / 260,  "label": "wide banner, ~3:1 (e.g. 1200×400)"},
+    "tall":   {"ratio": 1 / 1.8,    "label": "tall portrait, ~1:1.8 (e.g. 600×1080)"},
 }
 _GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 # How forgiving the ratio match is: log-distance beyond this means "doesn't fit this slot at
@@ -273,6 +264,10 @@ def _anime_pick(slot: str) -> str | None:
 # deque of int pairs is harmless cosmetic jitter at worst, not worth a lock for decorative charts.
 _activity_history: deque[tuple[int, int]] = deque(maxlen=48)
 _START_TIME = time.monotonic()
+# Wall-clock counterpart to _START_TIME (which is monotonic, not comparable to hydownloader's
+# epoch-based check timestamps) - marks "this session" for the subs list's session-download
+# pill (see subscriptions.get_session_downloads).
+_SESSION_START_EPOCH = time.time()
 
 
 def _active_sub_id(status_data: dict | None) -> str | None:
@@ -498,13 +493,14 @@ if HAVE_FLASK:
     @app.route("/partials/status")
     def partial_status():
         svc = services.get_service_status()
+        drive_mounted = Path(config.HYDRUS_VOLUME_DRIVE + "\\").exists()
         status_resp = api_client.get_status_info()
         if status_resp.success and status_resp.data:
             d = status_resp.data
             urls_queued = d.get("urls_queued") or 0
             subs_due = d.get("subscriptions_due") or 0
             ctx = dict(
-                status=svc, api_ok=True,
+                status=svc, api_ok=True, drive_mounted=drive_mounted,
                 sub_status=d.get("subscription_worker_status") or "",
                 url_status=d.get("url_worker_status") or "",
                 urls_queued=urls_queued,
@@ -512,7 +508,7 @@ if HAVE_FLASK:
             )
             _activity_history.append((urls_queued, subs_due))
         else:
-            ctx = dict(status=svc, api_ok=False, sub_status="", url_status="", urls_queued=0, subs_due=0)
+            ctx = dict(status=svc, api_ok=False, drive_mounted=drive_mounted, sub_status="", url_status="", urls_queued=0, subs_due=0)
             _activity_history.append((0, 0))
         # Decorative "signature" readout for the header - a real hash of the current worker
         # state (not random), so it changes exactly when something real changes rather than
@@ -530,17 +526,10 @@ if HAVE_FLASK:
         h, rem = divmod(uptime_s, 3600)
         m, sec = divmod(rem, 60)
 
-        svc = services.get_service_status()
-        procs = [
-            {"name": "hydrus_client.exe", "up": svc.hydrus_running, "pid": svc.hydrus_pid},
-            {"name": "hydownloader-daemon", "up": svc.daemon_running, "pid": svc.daemon_pid},
-            {"name": "hydownloader-systray", "up": svc.systray_running, "pid": svc.systray_pid},
-        ]
-
         return render_template(
             _themed_template("fleet.html"),
             total=counts["total"], active=counts["active"], paused=counts["paused"], due=counts["due"],
-            uptime=f"{h:02}:{m:02}:{sec:02}", procs=procs,
+            uptime=f"{h:02}:{m:02}:{sec:02}",
         )
 
     @app.route("/partials/sector")
@@ -604,12 +593,15 @@ if HAVE_FLASK:
             if tag_query:
                 all_subs = [s for s in all_subs if any(tag_query in t.lower() for t in tags_by_id.get(s.get("id"), []))]
             failure_status = subscriptions.get_failure_status(all_subs) if grouped else {}
+            all_ids = [s.get("id") for s in all_subs if s.get("id") is not None]
+            session_totals = subscriptions.get_session_downloads(all_ids, _SESSION_START_EPOCH) if all_ids else {}
             for s in all_subs:
                 s["last_check_display"] = _format_last_check_column(s)
                 s["check_interval_display"] = _format_check_interval_column(s)
                 s["next_check_display"] = _format_next_check(s)
                 s["tags"] = tags_by_id.get(s.get("id"), [])
                 s["flagged"] = bool(failure_status.get(s.get("id"), {}).get("flagged"))
+                s["session_new_files"] = session_totals.get(s.get("id"), 0)
 
             if grouped:
                 groups = subscriptions.group_by_downloader(all_subs, sort_by=group_sort, sort_dir=group_dir)
@@ -1135,6 +1127,23 @@ if HAVE_FLASK:
         total_pages = max(1, math.ceil(total / _MEDIA_PAGE_SIZE))
         page = min(page, total_pages)
         start = (page - 1) * _MEDIA_PAGE_SIZE
+
+        # Related-tag display (see media_browser.html): siblings/parents of the most recently
+        # added predicate, so the search bar can suggest "here's what's directly connected to
+        # what you just searched" without a separate lookup step. Only for a plain tag/
+        # namespace:value predicate - a system: predicate (system:inbox, ...) has no tag
+        # relationships to look up.
+        related = None
+        if predicates and not predicates[-1].startswith("system:"):
+            last_tag = predicates[-1]
+            relationships, rel_err = media.get_tag_relationships(last_tag)
+            if not rel_err and (relationships.get("siblings") or relationships.get("parents")):
+                related = {
+                    "tag": last_tag,
+                    "siblings": [s for s in relationships["siblings"] if s not in predicates],
+                    "parents": [p for p in relationships["parents"] if p not in predicates],
+                }
+
         return {
             "reachable": True,
             "predicates": [{"tag": p, "color": media.namespace_color(p)} for p in predicates],
@@ -1143,6 +1152,7 @@ if HAVE_FLASK:
             "suggestions": [{"tag": t, "count": c, "color": media.namespace_color(t)} for t, c in suggestions],
             "search_error": search_error or suggest_error,
             "query": request.args.get("q", ""),
+            "related": related,
         }
 
     def _media_panel_response(sid: str, is_new: bool):
@@ -1274,9 +1284,9 @@ if HAVE_FLASK:
             ctx.update(relationships)
         return ctx
 
-    @app.route("/media/tag-relationships")
-    def media_tag_relationships():
-        return render_template("partials/tag_relationships_modal.html", **_tag_relationships_ctx(request.args.get("tag", "").strip()))
+    @app.route("/partials/tag-relations")
+    def partial_tag_relations():
+        return render_template("partials/girly/tag_relations_tab.html", **_tag_relationships_ctx(request.args.get("tag", "").strip()))
 
     # ---------------------------------------------------------------- API keys
 
@@ -1364,6 +1374,43 @@ if HAVE_FLASK:
     def focus_systray():
         ok = services.show_process_window("hydownloader-systray")
         return render_template("partials/message.html", message="Systray window not found - is it running?" if not ok else "Brought the systray to the front.", error=not ok)
+
+    # ---------------------------------------------------------------- service pill click actions
+    # Backs the navbar's clickable Hydrus/Downloader/Tray/Drive status pills (see
+    # templates/partials/girly/status.html) - clicking a pill restarts that service, or
+    # mounts/dismounts the A: VeraCrypt drive. Synchronous, same blocking-is-fine convention as
+    # the Diagnostics "Restart Services" button already uses.
+
+    _SERVICE_RESTARTERS = {
+        "hydrus": services.restart_hydrus_service,
+        "systray": services.restart_systray_service,
+    }
+
+    @app.route("/services/<name>/restart", methods=["POST"])
+    def service_restart(name: str):
+        headers = {"HX-Trigger": "refreshSubs"}
+        if name == "daemon":
+            result = services.restart_daemon()
+            error = None if result.success else result.error
+        elif name in _SERVICE_RESTARTERS:
+            error = _SERVICE_RESTARTERS[name]()
+        else:
+            return render_template("partials/message.html", message=f"unknown service: {name}", error=True), 200, headers
+        if error:
+            return render_template("partials/message.html", message=f"Restart failed: {error}", error=True), 200, headers
+        return render_template("partials/message.html", message=f"{name} restarted.", error=False), 200, headers
+
+    @app.route("/services/drive/toggle", methods=["POST"])
+    def service_drive_toggle():
+        headers = {"HX-Trigger": "refreshSubs"}
+        drive_root = Path(config.HYDRUS_VOLUME_DRIVE + "\\")
+        if drive_root.exists():
+            ok = services.dismount_veracrypt_drive()
+            message = "Drive dismounted." if ok else "Failed to dismount the drive - check VeraCrypt."
+        else:
+            ok = services.ensure_veracrypt_drive_mounted()
+            message = "Drive mounted." if ok else "Failed to mount the drive - check VeraCrypt for a password prompt."
+        return render_template("partials/message.html", message=message, error=not ok), 200, headers
 
     # ---------------------------------------------------------------- console UI fallback / shutdown
 
