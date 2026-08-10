@@ -344,6 +344,6 @@ const doc = new Document({
 });
 
 Packer.toBuffer(doc).then(buf => {
-  require("fs").writeFileSync(require("path").join(__dirname, "..", "docs", "Hydrus_Pipeline_Guide.docx"), buf);
+  require("fs").writeFileSync(require("path").join(__dirname, "Hydrus_Pipeline_Guide.docx"), buf);
   console.log("done, elements:", bodyChildren.length);
 });
