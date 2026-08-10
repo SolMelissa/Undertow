@@ -148,6 +148,68 @@ def get_tag_relationships(tag: str) -> tuple[dict, str | None]:
     }, None
 
 
+_TAG_MAP_MAX_LOOKUPS = 60
+
+
+def get_tag_family_map(tag: str, depth: int = 2) -> tuple[dict, str | None]:
+    """Family-tree view of `tag`: its siblings inline, plus parents (ancestors, expanded upward)
+    and children (descendants, expanded downward), each recursively expanded up to `depth`
+    levels. Hydrus's siblings/parents API is one round trip per tag, so a wide+deep tree could
+    otherwise fan out into hundreds of requests - capped at _TAG_MAP_MAX_LOOKUPS total lookups
+    (shared across both directions), after which further branches are shown as leaf nodes with
+    no further expansion. Returns ({"tag", "siblings", "ancestors", "descendants"}, None) or
+    ({}, reason)."""
+    depth = max(1, min(depth, 4))
+    lookups = 0
+
+    def expand(t: str, key: str, remaining: int, seen: set[str]) -> dict:
+        nonlocal lookups
+        node = {"tag": t, "siblings": [], "next": []}
+        if lookups >= _TAG_MAP_MAX_LOOKUPS:
+            return node
+        rel, err = get_tag_relationships(t)
+        lookups += 1
+        if err:
+            return node
+        node["siblings"] = rel.get("siblings", [])
+        if remaining <= 0:
+            return node
+        for nt in rel.get(key, []):
+            if nt in seen:
+                continue
+            seen.add(nt)
+            node["next"].append(expand(nt, key, remaining - 1, seen))
+        return node
+
+    root_rel, root_err = get_tag_relationships(tag)
+    lookups += 1
+    if root_err:
+        return {}, root_err
+
+    seen_up = {tag}
+    ancestors = []
+    for p in root_rel.get("parents", []):
+        if p in seen_up:
+            continue
+        seen_up.add(p)
+        ancestors.append(expand(p, "parents", depth - 1, seen_up))
+
+    seen_down = {tag}
+    descendants = []
+    for c in root_rel.get("children", []):
+        if c in seen_down:
+            continue
+        seen_down.add(c)
+        descendants.append(expand(c, "children", depth - 1, seen_down))
+
+    return {
+        "tag": tag,
+        "siblings": root_rel.get("siblings", []),
+        "ancestors": ancestors,
+        "descendants": descendants,
+    }, None
+
+
 def flatten_tags(file_metadata_entry: dict) -> set[str]:
     """Every stored tag on a single /get_files/file_metadata entry, across all tag services -
     shared by the detail view and get_similar_files below so they can't drift out of sync on

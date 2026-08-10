@@ -602,6 +602,10 @@ if HAVE_FLASK:
                 s["tags"] = tags_by_id.get(s.get("id"), [])
                 s["flagged"] = bool(failure_status.get(s.get("id"), {}).get("flagged"))
                 s["session_new_files"] = session_totals.get(s.get("id"), 0)
+                # hydownloader's /get_queued_urls has no per-subscription linkage, so "queued"
+                # here is approximated as "due to run now or currently running" rather than a
+                # true queue depth.
+                s["queued_count"] = 1 if (s.get("is_due") or s.get("id") == active_id) else 0
 
             if grouped:
                 groups = subscriptions.group_by_downloader(all_subs, sort_by=group_sort, sort_dir=group_dir)
@@ -1137,11 +1141,12 @@ if HAVE_FLASK:
         if predicates and not predicates[-1].startswith("system:"):
             last_tag = predicates[-1]
             relationships, rel_err = media.get_tag_relationships(last_tag)
-            if not rel_err and (relationships.get("siblings") or relationships.get("parents")):
+            if not rel_err and (relationships.get("siblings") or relationships.get("parents") or relationships.get("children")):
                 related = {
                     "tag": last_tag,
                     "siblings": [s for s in relationships["siblings"] if s not in predicates],
                     "parents": [p for p in relationships["parents"] if p not in predicates],
+                    "children": [c for c in relationships["children"] if c not in predicates],
                 }
 
         return {
@@ -1274,7 +1279,10 @@ if HAVE_FLASK:
     # still has to happen in Hydrus's own client for now.
 
     def _tag_relationships_ctx(searched_tag: str = "") -> dict:
-        ctx = {"searched_tag": searched_tag, "ideal_tag": "", "siblings": [], "parents": [], "children": [], "message": None}
+        ctx = {
+            "searched_tag": searched_tag, "ideal_tag": "", "siblings": [], "parents": [], "children": [], "message": None,
+            "map_family": None, "map_message": None, "map_depth": 2,
+        }
         if not searched_tag:
             return ctx
         relationships, err = media.get_tag_relationships(searched_tag)
@@ -1287,6 +1295,21 @@ if HAVE_FLASK:
     @app.route("/partials/tag-relations")
     def partial_tag_relations():
         return render_template("partials/girly/tag_relations_tab.html", **_tag_relationships_ctx(request.args.get("tag", "").strip()))
+
+    @app.route("/partials/tag-map")
+    def partial_tag_map():
+        tag = (request.args.get("tag") or "").strip()
+        try:
+            depth = int(request.args.get("depth", 2))
+        except ValueError:
+            depth = 2
+        depth = max(1, min(depth, 4))
+        ctx = {"map_family": None, "map_message": None, "map_depth": depth}
+        if tag:
+            family, err = media.get_tag_family_map(tag, depth)
+            ctx["map_message"] = err
+            ctx["map_family"] = family if not err else None
+        return render_template("partials/girly/tag_map.html", **ctx)
 
     # ---------------------------------------------------------------- API keys
 

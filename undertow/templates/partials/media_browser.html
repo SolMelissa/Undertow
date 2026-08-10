@@ -19,41 +19,52 @@
   <div class="text-xs" style="color:var(--k-danger-text); margin-bottom:0.5rem;">{{ search_error }}</div>
   {% endif %}
 
-  {% if predicates %}
-  <div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.75rem;">
-    {% for p in predicates %}
-    <button class="kawaii-pill" style="border-color:{{ p.color }}; color:{{ p.color }};"
-            hx-post="/media/search/remove" hx-vals='{"predicate": "{{ p.tag }}"}' hx-target="#media-panel" hx-swap="outerHTML"
-            title="click to remove">
-      {{ p.tag }} &times;
-    </button>
-    {% endfor %}
-    <button class="kawaii-pill" hx-post="/media/search/clear" hx-target="#media-panel" hx-swap="outerHTML">clear all</button>
-  </div>
-  {% endif %}
+  {% if predicates or (related and (related.siblings or related.parents or related.children)) %}
+  <div style="display:flex; flex-wrap:wrap; align-items:flex-start; gap:1rem; margin-bottom:0.75rem;">
+    {% if predicates %}
+    <div style="display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center;">
+      {% for p in predicates %}
+      <button class="kawaii-pill" style="border-color:{{ p.color }}; color:{{ p.color }};"
+              hx-post="/media/search/remove" hx-vals='{"predicate": "{{ p.tag }}"}' hx-target="#media-panel" hx-swap="outerHTML"
+              title="click to remove">
+        {{ p.tag }} &times;
+      </button>
+      {% endfor %}
+      <button class="kawaii-pill" hx-post="/media/search/clear" hx-target="#media-panel" hx-swap="outerHTML">clear all</button>
+    </div>
+    {% endif %}
 
-  {% if related and (related.siblings or related.parents) %}
-  <!-- Tags directly connected to the most-recently-searched tag - siblings (redirect to the
-       same ideal tag) in one color, parents (implied by this tag) in another. Clicking either
-       adds it to the active search, same as clicking a suggestion pill. This is deliberately
-       lightweight/inline - the full read-only siblings/parents/children lookup tool lives in
-       its own Tag Relations tab now (see the girlyTab='tags' panel in index.html). -->
-  <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem; margin:-0.35rem 0 0.75rem; font-size:0.78rem; color:var(--k-text-dim-text);">
-    <span>related to <strong style="color:var(--k-text);">{{ related.tag }}</strong>:</span>
-    {% for s in related.siblings %}
-    <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-2); color:var(--k-accent-2-text);"
-            title="sibling - clicking searches as if files were tagged {{ related.tag }}"
-            hx-post="/media/search/add" hx-vals='{"predicate": "{{ s }}"}' hx-target="#media-panel" hx-swap="outerHTML">
-      &#8646; {{ s }}
-    </button>
-    {% endfor %}
-    {% for p in related.parents %}
-    <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-3); color:var(--k-accent-3-text);"
-            title="parent - files tagged {{ related.tag }} automatically have this too"
-            hx-post="/media/search/add" hx-vals='{"predicate": "{{ p }}"}' hx-target="#media-panel" hx-swap="outerHTML">
-      &#8593; {{ p }}
-    </button>
-    {% endfor %}
+    {% if related and (related.siblings or related.parents or related.children) %}
+    <!-- Tags directly connected (1 level: siblings/parents/children) to the most-recently-
+         searched tag, shown right beside the active predicate pills. Clicking adds it to the
+         active search, same as clicking a suggestion pill. Deliberately lightweight/inline -
+         the full explorable family-tree view lives in the Tag Relations tab's "Tag Map"
+         (see the girlyTab='tags' panel in index.html). -->
+    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem; font-size:0.78rem; color:var(--k-text-dim-text); border-left:1px solid var(--k-border); padding-left:0.75rem;">
+      <span>Connected to <strong style="color:var(--k-text);">{{ related.tag }}</strong>:</span>
+      {% for s in related.siblings %}
+      <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-2); color:var(--k-accent-2-text);"
+              title="sibling - clicking searches as if files were tagged {{ related.tag }}"
+              hx-post="/media/search/add" hx-vals='{"predicate": "{{ s }}"}' hx-target="#media-panel" hx-swap="outerHTML">
+        &#8646; {{ s }}
+      </button>
+      {% endfor %}
+      {% for p in related.parents %}
+      <button type="button" class="kawaii-pill" style="border-color:var(--k-accent-3); color:var(--k-accent-3-text);"
+              title="parent - files tagged {{ related.tag }} automatically have this too"
+              hx-post="/media/search/add" hx-vals='{"predicate": "{{ p }}"}' hx-target="#media-panel" hx-swap="outerHTML">
+        &#8593; {{ p }}
+      </button>
+      {% endfor %}
+      {% for c in related.children %}
+      <button type="button" class="kawaii-pill" style="border-color:var(--k-accent); color:var(--k-accent-text);"
+              title="child - implied by {{ related.tag }}"
+              hx-post="/media/search/add" hx-vals='{"predicate": "{{ c }}"}' hx-target="#media-panel" hx-swap="outerHTML">
+        &#8595; {{ c }}
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 

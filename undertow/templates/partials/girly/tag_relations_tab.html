@@ -5,6 +5,7 @@
 <div x-data="{ tagSub: 'lookup' }">
   <div class="kawaii-tabs" style="margin-bottom:1rem;">
     <button type="button" class="kawaii-tab-btn" :class="{ active: tagSub === 'lookup' }" @click="tagSub = 'lookup'">Siblings &amp; Parents</button>
+    <button type="button" class="kawaii-tab-btn" :class="{ active: tagSub === 'map' }" @click="tagSub = 'map'">Tag Map</button>
     <button type="button" class="kawaii-tab-btn" :class="{ active: tagSub === 'namespaces' }" @click="tagSub = 'namespaces'">Namespaces</button>
     <button type="button" class="kawaii-tab-btn" :class="{ active: tagSub === 'bulk' }" @click="tagSub = 'bulk'">Bulk Tagging</button>
     <button type="button" class="kawaii-tab-btn" :class="{ active: tagSub === 'migration' }" @click="tagSub = 'migration'">Tag Migration</button>
@@ -60,6 +61,27 @@
       {% endfor %}
     </div>
     {% endif %}
+  </div>
+
+  <div x-show="tagSub === 'map'" x-cloak>
+    <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
+      Family-tree view of a tag's parents (ancestors) and children (descendants), with siblings shown inline.
+      Pick how many levels deep to expand, then click any tag in the tree to re-center the map on it.
+    </p>
+
+    <form hx-get="/partials/tag-map" hx-target="#girly-tag-map-panel" hx-swap="innerHTML" style="display:flex; gap:0.6rem; margin-bottom:0.75rem;">
+      <input type="text" name="tag" placeholder="tag to map&hellip;" required class="kawaii-input" style="flex:1;">
+      <select name="depth" class="kawaii-select">
+        {% for d in (1, 2, 3, 4) %}
+        <option value="{{ d }}" {{ 'selected' if map_depth == d else '' }}>{{ d }} level{{ 's' if d != 1 else '' }} deep</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="kawaii-btn kawaii-btn-primary">Map it</button>
+    </form>
+
+    <div id="girly-tag-map-panel">
+      {% include "partials/girly/tag_map.html" %}
+    </div>
   </div>
 
   <div x-show="tagSub === 'namespaces'" x-cloak class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">

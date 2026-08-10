@@ -15,9 +15,9 @@
                     templates/partials/*.html's markup.
 
   data-theme="kawaii" is now always set on <html> (see index.html), so #girly-view is always the
-  one visible. #hacker-view still polls in the background even though it's hidden (same as the
-  existing .kawaii-mascot pattern) - harmless for a local single-user dashboard, and avoids
-  touching its polling wiring while it's still being phased out.
+  one visible. #hacker-view still polls in the background even though it's hidden - harmless for
+  a local single-user dashboard, and avoids touching its polling wiring while it's still being
+  phased out.
 
   Token system (same palette as before):
     --k-bg          #fff5f9  page background
@@ -135,23 +135,6 @@
 .kawaii-only { display: none; }
 [data-theme="kawaii"] .kawaii-only { display: inline; }
 [data-theme="kawaii"] .kawaii-hide { display: none !important; }
-
-.kawaii-mascot { display: none; }
-[data-theme="kawaii"] .kawaii-mascot { display: block; }
-[data-theme="kawaii"] #mascot-header { height: 34px; width: 34px; }
-[data-theme="kawaii"] #mascot-corner {
-  position: fixed; right: 18px; bottom: 18px; height: 132px; width: 132px; z-index: 40;
-  filter: drop-shadow(0 6px 14px rgba(255, 111, 165, 0.35));
-  animation: kawaii-bob 3.2s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes kawaii-bob {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(-10px) rotate(2deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-theme="kawaii"] #mascot-corner { animation: none; }
-}
 
 /* ==================================================================== #girly-view: layout */
 #girly-view {
@@ -344,6 +327,8 @@
 .kawaii-pill.bad { color: var(--k-danger-text); border-color: #ffcdd9; background: #fff0f4; }
 .kawaii-pill.warn { color: var(--k-accent-3-text); border-color: #ffe2b3; background: #fff8ec; }
 .kawaii-pill.info { color: var(--k-accent-2-text); border-color: #c9eff2; background: #f0fbfc; }
+.kawaii-pill.muted { color: #9a9a9a; border-color: #e2e2e2; background: #f5f5f5; }
+[data-theme="kawaii"][data-kawaii-mode="dark"] .kawaii-pill.muted { color: #7a7a7a; border-color: #3a3a3a; background: #262626; }
 
 /* ------------------------------------------------------------------------------------- chart */
 .kawaii-chart-card { padding: 1.4rem 1.6rem; }

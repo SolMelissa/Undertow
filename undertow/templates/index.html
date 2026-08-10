@@ -175,7 +175,6 @@
 
   <div class="navbar bg-[#030805] border-b border-[var(--term-dim)] px-4 py-1.5 min-h-0 flex-wrap gap-y-1.5">
     <div class="flex items-center gap-3 flex-wrap">
-      <img id="mascot-header" class="kawaii-mascot" src="{{ url_for('static', filename='kawaii/mascots/header.svg') }}" alt="">
       <span class="glitch vt text-2xl font-bold text-[var(--term-green)] kawaii-hide" data-text="UNDERTOW">UNDERTOW</span>
       <span class="kawaii-only" style="font-family:'Baloo 2',sans-serif; font-weight:700; font-size:1.35rem;
             background:linear-gradient(90deg,#ff3d94,#ff85c2,#ffd1e8,#ff85c2,#ff3d94); background-size:250% auto;
@@ -183,12 +182,6 @@
             animation:kawaii-shimmer 5s linear infinite;">&#128142; Undertow</span>
       <span class="text-[10px] text-[#ff9d3c] hidden sm:inline tracking-widest kawaii-hide">::UPLINK_ESTABLISHED::</span>
 
-      <span id="version-pill" class="kawaii-pill {{ 'ok' if version_info.status == 'current' else ('warn' if version_info.status == 'stale' else 'info') }}"
-            title="{% if version_info.status == 'current' %}Running the latest pushed commit{% elif version_info.status == 'stale' %}Running code that differs from origin/master{% else %}Version freshness couldn't be determined{% endif %}"
-            style="font-size:0.72rem; padding:0.2rem 0.65rem;">
-        <span class="dot"></span>
-        v{{ version_info.version }} &middot; {{ version_info.commit }}{% if version_info.dirty %}+{% endif %}
-      </span>
       {% include "partials/version_check.html" %}
       {% if is_first_run %}
       <span class="kawaii-pill info kawaii-only" style="font-size:0.7rem; padding:0.2rem 0.6rem;" title="First run since updating to v{{ version_info.version }} - see the Changelog tab.">
@@ -390,7 +383,8 @@
        friendly subscriptions list and activity feed - built from templates/partials/girly/*.html
        (rendered by the same Flask routes as the hacker view; see _themed_template() in
        webui.py) rather than a recolored copy of the cockpit-grid/hud-panel markup above. -->
-  <div id="girly-view" x-data="{ girlyTab: 'home' }">
+  <div id="girly-view" x-data="{ girlyTab: 'home' }"
+       x-effect="window.girlyTab = girlyTab; if (girlyTab === 'metrics') { htmx.trigger(document.body, 'metricsTabOpen'); if (window.refreshLog) refreshLog(); }">
 
     <div class="kawaii-blob-bg"><span></span><span></span><span></span></div>
 
@@ -453,7 +447,6 @@
         <input type="text" x-model.debounce.150ms="filter" placeholder="search subs&hellip; (or tag:foo)"
                title="Plain text expands and searches within groups. Prefix with tag: (e.g. tag:favorites) to search by tag across every source instead."
                class="kawaii-input" style="flex:1; min-width:12rem;">
-        <button type="button" id="subs-group-toggle-btn" class="kawaii-btn" onclick="toggleSubsGrouping()">Ungroup</button>
       </div>
       <div id="girly-subs-panel"
            hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
@@ -473,32 +466,32 @@
     <div x-show="girlyTab === 'metrics'" x-cloak>
       <p class="kawaii-section-title">&#128200; Overview</p>
       <div id="girly-fleet-panel" class="kawaii-stat-grid"
-           hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+           hx-get="/partials/fleet" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
 
       <p class="kawaii-section-title">System</p>
       <div class="kawaii-stat-grid">
-        <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
-        <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
-        <div id="girly-hydrus-panel" style="display:contents;" hx-get="/partials/hydrus" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+        <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+        <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
+        <div id="girly-hydrus-panel" style="display:contents;" hx-get="/partials/hydrus" hx-trigger="load [window.girlyTab === 'metrics'], every 10s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
       </div>
 
       <p class="kawaii-section-title">&#128202; Queue &amp; Throughput</p>
-      <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+      <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load [window.girlyTab === 'metrics'], every 2s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
       <div class="kawaii-stat-grid" style="margin-top:1rem;">
-        <div id="girly-sparkline" style="display:contents;" hx-get="/partials/sparkline" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
-        <div id="girly-sector" style="display:contents;" hx-get="/partials/sector" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+        <div id="girly-sparkline" style="display:contents;" hx-get="/partials/sparkline" hx-trigger="load [window.girlyTab === 'metrics'], every 2s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+        <div id="girly-sector" style="display:contents;" hx-get="/partials/sector" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
       </div>
 
       <div class="kawaii-divider">&#127807;</div>
       <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#9889; Top Processes</p>
-      <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+      <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
 
       <p class="kawaii-section-title">&#127760; Network Connections</p>
       <div style="display:flex; gap:1.25rem; align-items:flex-start;">
         <div class="kawaii-card" style="flex:1; min-width:0;">
-          <div id="girly-netconn" style="max-height:14rem; overflow-y:auto;" hx-get="/partials/netconn" hx-trigger="load, every 3s" hx-swap="innerHTML">
+          <div id="girly-netconn" style="max-height:14rem; overflow-y:auto;" hx-get="/partials/netconn" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML">
             loading&hellip;
           </div>
         </div>
@@ -520,7 +513,8 @@
 
     <div x-show="girlyTab === 'changelog'" x-cloak>
       <p class="kawaii-section-title">&#128220; Changelog</p>
-      <div hx-get="/partials/changelog" hx-trigger="load" hx-swap="innerHTML">loading changelog&hellip;</div>
+      <div hx-get="/partials/changelog" hx-trigger="load" hx-swap="innerHTML"
+           style="max-height: 65vh; overflow-y: auto; padding-right: 0.5rem;">loading changelog&hellip;</div>
     </div><!-- /girlyTab === 'changelog' -->
 
   </div><!-- /#girly-view -->
@@ -529,8 +523,6 @@
     <div class="modal-box max-w-2xl bg-[#030805] border border-[var(--term-dim)] text-[var(--term-green)] rounded-none font-mono" id="modal-content"></div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
-
-  <img id="mascot-corner" class="kawaii-mascot" src="{{ url_for('static', filename='kawaii/mascots/corner-companion.svg') }}" alt="">
 </div>
 
 <script>
@@ -608,13 +600,6 @@ function subsGroupSortBy(col) {
   const st = window.subsGroupState;
   st.group_dir = (st.group_sort === col && st.group_dir === 'asc') ? 'desc' : 'asc';
   st.group_sort = col;
-  htmx.trigger(document.body, 'subsTableNav');
-}
-
-function toggleSubsGrouping() {
-  window.subsGroupState.grouped = !window.subsGroupState.grouped;
-  const btn = document.getElementById('subs-group-toggle-btn');
-  if (btn) btn.textContent = window.subsGroupState.grouped ? 'Ungroup' : 'Group by Source';
   htmx.trigger(document.body, 'subsTableNav');
 }
 
@@ -708,6 +693,7 @@ setInterval(tickClock, 1000);
 
 let logOffset = null;
 async function refreshLog() {
+  if (window.girlyTab !== 'metrics') return;
   try {
     const url = logOffset === null ? '/partials/log' : `/partials/log?since=${logOffset}`;
     const r = await fetch(url);

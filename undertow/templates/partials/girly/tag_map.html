@@ -1,0 +1,47 @@
+{% macro render_branch(nodes, depth) %}
+{% if nodes %}
+<ul style="list-style:none; margin:0; padding-left:1.25rem; border-left:1px dashed var(--k-border);">
+  {% for n in nodes %}
+  <li style="margin:0.3rem 0;">
+    <button type="button" class="kawaii-pill" style="border-color:var(--k-accent); color:var(--k-accent-text);"
+            title="click to re-center the map on this tag"
+            hx-get="/partials/tag-map" hx-vals='{"tag": "{{ n.tag }}", "depth": "{{ depth }}"}'
+            hx-target="#girly-tag-map-panel" hx-swap="innerHTML">
+      {{ n.tag }}
+    </button>
+    {% for s in n.siblings %}<span class="kawaii-pill" style="font-size:0.68rem; opacity:0.8; border-color:var(--k-accent-2); color:var(--k-accent-2-text);">&#8646; {{ s }}</span>{% endfor %}
+    {{ render_branch(n.next, depth) }}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endmacro %}
+
+<div class="kawaii-card" style="overflow-x:auto;">
+  {% if map_message %}
+  <div style="color:var(--k-danger-text);">{{ map_message }}</div>
+  {% elif map_family %}
+  {% if map_family.ancestors %}
+  <p class="kawaii-section-title" style="font-size:0.85rem;">&#8593; Ancestors (parents)</p>
+  {{ render_branch(map_family.ancestors, map_depth) }}
+  {% endif %}
+
+  <div style="margin: 0.85rem 0; display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
+    <span class="kawaii-pill kawaii-btn-primary" style="font-weight:700;">{{ map_family.tag }}</span>
+    {% for s in map_family.siblings %}
+    <span class="kawaii-pill" style="border-color:var(--k-accent-2); color:var(--k-accent-2-text);">&#8646; {{ s }}</span>
+    {% endfor %}
+  </div>
+
+  {% if map_family.descendants %}
+  <p class="kawaii-section-title" style="font-size:0.85rem;">&#8595; Descendants (children)</p>
+  {{ render_branch(map_family.descendants, map_depth) }}
+  {% endif %}
+
+  {% if not map_family.ancestors and not map_family.descendants and not map_family.siblings %}
+  <div class="text-xs" style="color:var(--k-text-dim-text);">No connected tags found for {{ map_family.tag }}.</div>
+  {% endif %}
+  {% else %}
+  <div class="text-xs" style="color:var(--k-text-dim-text);">Enter a tag above and pick a depth to build its family tree.</div>
+  {% endif %}
+</div>
