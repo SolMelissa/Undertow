@@ -88,10 +88,16 @@
   <div x-show="tagSub === 'namespaces'" x-cloak class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
     Namespace manager - coming soon. Reserved for renaming/recoloring tag namespaces in bulk.
   </div>
-  <div x-show="tagSub === 'bulk'" x-cloak class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
-    Bulk tagging - coming soon. Reserved for adding/removing a tag across many search results at once.
+
+  <div x-show="tagSub === 'bulk'" x-cloak>
+    <div id="girly-bulk-panel">
+      {% include "partials/girly/bulk_tagging_panel.html" %}
+    </div>
   </div>
-  <div x-show="tagSub === 'migration'" x-cloak class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
-    Tag migration - coming soon. Reserved for merging/renaming tags across the whole library.
+
+  <div x-show="tagSub === 'migration'" x-cloak>
+    <div id="girly-migration-panel">
+      {% include "partials/girly/tag_migration_panel.html" %}
+    </div>
   </div>
 </div>

@@ -1,0 +1,41 @@
+<div class="kawaii-card">
+  <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
+    Adds or removes a tag across every file matching a search - same predicate syntax as the
+    Media tab (tags, namespace:value, system: predicates), comma-separated for more than one.
+  </p>
+
+  <form style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
+    <input type="text" name="predicate" value="{{ bulk_predicate }}" placeholder="search predicates, comma-separated&hellip;"
+           class="kawaii-input" style="flex:2; min-width:16rem;">
+    <input type="text" name="tag" value="{{ bulk_tag }}" placeholder="tag to add or remove&hellip;"
+           class="kawaii-input" style="flex:1; min-width:10rem;">
+    <button type="button" class="kawaii-btn"
+            hx-get="/partials/bulk-tagging" hx-include="closest form" hx-target="#girly-bulk-panel" hx-swap="innerHTML">
+      Preview count
+    </button>
+    <button type="button" class="kawaii-btn kawaii-btn-primary"
+            hx-post="/tags/bulk/apply" hx-include="closest form" hx-vals='{"action": "add"}'
+            hx-target="#girly-bulk-panel" hx-swap="innerHTML"
+            hx-confirm="Add this tag to every matching file? This can't be bulk-undone.">
+      + Add to matches
+    </button>
+    <button type="button" class="kawaii-btn kawaii-btn-danger"
+            hx-post="/tags/bulk/apply" hx-include="closest form" hx-vals='{"action": "remove"}'
+            hx-target="#girly-bulk-panel" hx-swap="innerHTML"
+            hx-confirm="Remove this tag from every matching file? This can't be bulk-undone.">
+      &minus; Remove from matches
+    </button>
+  </form>
+
+  {% if bulk_predicate %}
+  <div class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.6rem;">
+    {% if bulk_preview_error %}<span style="color:var(--k-danger-text);">{{ bulk_preview_error }}</span>
+    {% elif bulk_preview is not none %}<strong style="color:var(--k-text);">{{ bulk_preview }}</strong> file(s) currently match this search.
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if bulk_message %}
+  <div class="kawaii-empty" style="color: {{ 'var(--k-danger-text)' if bulk_error else 'var(--k-accent-2-text)' }}; text-align:left; margin-top:0.6rem;">{{ bulk_message }}</div>
+  {% endif %}
+</div>

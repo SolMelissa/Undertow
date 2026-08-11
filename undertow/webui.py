@@ -1335,12 +1335,16 @@ if HAVE_FLASK:
             "map_family": None, "map_layout": None, "map_message": None, "map_depth": 2,
         }
         if not searched_tag:
+            ctx.update(_bulk_tagging_ctx())
+            ctx.update(_tag_migration_ctx())
             return ctx
         relationships, err = media.get_tag_relationships(searched_tag)
         if err:
             ctx["message"] = err
         else:
             ctx.update(relationships)
+        ctx.update(_bulk_tagging_ctx())
+        ctx.update(_tag_migration_ctx())
         return ctx
 
     @app.route("/partials/tag-relations")
@@ -1363,6 +1367,95 @@ if HAVE_FLASK:
                 ctx["map_family"] = family
                 ctx["map_layout"] = media.layout_tag_family_radial(family)
         return render_template("partials/girly/tag_map.html", **ctx)
+
+    # ------------------------------------------------------------ bulk tagging / tag migration
+    # Both are plain add_tags/delete_tags calls across a batch of files matched by a search -
+    # NOT the same as a real Hydrus tag sibling/parent relationship, which the Client API has no
+    # write endpoint for at all (see media.py's module note above bulk_add_tag). This is the
+    # closest legitimate substitute: a one-time edit of files that match right now.
+
+    def _split_predicates(raw: str) -> list[str]:
+        return [p.strip() for p in (raw or "").split(",") if p.strip()]
+
+    def _bulk_tagging_ctx(predicate: str = "", tag: str = "", message: str = None, error: bool = False) -> dict:
+        ctx = {
+            "bulk_predicate": predicate, "bulk_tag": tag, "bulk_preview": None, "bulk_preview_error": None,
+            "bulk_message": message, "bulk_error": error,
+        }
+        if predicate:
+            file_ids, err = media.get_current_results(_split_predicates(predicate))
+            if err:
+                ctx["bulk_preview_error"] = err
+            else:
+                ctx["bulk_preview"] = len(file_ids)
+        return ctx
+
+    @app.route("/partials/bulk-tagging")
+    def partial_bulk_tagging():
+        return render_template(
+            "partials/girly/bulk_tagging_panel.html",
+            **_bulk_tagging_ctx(request.args.get("predicate", "").strip(), request.args.get("tag", "").strip()),
+        )
+
+    @app.route("/tags/bulk/apply", methods=["POST"])
+    def tags_bulk_apply():
+        predicate = (request.form.get("predicate") or "").strip()
+        tag = (request.form.get("tag") or "").strip()
+        action = (request.form.get("action") or "").strip()
+        preds = _split_predicates(predicate)
+        if not preds or not tag or action not in ("add", "remove"):
+            return render_template(
+                "partials/girly/bulk_tagging_panel.html",
+                **_bulk_tagging_ctx(predicate, tag, "Enter both a search and a tag.", True),
+            )
+        fn = media.bulk_add_tag if action == "add" else media.bulk_remove_tag
+        count, err = fn(preds, tag)
+        if err:
+            message, error = f"Failed: {err}", True
+        else:
+            verb, prep = ("Added", "to") if action == "add" else ("Removed", "from")
+            message, error = f"{verb} {tag!r} {prep} {count} file(s).", False
+        return render_template("partials/girly/bulk_tagging_panel.html", **_bulk_tagging_ctx(predicate, tag, message, error))
+
+    def _tag_migration_ctx(old_tag: str = "", new_tag: str = "", extra: str = "", message: str = None, error: bool = False) -> dict:
+        ctx = {
+            "migration_old_tag": old_tag, "migration_new_tag": new_tag, "migration_extra": extra,
+            "migration_preview": None, "migration_preview_error": None, "migration_message": message, "migration_error": error,
+        }
+        if old_tag:
+            file_ids, err = media.get_current_results([old_tag, *_split_predicates(extra)])
+            if err:
+                ctx["migration_preview_error"] = err
+            else:
+                ctx["migration_preview"] = len(file_ids)
+        return ctx
+
+    @app.route("/partials/tag-migration")
+    def partial_tag_migration():
+        return render_template(
+            "partials/girly/tag_migration_panel.html",
+            **_tag_migration_ctx(
+                request.args.get("old_tag", "").strip(), request.args.get("new_tag", "").strip(),
+                request.args.get("extra_predicate", "").strip(),
+            ),
+        )
+
+    @app.route("/tags/migrate/apply", methods=["POST"])
+    def tags_migrate_apply():
+        old_tag = (request.form.get("old_tag") or "").strip()
+        new_tag = (request.form.get("new_tag") or "").strip()
+        extra = (request.form.get("extra_predicate") or "").strip()
+        if not old_tag or not new_tag:
+            return render_template(
+                "partials/girly/tag_migration_panel.html",
+                **_tag_migration_ctx(old_tag, new_tag, extra, "Enter both an old tag and a new tag.", True),
+            )
+        count, err = media.migrate_tag(old_tag, new_tag, _split_predicates(extra))
+        if err:
+            message, error = err, True
+        else:
+            message, error = f"Migrated {old_tag!r} to {new_tag!r} on {count} file(s).", False
+        return render_template("partials/girly/tag_migration_panel.html", **_tag_migration_ctx(old_tag, new_tag, extra, message, error))
 
     # ---------------------------------------------------------------- API keys
 

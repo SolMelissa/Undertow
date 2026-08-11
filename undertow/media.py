@@ -133,6 +133,68 @@ def get_current_results(active_predicates: list[str]) -> tuple[list[int], str | 
     return list((resp.data or {}).get("file_ids") or []), None
 
 
+# ---------------------------------------------------------------------------------- bulk tagging
+# Backs the Tag Relations tab's "Bulk Tagging" and "Tag Migration" sub-tabs. Both are plain
+# add_tags/delete_tags calls across a batch of files matched by a search - NOT the same thing as
+# a real Hydrus tag sibling/parent relationship (which would make old_tag permanently redirect
+# to new_tag for files added later too). Hydrus's Client API has no write endpoint for tag
+# siblings/parents at all (see hydrus_client.get_siblings_and_parents's docstring) - migrate_tag
+# below is the closest legitimate substitute: it fixes every file that matches *right now*, but
+# is a one-time edit, not a standing relationship. Say so in the UI rather than implying otherwise.
+
+def _bulk_tag_edit(predicates: list[str], tag: str, action) -> tuple[int, str | None]:
+    file_ids, err = get_current_results(predicates)
+    if err:
+        return 0, err
+    if not file_ids:
+        return 0, None
+    service_key, key_err = hydrus_client.get_local_tag_service_key()
+    if not service_key:
+        return 0, key_err
+    resp = action(file_ids, [tag], service_key)
+    if not resp.success:
+        return 0, resp.error
+    return len(file_ids), None
+
+
+def bulk_add_tag(predicates: list[str], tag: str) -> tuple[int, str | None]:
+    """Adds `tag` to every file currently matching `predicates`. Returns (files touched, None)
+    or (0, reason)."""
+    return _bulk_tag_edit(predicates, tag, hydrus_client.add_tags)
+
+
+def bulk_remove_tag(predicates: list[str], tag: str) -> tuple[int, str | None]:
+    """Removes `tag` from every file currently matching `predicates`. Returns (files touched,
+    None) or (0, reason)."""
+    return _bulk_tag_edit(predicates, tag, hydrus_client.delete_tags)
+
+
+def migrate_tag(old_tag: str, new_tag: str, extra_predicates: list[str] | None = None) -> tuple[int, str | None]:
+    """"Renames"/merges old_tag -> new_tag across every file that has old_tag right now (plus
+    any extra_predicates to narrow the scope further): adds new_tag then removes old_tag on
+    each matching file. This is a one-time edit of the tags actually on files today, NOT a real
+    Hydrus sibling relationship - see the module note above. Returns (files touched, None) or
+    (0, reason); if the add half succeeds but the delete half fails, the file count still
+    reflects files that got new_tag (they're not left worse off), with the delete failure
+    reported in the error message."""
+    predicates = [old_tag, *(extra_predicates or [])]
+    file_ids, err = get_current_results(predicates)
+    if err:
+        return 0, err
+    if not file_ids:
+        return 0, None
+    service_key, key_err = hydrus_client.get_local_tag_service_key()
+    if not service_key:
+        return 0, key_err
+    add_resp = hydrus_client.add_tags(file_ids, [new_tag], service_key)
+    if not add_resp.success:
+        return 0, add_resp.error
+    del_resp = hydrus_client.delete_tags(file_ids, [old_tag], service_key)
+    if not del_resp.success:
+        return len(file_ids), f"added {new_tag} to {len(file_ids)} file(s), but failed to remove {old_tag}: {del_resp.error}"
+    return len(file_ids), None
+
+
 def get_suggested_tags(active_predicates: list[str], query: str = "", limit: int = 50) -> tuple[list[tuple[str, int]], str | None]:
     """Suggestion pool for the search input: Hydrus tag autocomplete, excluding tags already in
     the active predicate list. Counts are whole-tag-domain, not narrowed by the active search -

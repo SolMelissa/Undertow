@@ -2,6 +2,18 @@
   {% if map_message %}
   <div style="color:var(--k-danger-text);">{{ map_message }}</div>
   {% elif map_layout %}
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.6rem;">
+    <button type="button" class="kawaii-pill" style="cursor:pointer;" title="Bulk-add or remove a tag across every file matching this tag"
+            @click="tagSub = 'bulk'"
+            hx-get="/partials/bulk-tagging" hx-vals='{"predicate": "{{ map_family.tag }}"}' hx-target="#girly-bulk-panel" hx-swap="innerHTML">
+      &#127991;&#65039; Bulk-tag files matching {{ map_family.tag }}
+    </button>
+    <button type="button" class="kawaii-pill" style="cursor:pointer;" title="Rename/merge this tag into another across every file that has it"
+            @click="tagSub = 'migration'"
+            hx-get="/partials/tag-migration" hx-vals='{"old_tag": "{{ map_family.tag }}"}' hx-target="#girly-migration-panel" hx-swap="innerHTML">
+      &#8644; Migrate {{ map_family.tag }} to&hellip;
+    </button>
+  </div>
   <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--k-text-dim-text); margin-bottom:0.35rem;">
     <span>&#8592; ancestors (parents)</span>
     <span>siblings shown under each tag</span>

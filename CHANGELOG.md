@@ -2,6 +2,34 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.3.0
+- Fixed the version pill falsely showing "behind" almost permanently: untracked scratch
+  files (settings.json, logs, dropped images) were counting as "dirty", and unpushed local
+  commits (ahead of origin - the normal day-to-day state for this repo) were lumped in with
+  genuinely behind/diverged as one generic "stale" status.
+- Removed the top-bar changelog ribbon - the Changelog tab is the one place for it now.
+- Moved the +Subscribe button and quick-add-by-URL form out of the header into the Home tab,
+  right above the subscriptions list.
+- Removed the Diagnostics modal button; its service/API status and maintenance actions
+  (restart down services, cap file limits, fuzz intervals, block video) now live in a
+  Health & Actions panel at the top of the System Metrics tab, renamed "Status", which was
+  also reorganized with several more image gallery slots throughout.
+- Subscription group headers now show the same downloaded/queued count pill as individual
+  rows, summed across the group.
+- Media tab: the "Connected" tags section now unions siblings/parents/children across every
+  active search tag (not just the last one added), sorted by whole-library reference count,
+  with a preview of how many results adding each one would produce. The current result count
+  is now shown next to the active search. The shape filter (Square/Portrait/Landscape) now
+  reruns the actual Hydrus search with a ratio predicate instead of hiding thumbnails
+  client-side, so switching shapes fills a full page instead of pruning an already-loaded one.
+- Tag Map redesigned as an actual hub-and-spoke diagram - the searched tag centered with
+  ancestors/descendants fanning out in rings connected by lines - instead of a nested list.
+- Built out the Bulk Tagging and Tag Migration tabs: add/remove a tag across every file
+  matching a search, or migrate (add new + remove old) a tag across every file that has it,
+  both reachable directly from the Tag Map. Note: this edits files that exist right now, not
+  a real Hydrus tag sibling/parent relationship - the Hydrus Client API still has no write
+  endpoint for those, so a permanent redirect still has to be set up in Hydrus itself.
+
 ## 1.2.0
 - The version pill in the top bar is now itself the update-checker - click it to check, and
   it turns into a "reload to update" or "couldn't check, retry" pill in place (no separate

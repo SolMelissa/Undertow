@@ -1,0 +1,41 @@
+<div class="kawaii-card">
+  <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
+    Adds the new tag and removes the old tag on every file that currently has the old tag
+    (optionally narrowed further by extra search predicates). This edits the files that exist
+    <strong>right now</strong> - it is <strong>not</strong> the same as a real Hydrus tag sibling
+    (the Hydrus Client API can't create those yet), so it won't automatically apply to files
+    tagged with the old tag in the future. For a permanent redirect, set up a proper sibling in
+    Hydrus's own tag sibling/parent manager instead.
+  </p>
+
+  <form style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
+    <input type="text" name="old_tag" value="{{ migration_old_tag }}" placeholder="old tag&hellip;"
+           class="kawaii-input" style="flex:1; min-width:10rem;">
+    <span style="color:var(--k-text-dim-text);">&rarr;</span>
+    <input type="text" name="new_tag" value="{{ migration_new_tag }}" placeholder="new tag&hellip;"
+           class="kawaii-input" style="flex:1; min-width:10rem;">
+    <input type="text" name="extra_predicate" value="{{ migration_extra }}" placeholder="optional: narrow scope, comma-separated&hellip;"
+           class="kawaii-input" style="flex:1; min-width:12rem;">
+    <button type="button" class="kawaii-btn"
+            hx-get="/partials/tag-migration" hx-include="closest form" hx-target="#girly-migration-panel" hx-swap="innerHTML">
+      Preview count
+    </button>
+    <button type="button" class="kawaii-btn kawaii-btn-primary"
+            hx-post="/tags/migrate/apply" hx-include="closest form" hx-target="#girly-migration-panel" hx-swap="innerHTML"
+            hx-confirm="Migrate this tag across every matching file? This can't be bulk-undone.">
+      Migrate
+    </button>
+  </form>
+
+  {% if migration_old_tag %}
+  <div class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.6rem;">
+    {% if migration_preview_error %}<span style="color:var(--k-danger-text);">{{ migration_preview_error }}</span>
+    {% elif migration_preview is not none %}<strong style="color:var(--k-text);">{{ migration_preview }}</strong> file(s) currently match{{ ' (old tag + scope)' if migration_extra else ' the old tag' }}.
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if migration_message %}
+  <div class="kawaii-empty" style="color: {{ 'var(--k-danger-text)' if migration_error else 'var(--k-accent-2-text)' }}; text-align:left; margin-top:0.6rem;">{{ migration_message }}</div>
+  {% endif %}
+</div>
