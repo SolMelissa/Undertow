@@ -1,45 +1,41 @@
-{% macro render_branch(nodes, depth) %}
-{% if nodes %}
-<ul style="list-style:none; margin:0; padding-left:1.25rem; border-left:1px dashed var(--k-border);">
-  {% for n in nodes %}
-  <li style="margin:0.3rem 0;">
-    <button type="button" class="kawaii-pill" style="border-color:var(--k-accent); color:var(--k-accent-text);"
-            title="click to re-center the map on this tag"
-            hx-get="/partials/tag-map" hx-vals='{"tag": "{{ n.tag }}", "depth": "{{ depth }}"}'
-            hx-target="#girly-tag-map-panel" hx-swap="innerHTML">
-      {{ n.tag }}
-    </button>
-    {% for s in n.siblings %}<span class="kawaii-pill" style="font-size:0.68rem; opacity:0.8; border-color:var(--k-accent-2); color:var(--k-accent-2-text);">&#8646; {{ s }}</span>{% endfor %}
-    {{ render_branch(n.next, depth) }}
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
-{% endmacro %}
-
 <div class="kawaii-card" style="overflow-x:auto;">
   {% if map_message %}
   <div style="color:var(--k-danger-text);">{{ map_message }}</div>
-  {% elif map_family %}
-  {% if map_family.ancestors %}
-  <p class="kawaii-section-title" style="font-size:0.85rem;">&#8593; Ancestors (parents)</p>
-  {{ render_branch(map_family.ancestors, map_depth) }}
-  {% endif %}
-
-  <div style="margin: 0.85rem 0; display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
-    <span class="kawaii-pill kawaii-btn-primary" style="font-weight:700;">{{ map_family.tag }}</span>
-    {% for s in map_family.siblings %}
-    <span class="kawaii-pill" style="border-color:var(--k-accent-2); color:var(--k-accent-2-text);">&#8646; {{ s }}</span>
+  {% elif map_layout %}
+  <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--k-text-dim-text); margin-bottom:0.35rem;">
+    <span>&#8592; ancestors (parents)</span>
+    <span>siblings shown under each tag</span>
+    <span>descendants (children) &#8594;</span>
+  </div>
+  <div style="position:relative; width:{{ map_layout.width }}px; height:{{ map_layout.height }}px; margin:0 auto; max-width:100%;">
+    <svg width="{{ map_layout.width }}" height="{{ map_layout.height }}" style="position:absolute; top:0; left:0; overflow:visible; pointer-events:none;">
+      {% for e in map_layout.edges %}
+      <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" style="stroke:var(--k-border); stroke-width:1.5px;" />
+      {% endfor %}
+    </svg>
+    {% for n in map_layout.nodes %}
+    <div style="position:absolute; left:{{ n.x }}px; top:{{ n.y }}px; transform:translate(-50%,-50%); text-align:center; z-index:1;">
+      <button type="button"
+              class="kawaii-pill {{ 'kawaii-btn-primary' if n.id == 0 else '' }}"
+              style="white-space:nowrap; {{ 'font-weight:700;' if n.id == 0 else '' }}"
+              title="{{ 'searched tag' if n.id == 0 else 'click to re-center the map on this tag' }}"
+              hx-get="/partials/tag-map" hx-vals='{"tag": "{{ n.tag }}", "depth": "{{ map_depth }}"}'
+              hx-target="#girly-tag-map-panel" hx-swap="innerHTML">
+        {{ n.tag }}
+      </button>
+      {% if n.siblings %}
+      <div style="font-size:0.6rem; color:var(--k-text-dim-text); margin-top:0.15rem; max-width:9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+           title="siblings: {{ n.siblings|join(', ') }}">
+        &#8646; {{ n.siblings[:2]|join(', ') }}{% if n.siblings|length > 2 %} +{{ n.siblings|length - 2 }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
     {% endfor %}
   </div>
-
-  {% if map_family.descendants %}
-  <p class="kawaii-section-title" style="font-size:0.85rem;">&#8595; Descendants (children)</p>
-  {{ render_branch(map_family.descendants, map_depth) }}
-  {% endif %}
-
-  {% if not map_family.ancestors and not map_family.descendants and not map_family.siblings %}
-  <div class="text-xs" style="color:var(--k-text-dim-text);">No connected tags found for {{ map_family.tag }}.</div>
+  {% if map_layout.truncated %}
+  <div class="text-xs" style="color:var(--k-text-dim-text); text-align:center; margin-top:0.5rem;">
+    +{{ map_layout.truncated }} more connected tag(s) not shown - narrow the depth or explore from a more specific tag.
+  </div>
   {% endif %}
   {% else %}
   <div class="text-xs" style="color:var(--k-text-dim-text);">Enter a tag above and pick a depth to build its family tree.</div>

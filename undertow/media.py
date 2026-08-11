@@ -16,6 +16,7 @@ multiple tabs/devices open against it at once, and they must not share one searc
 from __future__ import annotations
 
 import hashlib
+import math
 
 from . import hydrus_client
 
@@ -314,6 +315,65 @@ def get_tag_family_map(tag: str, depth: int = 2) -> tuple[dict, str | None]:
         "ancestors": ancestors,
         "descendants": descendants,
     }, None
+
+
+def layout_tag_family_radial(family: dict, width: int = 900, height: int = 560, max_nodes: int = 36) -> dict:
+    """Turns get_tag_family_map()'s nested ancestor/descendant trees into absolute (x, y) node
+    positions and parent-child edges for a hub-and-spoke render: the searched tag sits at the
+    center, ancestors fan out in concentric rings to the left (one ring per level - closer ring
+    = more directly connected), descendants fan out the same way to the right, and each node's
+    siblings are listed as a small satellite label right next to it rather than their own ring
+    (they're "the same tag" for search purposes, not a separate hop). Capped at `max_nodes`
+    total real graph nodes (siblings don't count against the cap) - a wide/deep tree beyond that
+    is silently dropped rather than overlapping labels into illegibility; `truncated` in the
+    return value counts how many were dropped so the caller can say so."""
+    cx, cy = width / 2, height / 2
+    max_radius = min(width, height) / 2 - 70
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    truncated = 0
+
+    def walk(items: list[dict], level: int, parent_id: int, angle_center: float, angle_spread: float) -> None:
+        nonlocal truncated
+        if not items:
+            return
+        radius = min(max_radius, 90 + level * 110)
+        n = len(items)
+        angles = [angle_center] if n == 1 else [
+            angle_center - angle_spread / 2 + angle_spread * i / (n - 1) for i in range(n)
+        ]
+        # Each branch gets a narrower slice of arc for its own children, so a deep chain
+        # converges toward a straight spoke instead of re-fanning to the full width every level.
+        child_spread = max(angle_spread / max(n, 1), 16)
+        for item, angle in zip(items, angles):
+            if len(nodes) >= max_nodes:
+                truncated += 1
+                continue
+            rad = math.radians(angle)
+            x = cx + radius * math.cos(rad)
+            y = cy + radius * math.sin(rad)
+            node_id = len(nodes)
+            nodes.append({
+                "id": node_id, "tag": item["tag"], "siblings": item.get("siblings", []),
+                "x": round(x, 1), "y": round(y, 1), "level": level,
+            })
+            edges.append({"from": parent_id, "to": node_id})
+            walk(item.get("next", []), level + 1, node_id, angle, child_spread)
+
+    root_id = 0
+    nodes.append({
+        "id": root_id, "tag": family["tag"], "siblings": family.get("siblings", []),
+        "x": cx, "y": cy, "level": 0,
+    })
+    walk(family.get("ancestors", []), 1, root_id, 180, 130)
+    walk(family.get("descendants", []), 1, root_id, 0, 130)
+
+    pos = {n["id"]: (n["x"], n["y"]) for n in nodes}
+    for e in edges:
+        e["x1"], e["y1"] = pos[e["from"]]
+        e["x2"], e["y2"] = pos[e["to"]]
+
+    return {"width": width, "height": height, "nodes": nodes, "edges": edges, "truncated": truncated}
 
 
 def flatten_tags(file_metadata_entry: dict) -> set[str]:

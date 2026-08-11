@@ -1332,7 +1332,7 @@ if HAVE_FLASK:
     def _tag_relationships_ctx(searched_tag: str = "") -> dict:
         ctx = {
             "searched_tag": searched_tag, "ideal_tag": "", "siblings": [], "parents": [], "children": [], "message": None,
-            "map_family": None, "map_message": None, "map_depth": 2,
+            "map_family": None, "map_layout": None, "map_message": None, "map_depth": 2,
         }
         if not searched_tag:
             return ctx
@@ -1355,11 +1355,13 @@ if HAVE_FLASK:
         except ValueError:
             depth = 2
         depth = max(1, min(depth, 4))
-        ctx = {"map_family": None, "map_message": None, "map_depth": depth}
+        ctx = {"map_family": None, "map_layout": None, "map_message": None, "map_depth": depth}
         if tag:
             family, err = media.get_tag_family_map(tag, depth)
             ctx["map_message"] = err
-            ctx["map_family"] = family if not err else None
+            if not err:
+                ctx["map_family"] = family
+                ctx["map_layout"] = media.layout_tag_family_radial(family)
         return render_template("partials/girly/tag_map.html", **ctx)
 
     # ---------------------------------------------------------------- API keys
