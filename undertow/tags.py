@@ -19,18 +19,34 @@ from . import config
 
 TAGS_FILE = config.DATA_DIR / "hydrus-pipeline-tags.json"
 
+# load_tags() gets called on every TUI table render (every 1.5s poll tick); the file only
+# changes when save_tags() writes it (from this process or another), so cache on mtime rather
+# than re-reading/re-parsing JSON off disk dozens of times a minute for no reason.
+_cache: dict[int, list[str]] | None = None
+_cache_mtime: float | None = None
+
 
 def load_tags() -> dict[int, list[str]]:
     """Returns {subscription_id: [tags]} for every subscription that has at least one tag -
     ids with no tags simply aren't keys, not an empty-list entry. Falls back to {} on any
     read/parse failure (missing file, corrupt JSON), same "degrade rather than crash" contract
     as settings.load_settings()."""
+    global _cache, _cache_mtime
+    try:
+        mtime = TAGS_FILE.stat().st_mtime
+    except OSError:
+        _cache, _cache_mtime = {}, None
+        return {}
+    if _cache is not None and mtime == _cache_mtime:
+        return _cache
     try:
         with open(TAGS_FILE, encoding="utf-8") as f:
             stored = json.load(f)
     except (OSError, ValueError):
+        _cache, _cache_mtime = {}, None
         return {}
     if not isinstance(stored, dict):
+        _cache, _cache_mtime = {}, None
         return {}
     result: dict[int, list[str]] = {}
     for k, v in stored.items():
@@ -40,6 +56,7 @@ def load_tags() -> dict[int, list[str]]:
             continue
         if isinstance(v, list):
             result[sub_id] = [str(t) for t in v if str(t).strip()]
+    _cache, _cache_mtime = result, mtime
     return result
 
 

@@ -315,6 +315,8 @@ class PipelineApp(App):
         self._activity_history: deque[int] = deque(maxlen=48)
         self._start_time = time.monotonic()
         self._frame = 0
+        self._fleet_counts: dict | None = None
+        self._last_table_fingerprint: tuple | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -480,6 +482,7 @@ class PipelineApp(App):
             return  # keep showing the last known table; the status bar already flags the outage
         self._subs_cache = sorted(subs_resp.data or [], key=lambda s: s.get("id", 0))
         self._subs_by_id = {str(s.get("id")): s for s in self._subs_cache}
+        self._fleet_counts = subscriptions.fleet_counts(self._subs_cache)
         self._render_table()
         self._render_fleet_instruments()
         self._render_sector_scan()
@@ -511,7 +514,9 @@ class PipelineApp(App):
     # the cockpit doesn't look like a frozen screenshot between polls.
 
     def _render_fleet_instruments(self) -> None:
-        counts = subscriptions.fleet_counts(self._subs_cache)
+        if self._fleet_counts is None:
+            self._fleet_counts = subscriptions.fleet_counts(self._subs_cache)
+        counts = self._fleet_counts
         total, active, paused, due = counts["total"], counts["active"], counts["paused"], counts["due"]
 
         uptime = int(time.monotonic() - self._start_time)
@@ -618,6 +623,28 @@ class PipelineApp(App):
         page_items, page_meta = subscriptions.paginate(ordered, self._page, self._page_size)
         self._page = page_meta["page"]  # clamped back into range if the list shrank underneath it
         self._page_meta = page_meta
+
+        # Every poll (every 1.5s) lands here even when nothing about the subscriptions actually
+        # changed - the common case for an idle install. table.clear() + re-adding every row
+        # forces Textual to fully re-layout/repaint the DataTable regardless, which is real,
+        # avoidable work done forever in the background. A cheap fingerprint of exactly what
+        # would be rendered lets an unchanged tick skip the rebuild entirely.
+        fingerprint = (
+            active_id, tuple(sorted(tags_by_id.items())) if filt.startswith("tag:") else None,
+            tuple(
+                (
+                    s.get("id"), s.get("downloader"), s.get("keywords"), s.get("paused"), s.get("is_due"),
+                    s.get("last_result_status"),
+                    (self._last_checks.get(s.get("id")) or {}).get("new_files"),
+                    bool((self._failure_status.get(s.get("id")) or {}).get("flagged")),
+                    tuple(tags_by_id.get(s.get("id"), [])),
+                )
+                for s in page_items
+            ),
+        )
+        if fingerprint == self._last_table_fingerprint:
+            return
+        self._last_table_fingerprint = fingerprint
 
         table.clear()
         for s in page_items:

@@ -87,13 +87,27 @@ class DaemonApiInfo:
     scheme: str
 
 
+# get_subscriptions() (called every 1.5s tick, uncached) and every other invoke_daemon_api()
+# call route through here first - without caching, that's a disk read + full JSON parse of
+# hydownloader-config.json on every single API call forever, for a file that only changes when
+# the user reconfigures hydownloader itself. mtime-keyed, same pattern as tags.load_tags().
+_config_cache: tuple[float, DaemonApiInfo | None, str | None] | None = None
+
+
 def get_daemon_api_info() -> tuple[DaemonApiInfo | None, str | None]:
     """Returns (info, None) on success, or (None, reason) on failure - the reason is shown
     directly to the user, so it needs to say exactly what was checked and what was found
     instead of a generic "not reachable" guess."""
+    global _config_cache
     cfg_path = config.HYDOWNLOADER_CONFIG_FILE
-    if not cfg_path.exists():
+    try:
+        mtime = cfg_path.stat().st_mtime
+    except OSError:
+        _config_cache = None
         return None, f"config file not found at {cfg_path} - has hydownloader been set up yet?"
+    if _config_cache is not None and _config_cache[0] == mtime:
+        return _config_cache[1], _config_cache[2]
+
     try:
         # utf-8-sig strips a BOM if present (harmless no-op if not) - hydownloader-config.json
         # gets written by Setup-HydrusPipeline.ps1's Set-Content -Encoding UTF8, which prepends
@@ -101,9 +115,13 @@ def get_daemon_api_info() -> tuple[DaemonApiInfo | None, str | None]:
         # out for gallery-dl's config file.
         cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
     except OSError as e:
-        return None, f"couldn't read {cfg_path}: {e}"
+        info, reason = None, f"couldn't read {cfg_path}: {e}"
+        _config_cache = (mtime, info, reason)
+        return info, reason
     except json.JSONDecodeError as e:
-        return None, f"{cfg_path} exists but isn't valid JSON: {e}"
+        info, reason = None, f"{cfg_path} exists but isn't valid JSON: {e}"
+        _config_cache = (mtime, info, reason)
+        return info, reason
 
     port = cfg.get("daemon.port") or 53211
     host = cfg.get("daemon.host") or "127.0.0.1"
@@ -118,11 +136,15 @@ def get_daemon_api_info() -> tuple[DaemonApiInfo | None, str | None]:
     server_pem_exists = (config.DATA_DIR / "server.pem").exists()
     scheme = "https" if (ssl_enabled and server_pem_exists) else "http"
     if not access_key and not skip_key_check:
-        return None, (
+        info, reason = None, (
             f"{cfg_path} has no 'daemon.access-key' set, and 'daemon.do-not-check-access-key' "
             f"isn't true either - has an access key actually been generated for this database?"
         )
-    return DaemonApiInfo(base_url=f"{scheme}://{host}:{port}", access_key=access_key, scheme=scheme), None
+        _config_cache = (mtime, info, reason)
+        return info, reason
+    info = DaemonApiInfo(base_url=f"{scheme}://{host}:{port}", access_key=access_key, scheme=scheme)
+    _config_cache = (mtime, info, None)
+    return info, None
 
 
 def invoke_daemon_api(route: str, body: Any = None, timeout: float = 8) -> ApiResult:

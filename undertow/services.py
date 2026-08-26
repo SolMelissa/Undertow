@@ -97,13 +97,18 @@ def kill_orphaned_gallery_dl_processes() -> int:
     return killed
 
 
-# The girly web layout polls /partials/status from three separate DOM elements every 2s
-# (index.html's mobile/desktop-duplicated status widgets), each of which calls this - without
-# caching, that's 3x the psutil.process_iter() scans (including a full cmdline read of every
-# python.exe on the box, in find_hydownloader_daemon_proc) every 2 seconds. TTL is short enough
-# that no caller ever sees data staler than the poll interval it's serving.
+# The TUI's main tick and the web layout's /partials/status widgets both poll this every
+# 1.5-2s. TTL is long enough that repeated callers within the same tick share one scan, but the
+# real cost isn't the caching - it's that a cache miss used to mean THREE separate full
+# psutil.process_iter() passes over every process on the box (one each for hydrus_client.exe,
+# the daemon, hydownloader-systray.exe), with the daemon pass additionally opening a handle to
+# read .cmdline() on every python.exe/pythonw.exe found. Process enumeration on Windows is
+# genuinely expensive (per-process OpenProcess + query syscalls), so doing that 3x on every
+# poll was a real, sustained CPU cost for something that's just "is this still running" - a
+# single merged pass below finds all three in one scan. TTL is also longer than the old 1.5s:
+# service up/down state doesn't change fast enough to need sub-3s freshness.
 _service_status_cache: tuple[float, "ServiceStatus"] | None = None
-_SERVICE_STATUS_TTL = 1.5
+_SERVICE_STATUS_TTL = 3.0
 
 
 def get_service_status() -> ServiceStatus:
@@ -111,9 +116,25 @@ def get_service_status() -> ServiceStatus:
     now = time.monotonic()
     if _service_status_cache is not None and now - _service_status_cache[0] < _SERVICE_STATUS_TTL:
         return _service_status_cache[1]
-    hydrus = find_process_by_name("hydrus_client.exe")
-    daemon = find_hydownloader_daemon_proc()
-    systray = find_process_by_name("hydownloader-systray.exe")
+
+    hydrus = daemon = systray = None
+    for proc in psutil.process_iter(["pid", "name"]):
+        try:
+            name = (proc.info["name"] or "").lower()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        if name == "hydrus_client.exe":
+            hydrus = proc
+        elif name == "hydownloader-systray.exe":
+            systray = proc
+        elif name in ("python.exe", "pythonw.exe"):
+            try:
+                cmdline = proc.cmdline()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            if any("hydownloader-daemon" in part for part in cmdline):
+                daemon = proc
+
     status = ServiceStatus(
         hydrus_running=hydrus is not None,
         hydrus_pid=hydrus.pid if hydrus else None,
