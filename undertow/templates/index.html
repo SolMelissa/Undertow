@@ -275,7 +275,7 @@
         <div id="hexdump" class="p-2 h-32 overflow-hidden"></div>
       </div>
 
-      <div id="sector-panel" hx-get="/partials/sector" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+      <div id="sector-panel" hx-get="/partials/sector" hx-trigger="load, every 8s, refreshSubs from:body" hx-swap="innerHTML"></div>
 
       <div id="sparkline-panel" hx-get="/partials/sparkline" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
     </div>
@@ -287,14 +287,14 @@
          see the "kawaii panel grouping" rules in static/kawaii/css/kawaii.css. -->
     <div class="cockpit-right flex flex-col gap-3">
       <div class="kawaii-group">
-        <div id="fleet-panel" class="kawaii-group-first" hx-get="/partials/fleet" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+        <div id="fleet-panel" class="kawaii-group-first" hx-get="/partials/fleet" hx-trigger="load, every 8s, refreshSubs from:body" hx-swap="innerHTML"></div>
         <div id="hydrus-panel" hx-get="/partials/hydrus" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
-        <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
-        <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 3s" hx-swap="innerHTML"></div>
+        <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 8s" hx-swap="innerHTML"></div>
+        <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 8s" hx-swap="innerHTML"></div>
       </div>
 
       <div class="kawaii-group">
-        <div id="netstat" class="kawaii-group-first" hx-get="/partials/netstat" hx-trigger="load, every 3s, refreshSubs from:body" hx-swap="innerHTML"></div>
+        <div id="netstat" class="kawaii-group-first" hx-get="/partials/netstat" hx-trigger="load, every 8s, refreshSubs from:body" hx-swap="innerHTML"></div>
 
         <div class="hud-panel">
           <div class="hud-titlebar">CONNECTIONS<div class="rule"></div></div>
@@ -302,7 +302,7 @@
                in the static shell so htmx only ever replaces the rows inside it, never the
                scrollable element itself - scrollTop survives every poll instead of resetting. -->
           <div class="h-40 overflow-y-auto p-2 text-[10.5px]">
-            <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 3s" hx-swap="innerHTML">
+            <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 8s" hx-swap="innerHTML">
               loading...
             </div>
           </div>
@@ -475,12 +475,12 @@
 
       <p class="kawaii-section-title">&#128200; Overview</p>
       <div id="girly-fleet-panel" class="kawaii-stat-grid"
-           hx-get="/partials/fleet" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
+           hx-get="/partials/fleet" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
 
       <p class="kawaii-section-title">System</p>
       <div class="kawaii-stat-grid">
-        <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
-        <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
+        <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+        <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
         <div id="girly-hydrus-panel" style="display:contents;" hx-get="/partials/hydrus" hx-trigger="load [window.girlyTab === 'metrics'], every 10s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
       </div>
 
@@ -490,19 +490,19 @@
       <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load [window.girlyTab === 'metrics'], every 2s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
       <div class="kawaii-stat-grid" style="margin-top:1rem;">
         <div id="girly-sparkline" style="display:contents;" hx-get="/partials/sparkline" hx-trigger="load [window.girlyTab === 'metrics'], every 2s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
-        <div id="girly-sector" style="display:contents;" hx-get="/partials/sector" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
+        <div id="girly-sector" style="display:contents;" hx-get="/partials/sector" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
       </div>
 
       <div class="kawaii-divider">&#127807;</div>
       <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#9889; Top Processes</p>
-      <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+      <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
 
       <p class="kawaii-section-title">&#127760; Network Connections</p>
       <div style="display:flex; gap:1.25rem; align-items:flex-start;">
         <div class="kawaii-card" style="flex:1; min-width:0;">
-          <div id="girly-netconn" style="max-height:14rem; overflow-y:auto;" hx-get="/partials/netconn" hx-trigger="load [window.girlyTab === 'metrics'], every 3s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML">
+          <div id="girly-netconn" style="max-height:14rem; overflow-y:auto;" hx-get="/partials/netconn" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML">
             loading&hellip;
           </div>
         </div>
@@ -672,6 +672,15 @@ document.body.addEventListener('htmx:afterSwap', (e) => {
 });
 document.body.addEventListener('closeModal', () => document.getElementById('modal').close());
 
+// The dashboard has 15+ htmx widgets polling every 2-3s, each hitting backend endpoints that
+// do real work (psutil process scans, nvidia-smi subprocess spawns, Hydrus API calls). None of
+// that needs to happen while the window is minimized/backgrounded, so skip every htmx-driven
+// request outright while the tab isn't visible - the `every Xs` timers keep ticking (cheap),
+// they just stop producing backend load until the tab is focused again.
+document.body.addEventListener('htmx:beforeRequest', (evt) => {
+  if (document.hidden) evt.preventDefault();
+});
+
 function tickClock() {
   const el = document.getElementById('clock');
   if (el) el.textContent = new Date().toISOString().replace('T', ' ').slice(0, 19) + 'Z';
@@ -766,7 +775,8 @@ setInterval(refreshLog, 1500);
       if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
       drops[i]++;
     }
-    requestAnimationFrame(draw);
+    if (!document.hidden) requestAnimationFrame(draw);
+    else setTimeout(() => requestAnimationFrame(draw), 500);
   }
   window.addEventListener('resize', resize);
   resize();
@@ -778,6 +788,7 @@ setInterval(refreshLog, 1500);
 (function noiseReadouts() {
   const el = document.getElementById('noise-readouts');
   function tick() {
+    if (document.hidden) return;
     const entropy = (0.6 + Math.random() * 0.35).toFixed(3);
     const noiseFloor = -(60 + Math.random() * 20).toFixed(1);
     const latency = (8 + Math.random() * 30).toFixed(1);
@@ -802,6 +813,7 @@ setInterval(refreshLog, 1500);
     return bytes.map(h => { const v = parseInt(h, 16); return (v >= 32 && v < 127) ? String.fromCharCode(v) : '.'; }).join('');
   }
   function tick() {
+    if (document.hidden) return;
     const bytes = randHex(16);
     const line = document.createElement('div');
     line.innerHTML = `<span class="addr">0x${addr.toString(16).toUpperCase().padStart(8, '0')}</span>  ${bytes.join(' ')}  <span class="ascii">|${toAscii(bytes)}|</span>`;
@@ -821,6 +833,7 @@ setInterval(refreshLog, 1500);
   let buffer = bars.map(() => 0.15);
   bars.forEach((bar) => { bar.style.transition = 'height 140ms linear'; });
   function tick() {
+    if (document.hidden) return;
     buffer.pop();
     buffer.unshift(Math.random());
     bars.forEach((bar, i) => { bar.style.height = (8 + buffer[i] * 90).toFixed(0) + '%'; });
@@ -903,7 +916,8 @@ setInterval(refreshLog, 1500);
       ctx.fill();
     }
     ctx.shadowBlur = 0;
-    requestAnimationFrame(draw);
+    if (!document.hidden) requestAnimationFrame(draw);
+    else setTimeout(() => requestAnimationFrame(draw), 500);
   }
   window.addEventListener('resize', resize);
   resize();

@@ -778,10 +778,10 @@ def get_gpu_stats() -> dict | None:
 
 
 # Spawning nvidia-smi is a real subprocess launch (50-150ms+ on Windows) - the hoststats widget
-# polls this every 3s, so an uncached call means a fresh process spawn every 3 seconds purely
-# to refresh a gauge that doesn't need sub-second freshness.
+# polls this every few seconds, so too short a TTL means a fresh process spawn on nearly every
+# request purely to refresh a gauge that doesn't need sub-5s freshness.
 _gpu_stats_cache: tuple[float, dict | None] | None = None
-_GPU_STATS_TTL = 5.0
+_GPU_STATS_TTL = 20.0
 
 
 # Persistent across polls (module-level, not re-created per call) so cpu_percent() has a

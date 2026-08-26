@@ -55,7 +55,7 @@ if app is not None:
     # use_reloader (which re-execs the whole process to pick up *.py changes) - that one stays
     # off deliberately, since this Flask app runs inside a background thread of the console
     # process (see run_webui() below), not as the main process the reloader expects to own.
-    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.config["TEMPLATES_AUTO_RELOAD"] = False
     app.jinja_env.auto_reload = True
 
     @app.context_processor
