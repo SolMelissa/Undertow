@@ -237,6 +237,12 @@ def get_queued_urls() -> ApiResult:
 # (index.html's triplicated /partials/status widgets). Caching means only the first caller in
 # a burst actually hits the network; everyone else in the same tick reuses that result. TTL is
 # short enough that it never returns data staler than the poll interval it's serving.
+#
+# _subscription_checks_cache is keyed by the exact (sorted) id tuple queried - every time the
+# subscribed set changes (add/remove/pause) or a different call site queries a different
+# subset, that's a brand new key. Left alone, old keys just sit there holding stale ApiResult
+# data (potentially a full check-history list per entry) forever - a slow, unbounded leak over
+# a long-running session. Pruned on every insert instead.
 _subscription_checks_cache: dict[tuple[int, ...], tuple[float, ApiResult]] = {}
 _SUBSCRIPTION_CHECKS_TTL = 2.0
 _status_info_cache: tuple[float, ApiResult] | None = None
@@ -257,6 +263,9 @@ def get_subscription_checks(ids: list[int]) -> ApiResult:
         return cached[1]
     result = invoke_daemon_api("/get_subscription_checks", {"ids": ids})
     _subscription_checks_cache[key] = (now, result)
+    stale = [k for k, (t, _) in _subscription_checks_cache.items() if now - t >= _SUBSCRIPTION_CHECKS_TTL]
+    for k in stale:
+        del _subscription_checks_cache[k]
     return result
 
 
