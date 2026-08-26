@@ -33,8 +33,9 @@ browser, and hides its own console window. Use the dashboard's **Shutdown** butt
 whole pipeline cleanly — there's no window left to close or Ctrl+C once it's hidden.
 
 **First time on this machine?** Run `Setup-HydrusPipeline.ps1` from a *non-admin* PowerShell
-window. It installs Hydrus, Python, Git, FFmpeg, gallery-dl, and Poetry via `winget`/`pip`,
-clones and configures hydownloader, and walks you through the two steps that can't be scripted
+window. It clones our Hydrus fork ([SolMelissa/hydrus](https://github.com/SolMelissa/hydrus),
+`undertow` branch) and builds its venv, installs Python, Git, FFmpeg, gallery-dl, and Poetry via
+`winget`/`pip`, clones and configures hydownloader, and walks you through the two steps that can't be scripted
 (Reddit app registration, Hydrus Client API key generation). See that script's header comment
 for prerequisites (`winget` must be available). This is a one-time, idempotent script — safe
 to re-run if it's interrupted.
@@ -143,7 +144,7 @@ Everything Hydrus/hydownloader-related lives under `%USERPROFILE%\HydrusPipeline
 
 | Path | What |
 | --- | --- |
-| `HydrusPipeline\hydrus\` | The Hydrus Network install |
+| `HydrusPipeline\hydrus\` | Our Hydrus fork, run from source (git clone + venv, not a winget/release build) |
 | `HydrusPipeline\hydownloader\` | The cloned hydownloader repo (its own Python/Poetry env, run as the daemon) |
 | `HydrusPipeline\hydownloader-data\` | hydownloader's database, config (`hydownloader-config.json`), and logs |
 | `HydrusPipeline\hydownloader-data\logs\daemon.txt` | The live log the TUI/web UI tail |
