@@ -38,9 +38,8 @@ def create_desktop_shortcut() -> None:
     shortcut = shell.CreateShortcut(str(shortcut_path))
     shortcut.TargetPath = str(target)
     shortcut.WorkingDirectory = str(target.parent)
-    hydrus_icon = config.HYDRUS_DIR / "static" / "hydrus.ico"
-    if hydrus_icon.exists():
-        shortcut.IconLocation = str(hydrus_icon)
+    if config.HYDRUS_EXE.exists():
+        shortcut.IconLocation = str(config.HYDRUS_EXE)
     shortcut.Description = "Start the Hydrus pipeline (Hydrus, hydownloader daemon, systray) and open the menu."
     shortcut.Save()
 

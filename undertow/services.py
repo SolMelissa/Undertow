@@ -74,23 +74,6 @@ def find_hydownloader_daemon_proc() -> psutil.Process | None:
     return None
 
 
-def find_hydrus_proc() -> psutil.Process | None:
-    """Hydrus now runs from our fork's source (see config.HYDRUS_ENTRY_SCRIPT) via its own
-    venv's pythonw.exe, not a standalone hydrus_client.exe - so like the hydownloader daemon,
-    it has to be found by matching its command line rather than its process name."""
-    for proc in psutil.process_iter(["pid", "name"]):
-        try:
-            name = (proc.info["name"] or "").lower()
-            if name not in ("python.exe", "pythonw.exe"):
-                continue
-            cmdline = proc.cmdline()
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-        if any("hydrus_client.pyw" in part or "hydrus_client.py" in part for part in cmdline):
-            return proc
-    return None
-
-
 def kill_orphaned_gallery_dl_processes() -> int:
     """Kills any gallery-dl.exe processes still running with no hydownloader daemon alive.
     gallery-dl is only ever spawned by the daemon as a per-subscription subprocess, so if the
@@ -140,7 +123,9 @@ def get_service_status() -> ServiceStatus:
             name = (proc.info["name"] or "").lower()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
-        if name == "hydownloader-systray.exe":
+        if name == "hydrus_client.exe":
+            hydrus = proc
+        elif name == "hydownloader-systray.exe":
             systray = proc
         elif name in ("python.exe", "pythonw.exe"):
             try:
@@ -149,8 +134,6 @@ def get_service_status() -> ServiceStatus:
                 continue
             if any("hydownloader-daemon" in part for part in cmdline):
                 daemon = proc
-            elif any("hydrus_client.pyw" in part or "hydrus_client.py" in part for part in cmdline):
-                hydrus = proc
 
     status = ServiceStatus(
         hydrus_running=hydrus is not None,
@@ -392,7 +375,7 @@ def stop_everything() -> None:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
-    hydrus = find_hydrus_proc()
+    hydrus = find_process_by_name("hydrus_client.exe")
     if hydrus:
         print("  closing Hydrus...")
         try:
@@ -413,15 +396,12 @@ def start_required_services() -> None:
     status = get_service_status()
 
     if not status.hydrus_running:
-        if config.hydrus_is_installed():
+        if config.HYDRUS_EXE.exists():
             print("  starting Hydrus (minimized)...")
-            _start_gui_minimized(
-                [str(config.HYDRUS_VENV_PYTHONW), str(config.HYDRUS_ENTRY_SCRIPT)],
-                cwd=config.HYDRUS_DIR,
-            )
+            _start_gui_minimized([str(config.HYDRUS_EXE)])
             time.sleep(12)
         else:
-            print(f"  Hydrus not found at {config.HYDRUS_DIR} - has setup been run?")
+            print(f"  Hydrus not found at {config.HYDRUS_EXE} - has setup been run?")
     else:
         print("  Hydrus already running.")
 
@@ -453,19 +433,16 @@ def start_required_services() -> None:
 def restart_hydrus_service(timeout: float = 15.0) -> str | None:
     """Force-restarts Hydrus itself (terminate + relaunch minimized) - used by the dashboard's
     clickable service status pill. Returns None on success, or an error string."""
-    hydrus = find_hydrus_proc()
+    hydrus = find_process_by_name("hydrus_client.exe")
     if hydrus:
         try:
             hydrus.terminate()
             hydrus.wait(timeout=timeout)
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
             pass
-    if not config.hydrus_is_installed():
-        return f"Hydrus not found at {config.HYDRUS_DIR}"
-    _start_gui_minimized(
-        [str(config.HYDRUS_VENV_PYTHONW), str(config.HYDRUS_ENTRY_SCRIPT)],
-        cwd=config.HYDRUS_DIR,
-    )
+    if not config.HYDRUS_EXE.exists():
+        return f"Hydrus not found at {config.HYDRUS_EXE}"
+    _start_gui_minimized([str(config.HYDRUS_EXE)])
     return None
 
 
@@ -491,12 +468,7 @@ def show_process_window(process_name: str) -> bool:
     Show-ProcessWindow (the PS1's P/Invoke SetForegroundWindow/ShowWindow/IsIconic calls)."""
     if not HAVE_WIN32:
         return False
-    if process_name in ("hydrus_client", "hydrus_client.exe"):
-        proc = find_hydrus_proc()
-    elif process_name.endswith(".exe"):
-        proc = find_process_by_name(process_name)
-    else:
-        proc = find_process_by_name(f"{process_name}.exe")
+    proc = find_process_by_name(f"{process_name}.exe") if not process_name.endswith(".exe") else find_process_by_name(process_name)
     if not proc:
         return False
     target_pid = proc.pid

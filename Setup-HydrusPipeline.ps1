@@ -109,26 +109,13 @@ if (-not (Test-CommandExists "mkvmerge")) {
     Write-Host "MKVToolNix already installed."
 }
 
-# Hydrus is our own fork (github.com/SolMelissa/hydrus, "undertow" branch), run from source -
-# never the upstream winget/release build, so we can freely modify it.
-$HydrusVenvPythonw = Join-Path $HydrusDir "venv\Scripts\pythonw.exe"
-$HydrusEntryScript = Join-Path $HydrusDir "hydrus_client.pyw"
-if (-not (Test-Path $HydrusVenvPythonw) -or -not (Test-Path $HydrusEntryScript)) {
-    if (-not (Test-Path (Join-Path $HydrusDir ".git"))) {
-        Write-Step "Cloning Hydrus fork (SolMelissa/hydrus, undertow branch) to $HydrusDir ..."
-        git clone --branch undertow https://github.com/SolMelissa/hydrus.git "$HydrusDir"
-    } else {
-        Write-Step "Hydrus fork already cloned at $HydrusDir - pulling latest undertow branch..."
-        git -C "$HydrusDir" pull --ff-only origin undertow
-    }
-
-    Write-Step "Building Hydrus's venv (simple install)..."
-    Push-Location $HydrusDir
-    python setup_venv.py -i s
-    Pop-Location
-    Write-Warn2 "Running from source also needs mpv/SQLite DLLs dropped into $HydrusDir - see hydrus-client/docs/running_from_source.md if the client fails to start."
+$HydrusExe = Join-Path $HydrusDir "hydrus_client.exe"
+if (-not (Test-Path $HydrusExe)) {
+    Write-Step "Installing Hydrus Network to $HydrusDir ..."
+    New-Item -ItemType Directory -Force -Path $HydrusDir | Out-Null
+    winget install --id HydrusNetwork.HydrusNetwork -e --location "$HydrusDir" @wingetCommonArgs
 } else {
-    Write-Host "Hydrus already set up from source at $HydrusDir"
+    Write-Host "Hydrus already installed at $HydrusDir"
 }
 
 # Refresh PATH in this session so newly-installed tools are visible without reopening the shell

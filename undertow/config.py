@@ -13,15 +13,7 @@ HYDRUS_DIR = INSTALL_ROOT / "hydrus"
 HYDOWNLOADER_REPO_DIR = INSTALL_ROOT / "hydownloader"
 DATA_DIR = INSTALL_ROOT / "hydownloader-data"
 LOGS_DIR = DATA_DIR / "logs"
-
-# Hydrus is our own fork (github.com/SolMelissa/hydrus, "undertow" branch) run from source,
-# never the upstream winget/release build. Setup-HydrusPipeline.ps1 git-clones it into
-# HYDRUS_DIR and builds a venv there via setup_venv.py; there is no hydrus_client.exe anymore.
-HYDRUS_VENV_PYTHONW = HYDRUS_DIR / "venv" / "Scripts" / "pythonw.exe"
-HYDRUS_VENV_PYTHON = HYDRUS_DIR / "venv" / "Scripts" / "python.exe"
-HYDRUS_ENTRY_SCRIPT = HYDRUS_DIR / "hydrus_client.pyw"
-HYDRUS_FORK_URL = "https://github.com/SolMelissa/hydrus.git"
-HYDRUS_FORK_BRANCH = "undertow"
+HYDRUS_EXE = HYDRUS_DIR / "hydrus_client.exe"
 HYDOWNLOADER_CONFIG_FILE = DATA_DIR / "hydownloader-config.json"
 SYSTRAY_DIR = INSTALL_ROOT / "hydownloader-systray"
 
@@ -62,11 +54,6 @@ def find_veracrypt_exe() -> Path | None:
         if candidate.exists():
             return candidate
     return None
-
-
-def hydrus_is_installed() -> bool:
-    """True once the fork has been cloned to HYDRUS_DIR and its venv built."""
-    return HYDRUS_VENV_PYTHONW.exists() and HYDRUS_ENTRY_SCRIPT.exists()
 
 
 def find_systray_exe() -> Path | None:
