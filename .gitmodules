@@ -1,4 +1,0 @@
-[submodule "hydrus-client"]
-	path = hydrus-client
-	url = https://github.com/SolMelissa/hydrus.git
-	branch = undertow
