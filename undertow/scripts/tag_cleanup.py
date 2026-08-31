@@ -6,10 +6,11 @@ watches full moon rise over lake after long trail up xz) into well-formed
 individual tags, previews the result, and optionally writes them back to
 Hydrus via its Client API.
 
-Usage:
-    python tag_cleanup.py --preview
-    python tag_cleanup.py --dry-run
-    python tag_cleanup.py --apply
+Run it with no arguments and it walks you through a wizard: enter (or reuse a
+saved) Hydrus Client API URL and key, pick a file domain and tag service from
+the live list Hydrus reports, then choose preview / dry-run / apply. The URL,
+key, and your last picks are stored locally so you don't have to retype them
+next time - see `--reconfigure` to start over.
 
 Only hard dependency: requests. wordfreq is an optional soft dependency used
 for name detection; without it, only the configured known_names list is used.
@@ -18,12 +19,14 @@ for name detection; without it, only the configured known_names list is used.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 try:
@@ -37,6 +40,43 @@ try:
     HAVE_WORDFREQ = True
 except ImportError:
     HAVE_WORDFREQ = False
+
+
+# ---------------------------------------------------------------------------
+# Locally-stored settings (API URL/key, last-picked services, preferences)
+# ---------------------------------------------------------------------------
+# Stored in plaintext JSON next to hydownloader's own data, same convention as
+# the project's other locally-cached credentials (e.g. GALLERY_DL_USER_CONFIG_FILE
+# in undertow/config.py) - no extra encryption layer, just kept out of the repo.
+
+def _default_local_config_path() -> Path:
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        from undertow import config as _undertow_config  # type: ignore
+        return _undertow_config.DATA_DIR / "tag-cleanup-config.json"
+    except Exception:
+        root = Path(os.environ.get("USERPROFILE", str(Path.home())))
+        return root / "HydrusPipeline" / "hydownloader-data" / "tag-cleanup-config.json"
+
+
+LOCAL_CONFIG_FILE = _default_local_config_path()
+
+
+def load_local_config() -> dict:
+    try:
+        with open(LOCAL_CONFIG_FILE, encoding="utf-8") as f:
+            stored = json.load(f)
+        return stored if isinstance(stored, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_local_config(updates: dict) -> None:
+    stored = load_local_config()
+    stored.update(updates)
+    LOCAL_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(stored, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -278,12 +318,22 @@ class HydrusClient:
             f"No Hydrus service found named {name!r}. Available services: {', '.join(available) or '(none returned)'}"
         )
 
-    def list_service_names(self) -> List[str]:
+    def list_services(self) -> List[Tuple[str, str, str]]:
+        """Returns (name, service_key, type_pretty) tuples for every service Hydrus knows about."""
         services = self.get_services()
         services_dict = services.get("services", {})
         if not isinstance(services_dict, dict):
             return []
-        return sorted(svc.get("name", "?") for svc in services_dict.values())
+        return sorted(
+            (svc.get("name", "?"), key, svc.get("type_pretty", "?"))
+            for key, svc in services_dict.items()
+        )
+
+    def list_file_services(self) -> List[Tuple[str, str, str]]:
+        return [s for s in self.list_services() if "file" in s[2].lower()]
+
+    def list_tag_services(self) -> List[Tuple[str, str, str]]:
+        return [s for s in self.list_services() if "tag" in s[2].lower()]
 
     def search_files(self, tags: List[str], file_service_key: str) -> List[int]:
         params = {
@@ -369,117 +419,176 @@ def run_self_test(cfg: Config) -> None:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Clean up filename-derived Hydrus tags: split, relabel, and rewrite via the Client API.",
-        epilog=(
-            "Examples:\n"
-            "  python tag_cleanup.py --preview\n"
-            "  python tag_cleanup.py --dry-run --api-key <key>\n"
-            "  python tag_cleanup.py --apply --api-key <key> --yes\n"
-            "  python tag_cleanup.py --list-services --api-key <key>\n\n"
-            "The API key can also be set via the HYDRUS_API_KEY environment variable."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Interactive wizard to clean up filename-derived Hydrus tags via the Client API.",
+        epilog="Just run `python tag_cleanup.py` with no arguments - it walks you through the rest.",
     )
-    p.add_argument("--source-namespace", default="dir", metavar="NS",
-                    help="Namespace holding raw filename tags (default: dir)")
-    p.add_argument("--wildcard", action="append", dest="wildcards", metavar="TAG",
-                    help="Tag wildcard to search for (repeatable, default: '<namespace>:*')")
-    p.add_argument("--file-service", default="all local files", metavar="NAME",
-                    help="Hydrus file service name (default: 'all local files')")
-    p.add_argument("--tag-service", default="my tags", metavar="NAME",
-                    help="Hydrus tag service name to read/write (default: 'my tags')")
-    p.add_argument("--api-url", default="http://127.0.0.1:45869", metavar="URL",
-                    help="Hydrus Client API base URL (default: http://127.0.0.1:45869)")
-    p.add_argument("--api-key", default=os.environ.get("HYDRUS_API_KEY"), metavar="KEY",
-                    help="Hydrus Client API access key (or set HYDRUS_API_KEY)")
-    p.add_argument("--known-names", nargs="*", default=[], metavar="NAME",
-                    help="Extra known name tokens to always treat as character: tags")
-    p.add_argument("--no-truncation-drop", action="store_true",
-                    help="Disable the trailing-truncation drop heuristic (keep suspect trailing tokens)")
-    p.add_argument("-y", "--yes", action="store_true",
-                    help="Skip the confirmation prompt before --apply writes changes")
-
-    mode = p.add_mutually_exclusive_group()
-    mode.add_argument("--preview", action="store_true",
-                       help="Run against the 10 built-in fixtures only, no Hydrus connection made (default mode)")
-    mode.add_argument("--dry-run", action="store_true",
-                       help="Fetch real tags from Hydrus, show the planned changes, write nothing")
-    mode.add_argument("--apply", action="store_true",
-                       help="Fetch real tags from Hydrus and write the add/delete changes")
-    mode.add_argument("--list-services", action="store_true",
-                       help="Print the Hydrus service names available at --api-url, then exit")
+    p.add_argument("--reconfigure", action="store_true",
+                    help="Ignore saved settings and re-enter the API URL/key and service picks from scratch")
     return p
 
 
-def build_config(args: argparse.Namespace) -> Config:
-    cfg = Config(
-        source_namespace=args.source_namespace,
-        target_service_name=args.tag_service,
-        file_service_name=args.file_service,
-        drop_suspected_truncation=not args.no_truncation_drop,
-    )
-    if args.known_names:
-        cfg.known_names |= {k.lower() for k in args.known_names}
-    cfg.target_tag_wildcards = args.wildcards if args.wildcards else [f"{cfg.source_namespace}:*"]
+# ---------------------------------------------------------------------------
+# Small interactive-prompt helpers
+# ---------------------------------------------------------------------------
+
+def prompt_text(label: str, default: Optional[str] = None) -> str:
+    suffix = f" [{default}]" if default else ""
+    while True:
+        raw = input(f"{label}{suffix}: ").strip()
+        if raw:
+            return raw
+        if default is not None:
+            return default
+        print("  A value is required.")
+
+
+def prompt_secret(label: str, has_saved: bool) -> Optional[str]:
+    """Returns None if the caller should keep whatever secret is already saved."""
+    hint = " (leave blank to keep the saved key)" if has_saved else ""
+    value = getpass.getpass(f"{label}{hint}: ").strip()
+    return value or None
+
+
+def prompt_yes_no(label: str, default: bool = True) -> bool:
+    suffix = " [Y/n]" if default else " [y/N]"
+    raw = input(f"{label}{suffix}: ").strip().lower()
+    if not raw:
+        return default
+    return raw.startswith("y")
+
+
+def prompt_choice(label: str, options: List[Tuple[str, str]], default_key: Optional[str] = None) -> str:
+    """options: list of (display_text, value). Returns the chosen value."""
+    print(f"\n{label}")
+    default_idx = 1
+    for idx, (display, value) in enumerate(options, start=1):
+        marker = " (saved default)" if value == default_key else ""
+        print(f"  {idx}. {display}{marker}")
+        if value == default_key:
+            default_idx = idx
+    while True:
+        raw = input(f"Choose 1-{len(options)} [{default_idx}]: ").strip()
+        if not raw:
+            return options[default_idx - 1][1]
+        if raw.isdigit() and 1 <= int(raw) <= len(options):
+            return options[int(raw) - 1][1]
+        print("  Not a valid choice, try again.")
+
+
+def prompt_name_list(label: str, default: List[str]) -> List[str]:
+    default_str = ", ".join(default) if default else "(none)"
+    raw = input(f"{label} (comma-separated) [{default_str}]: ").strip()
+    if not raw:
+        return default
+    return [part.strip().lower() for part in raw.split(",") if part.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Wizard
+# ---------------------------------------------------------------------------
+
+def wizard_connect(saved: dict, reconfigure: bool) -> Tuple[HydrusClient, str, str]:
+    """Prompts for API URL/key (reusing saved values unless --reconfigure), validates the
+    connection against Hydrus, and returns the connected client plus the url/key used."""
+    default_url = saved.get("api_url", "http://127.0.0.1:45869")
+    saved_key = None if reconfigure else saved.get("api_key")
+
+    while True:
+        api_url = prompt_text("Hydrus Client API URL", default=default_url)
+        if saved_key:
+            masked = f"...{saved_key[-4:]}" if len(saved_key) >= 4 else "(saved)"
+            if prompt_yes_no(f"Use saved API key ({masked})?", default=True):
+                api_key = saved_key
+            else:
+                api_key = prompt_secret("Hydrus Client API access key", has_saved=False) or ""
+        else:
+            print("Find/create an access key in Hydrus under services > review services > the 'client api' tab.")
+            api_key = prompt_secret("Hydrus Client API access key", has_saved=False) or ""
+
+        if not api_key:
+            print("  An API key is required.")
+            continue
+
+        client = HydrusClient(api_url, api_key)
+        try:
+            client.get_services()
+        except (requests.RequestException, RuntimeError) as exc:
+            print(f"  Could not connect: {exc}")
+            if not prompt_yes_no("Try again?", default=True):
+                raise SystemExit(1)
+            saved_key = None  # force a fresh key prompt on retry
+            continue
+
+        save_local_config({"api_url": api_url, "api_key": api_key})
+        return client, api_url, api_key
+
+
+def wizard_pick_services(client: HydrusClient, saved: dict) -> Tuple[str, str, str, str]:
+    """Returns (file_service_name, file_service_key, tag_service_name, tag_service_key)."""
+    file_services = client.list_file_services()
+    tag_services = client.list_tag_services()
+    if not file_services:
+        raise SystemExit("Hydrus reported no file services - is the Client API enabled with file access?")
+    if not tag_services:
+        raise SystemExit("Hydrus reported no tag services - is the Client API enabled with tag access?")
+
+    file_options = [(f"{name}  ({type_pretty})", key) for name, key, type_pretty in file_services]
+    file_key = prompt_choice("Which file domain should be searched?", file_options,
+                              default_key=saved.get("file_service_key"))
+    file_name = next(name for name, key, _ in file_services if key == file_key)
+
+    tag_options = [(f"{name}  ({type_pretty})", key) for name, key, type_pretty in tag_services]
+    tag_key = prompt_choice("Which tag service holds the filename tags to clean up?", tag_options,
+                             default_key=saved.get("tag_service_key"))
+    tag_name = next(name for name, key, _ in tag_services if key == tag_key)
+
+    save_local_config({
+        "file_service_name": file_name, "file_service_key": file_key,
+        "tag_service_name": tag_name, "tag_service_key": tag_key,
+    })
+    return file_name, file_key, tag_name, tag_key
+
+
+def wizard_build_config(saved: dict) -> Config:
+    print()
+    source_namespace = prompt_text("Namespace holding the raw filename tags", default=saved.get("source_namespace", "dir"))
+    known_names = prompt_name_list("Extra known name tokens to always tag as character:", default=saved.get("known_names", []))
+    drop_truncation = prompt_yes_no("Drop suspected truncated trailing tokens (short consonant-only remnants)?",
+                                     default=saved.get("drop_suspected_truncation", True))
+
+    save_local_config({
+        "source_namespace": source_namespace,
+        "known_names": known_names,
+        "drop_suspected_truncation": drop_truncation,
+    })
+
+    cfg = Config(source_namespace=source_namespace, drop_suspected_truncation=drop_truncation)
+    cfg.known_names |= set(known_names)
+    cfg.target_tag_wildcards = [f"{source_namespace}:*"]
     return cfg
 
 
-def require_api_key(args: argparse.Namespace) -> Optional[str]:
-    if not args.api_key:
-        print(
-            "An API key is required for this mode: pass --api-key or set the HYDRUS_API_KEY "
-            "environment variable. Find/create one in Hydrus under services > review services > "
-            "the 'client api' tab.",
-            file=sys.stderr,
-        )
-        return None
-    return args.api_key
+def wizard_pick_mode() -> str:
+    return prompt_choice("What would you like to do?", [
+        ("Preview - run against 10 built-in sample tags, no Hydrus connection needed", "preview"),
+        ("Dry run - fetch real tags from Hydrus, show the plan, write nothing", "dry-run"),
+        ("Apply - fetch real tags and write the cleaned-up tags to Hydrus", "apply"),
+    ])
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    args = build_arg_parser().parse_args(argv)
-    cfg = build_config(args)
-
-    if not (args.dry_run or args.apply or args.list_services):
-        args.preview = True
-
-    if args.preview:
-        print("Running preview against the 10 built-in fixtures (no Hydrus connection made).\n")
-        run_self_test(cfg)
-        return 0
-
-    api_key = require_api_key(args)
-    if not api_key:
-        return 1
-
+def run_dry_run_or_apply(client: HydrusClient, cfg: Config, file_service_key: str,
+                          file_service_name: str, tag_service_key: str, apply: bool) -> int:
     try:
-        client = HydrusClient(args.api_url, api_key)
-
-        if args.list_services:
-            names = client.list_service_names()
-            if not names:
-                print("No services returned by Hydrus.")
-            else:
-                print("Available Hydrus services:")
-                for name in names:
-                    print(f"  - {name}")
-            return 0
-
-        file_service_key = client.resolve_service_key(cfg.file_service_name)
-        tag_service_key = client.resolve_service_key(cfg.target_service_name)
-
         file_ids = client.search_files(cfg.target_tag_wildcards, file_service_key)
-        print(f"Found {len(file_ids)} file(s) matching {cfg.target_tag_wildcards} "
-              f"in service {cfg.file_service_name!r}.")
+        print(f"\nFound {len(file_ids)} file(s) matching {cfg.target_tag_wildcards} "
+              f"in service {file_service_name!r}.")
         if not file_ids:
             return 0
-
         metadata = client.fetch_metadata(file_ids, tag_service_key)
     except (requests.RequestException, RuntimeError, ValueError) as exc:
         print(f"Could not reach Hydrus: {exc}", file=sys.stderr)
         return 1
 
-    # plan: fid -> (tags_to_add, tags_to_delete, [ParsedTag ...] for preview)
     plan: Dict[int, Tuple[List[str], List[str]]] = {}
     previews: List[ParsedTag] = []
     for fid, current_tags in metadata.items():
@@ -499,17 +608,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     print_preview_table(previews)
     files_affected = len(plan)
 
-    if args.dry_run:
+    if not apply:
         print(f"\nDRY RUN: would rewrite {len(previews)} tag(s) across {files_affected} file(s). No changes written.")
         return 0
 
-    if not args.yes:
-        confirm = input(
-            f"\nApply changes to {files_affected} file(s) ({len(previews)} tag(s) rewritten) to Hydrus now? [y/N] "
-        ).strip().lower()
-        if confirm != "y":
-            print("Aborted, no changes written.")
-            return 0
+    if not prompt_yes_no(f"\nApply changes to {files_affected} file(s) ({len(previews)} tag(s) rewritten) now?",
+                          default=False):
+        print("Aborted, no changes written.")
+        return 0
 
     try:
         for fid, (tags_to_add, tags_to_delete) in plan.items():
@@ -523,9 +629,29 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Stopped partway through after a Hydrus request failure: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Submitted changes for {files_affected} file(s) to Hydrus's add_tags queue "
-          f"(applies in the background).")
+    print(f"Submitted changes for {files_affected} file(s) to Hydrus's add_tags queue (applies in the background).")
     return 0
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    saved = {} if args.reconfigure else load_local_config()
+
+    print("=== Hydrus filename-tag cleanup ===")
+    mode = wizard_pick_mode()
+
+    if mode == "preview":
+        print()
+        run_self_test(Config())
+        return 0
+
+    client, _, _ = wizard_connect(saved, args.reconfigure)
+    saved = load_local_config()  # picks up the freshly-saved url/key
+    file_name, file_key, _, tag_key = wizard_pick_services(client, saved)
+    saved = load_local_config()
+    cfg = wizard_build_config(saved)
+
+    return run_dry_run_or_apply(client, cfg, file_key, file_name, tag_key, apply=(mode == "apply"))
 
 
 if __name__ == "__main__":
