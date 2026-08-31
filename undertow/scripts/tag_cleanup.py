@@ -235,6 +235,11 @@ class ParsedTag:
     namespace_stripped: str
     tags: List[str]
     dropped: List[str]
+    # Which of `tags` were produced by name-block detection specifically (see
+    # _carve_name_blocks), so a preview can call out what the parser thinks are
+    # names separately from ordinary content/attribute tags - deliberately not
+    # folded into `tags`' own dataclass since every name IS also in `tags`.
+    names: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -319,22 +324,24 @@ def _classify_token(tok: str, cfg: Config) -> str:
     return "content"
 
 
-def _find_name_slot_indices(tokens: List[str], categories: List[str]) -> Set[int]:
+def _find_name_shape_runs(tokens: List[str], categories: List[str]) -> List[List[int]]:
     """The observed name pattern: a 1-2 token run of "content" tokens sitting
     right after a run of "attribute" tokens, OR right at the start of the block
     (the primary-keyword block itself may open directly with the name, with no
-    leading attribute). Used as a positional signal for name detection, and to
-    seed the corpus-global occurrence count."""
-    slots: Set[int] = set()
+    leading attribute). Returns each such run as a list of 1 or 2 token
+    indices, used both as a positional signal for name detection and to seed
+    the corpus-global bigram occurrence count."""
+    runs: List[List[int]] = []
     n = len(tokens)
 
     def add_run(start: int) -> int:
         k = start
-        run_len = 0
-        while k < n and categories[k] == "content" and run_len < 2:
-            slots.add(k)
+        idxs: List[int] = []
+        while k < n and categories[k] == "content" and len(idxs) < 2:
+            idxs.append(k)
             k += 1
-            run_len += 1
+        if idxs:
+            runs.append(idxs)
         return k
 
     add_run(0)
@@ -348,32 +355,51 @@ def _find_name_slot_indices(tokens: List[str], categories: List[str]) -> Set[int
             j += 1
         k = add_run(j)
         i = k if k > j else j + 1
+    return runs
+
+
+def _find_name_slot_indices(tokens: List[str], categories: List[str]) -> Set[int]:
+    slots: Set[int] = set()
+    for run in _find_name_shape_runs(tokens, categories):
+        slots.update(run)
     return slots
 
 
-def compute_corpus_name_counts(per_block_tokens_slots: List[Tuple[List[str], Set[int]]]) -> Counter:
-    """Counts how often each token appears in the name-shaped positional slot
-    across the whole batch - one (tokens, slot_indices) entry per block of
-    every raw tag in the batch."""
-    counts: Counter = Counter()
-    for tokens, slots in per_block_tokens_slots:
-        for idx in slots:
-            counts[tokens[idx]] += 1
-    return counts
+def compute_corpus_name_stats(per_block: List[Tuple[List[str], List[List[int]]]]) -> Tuple[Counter, Counter]:
+    """Counts (a) how often each token appears in the name-shaped positional
+    slot, and (b) how often each ADJACENT pair of slot tokens recurs together
+    as a bigram, across the whole batch - one (tokens, shape_runs) entry per
+    block of every raw tag in the batch. The bigram count is the real primary
+    signal: a genuine recurring name (the same two words, in that order, over
+    and over - the same person appearing in many photos) produces a strong
+    bigram signal that an incidental, unrelated pair of common words sharing
+    the slot position by coincidence essentially never will. A bare unigram
+    count is comparatively weak/noisy and is NOT used alone to confirm a name
+    - see _carve_name_blocks."""
+    unigram: Counter = Counter()
+    bigram: Counter = Counter()
+    for tokens, runs in per_block:
+        for run in runs:
+            unigram[tokens[run[0]]] += 1
+            if len(run) == 2:
+                unigram[tokens[run[1]]] += 1
+                bigram[(tokens[run[0]], tokens[run[1]])] += 1
+    return unigram, bigram
 
 
 def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: Set[int],
-                        cfg: Config, corpus_name_counts: Counter) -> Tuple[Dict[int, str], Set[int]]:
+                        cfg: Config, corpus_bigram_counts: Counter) -> Tuple[Dict[int, str], Set[int]]:
     """Name detection, run FIRST, before any glue-dropping or phrase assembly.
     Finds every name block in a token stream and returns {start_index: composed
     name string} plus the full set of consumed token indices (including any
     absorbed initial and consumed ","/"&" separator). Detection signals, in
-    priority order: (1) corpus-global positional occurrence count - the primary
-    signal, catches common names wordfreq can't; (2) known_names allowlist;
-    (3) wordfreq rarity as a supporting signal; a comma/"&" immediately after an
-    already-confirmed name always introduces another name block, no re-check
-    needed. A single-letter token immediately following a confirmed name is
-    absorbed as an initial (e.g. "anna r")."""
+    priority order: (1) corpus-global recurring-bigram count - the primary
+    signal, catches common names wordfreq can't, without the false-positive
+    risk of counting single common words alone (see compute_corpus_name_stats);
+    (2) known_names allowlist; (3) wordfreq rarity as a supporting signal. A
+    comma/"&" immediately after an already-confirmed name always introduces
+    another name block, no re-check needed. A single-letter token immediately
+    following a confirmed name is absorbed as an initial (e.g. "anna r")."""
     n = len(tokens)
     consumed: Set[int] = set()
     name_by_start: Dict[int, str] = {}
@@ -386,19 +412,27 @@ def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: S
         tok = tokens[i]
         is_slot = i in slot_indices
         preceded_by_sep = i > 0 and categories[i - 1] == "sep" and (i - 1) in consumed
+        next_is_content = i + 1 < n and categories[i + 1] == "content"
+        tok2 = tokens[i + 1] if next_is_content else None
 
         confirmed = False
+        grab_second = False
         if preceded_by_sep:
             confirmed = True
+            grab_second = True
         elif is_slot:
-            if tok in cfg.known_names:
+            if (next_is_content and cfg.corpus_global_name_pass
+                    and corpus_bigram_counts.get((tok, tok2), 0) >= cfg.corpus_name_min_occurrences):
                 confirmed = True
+                grab_second = True
+            elif tok in cfg.known_names:
+                confirmed = True
+                grab_second = True
             else:
                 zipf = zipf_frequency(tok, "en")
                 wordfreq_hit = 0.0 < zipf < cfg.wordfreq_min_zipf_for_tag
-                corpus_hit = (cfg.corpus_global_name_pass
-                              and corpus_name_counts.get(tok, 0) >= cfg.corpus_name_min_occurrences)
-                confirmed = wordfreq_hit or corpus_hit
+                confirmed = wordfreq_hit
+                grab_second = wordfreq_hit
 
         if not confirmed:
             i += 1
@@ -406,7 +440,7 @@ def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: S
 
         run = [i]
         j = i + 1
-        if j < n and categories[j] == "content":
+        if grab_second and j < n and categories[j] == "content":
             run.append(j)
             j += 1
         if j < n and categories[j] == "content" and len(tokens[j]) == 1 and tokens[j].isalpha():
@@ -552,28 +586,33 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag
     tokenized = [(raw_tag,) + _tokenize_raw_tag(raw_tag, cfg) for raw_tag in raw_tags]
 
     per_block_categories: List[List[List[str]]] = []
+    per_block_runs: List[List[List[List[int]]]] = []
     per_block_slots: List[List[Set[int]]] = []
     for _, _, blocks_tokens in tokenized:
         cats_for_file = [[_classify_token(t, cfg) for t in tokens] for tokens in blocks_tokens]
-        slots_for_file = [_find_name_slot_indices(tokens, cats)
-                           for tokens, cats in zip(blocks_tokens, cats_for_file)]
+        runs_for_file = [_find_name_shape_runs(tokens, cats)
+                          for tokens, cats in zip(blocks_tokens, cats_for_file)]
+        slots_for_file = [{i for run in runs for i in run} for runs in runs_for_file]
         per_block_categories.append(cats_for_file)
+        per_block_runs.append(runs_for_file)
         per_block_slots.append(slots_for_file)
 
-    corpus_name_counts: Counter = Counter()
+    corpus_bigram_counts: Counter = Counter()
     if cfg.corpus_global_name_pass:
-        flat = [(tokens, slots)
-                for (_, _, blocks_tokens), slots_for_file in zip(tokenized, per_block_slots)
-                for tokens, slots in zip(blocks_tokens, slots_for_file)]
-        corpus_name_counts = compute_corpus_name_counts(flat)
+        flat = [(tokens, runs)
+                for (_, _, blocks_tokens), runs_for_file in zip(tokenized, per_block_runs)
+                for tokens, runs in zip(blocks_tokens, runs_for_file)]
+        _, corpus_bigram_counts = compute_corpus_name_stats(flat)
 
     results: List[ParsedTag] = []
     for (raw_tag, original_value, blocks_tokens), cats_for_file, slots_for_file in zip(
             tokenized, per_block_categories, per_block_slots):
         dropped: List[str] = []
         kept_tags: List[str] = []
+        name_tags: List[str] = []
         for block_idx, (tokens, categories, slots) in enumerate(zip(blocks_tokens, cats_for_file, slots_for_file)):
-            name_by_start, consumed = _carve_name_blocks(tokens, categories, slots, cfg, corpus_name_counts)
+            name_by_start, consumed = _carve_name_blocks(tokens, categories, slots, cfg, corpus_bigram_counts)
+            name_tags.extend(name_by_start.values())
             merged_tokens, merged_categories = _collapse_names(tokens, categories, name_by_start, consumed)
             is_last_block = block_idx == len(blocks_tokens) - 1
             kept, blk_dropped = _process_block(merged_tokens, merged_categories, is_last_block, cfg)
@@ -588,7 +627,7 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag
                 deduped.append(t)
 
         results.append(ParsedTag(original=raw_tag, namespace_stripped=original_value,
-                                  tags=deduped, dropped=dropped))
+                                  tags=deduped, dropped=dropped, names=name_tags))
     return results
 
 
@@ -766,8 +805,14 @@ PREVIEW_INLINE_LIMIT = 40
 def _render_file_block(idx: int, total: int, fp: FilePreview) -> List[str]:
     lines = [f"===== File {idx}/{total} - {fp.label} ====="]
     for entry in fp.entries:
+        names_str = ", ".join(entry.names) if entry.names else "(none detected)"
         out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
         dropped_str = ", ".join(entry.dropped) if entry.dropped else "-"
+        # NAMES is listed first and marked with ">>>" so it stands out from the
+        # OUT line even in a plain scrolled terminal - this is what the parser
+        # thinks is a name, called out separately so a run of "(none detected)"
+        # across a real library is easy to spot as a name-detection problem.
+        lines.append(f"  >>> NAMES: {names_str}")
         lines.append(f"  IN:      {entry.original}")
         lines.append(f"  OUT:     {out_str}")
         lines.append(f"  DROPPED: {dropped_str}")
@@ -827,6 +872,7 @@ _HTML_STYLE = """
   .summary .stat .label { font-size: 12px; color: #7a8190; margin-top: 4px; }
   .summary .stat.keep .num { color: #1e7a5e; }
   .summary .stat.drop .num { color: #a6433a; }
+  .summary .stat.names .num { color: #8a4fc9; }
   .files { display: flex; flex-direction: column; gap: 18px; margin-top: 32px; }
   .file-card { background: #fff; border: 1px solid #dde1e6; border-radius: 12px; padding: 18px 20px 20px; }
   .file-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -843,11 +889,17 @@ _HTML_STYLE = """
   .tagblock__label { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
   .tagblock--keep .tagblock__label { color: #1e7a5e; }
   .tagblock--drop .tagblock__label { color: #a6433a; }
+  .namesblock { border-radius: 8px; padding: 10px 12px 12px; border: 2px solid #c9a6f5;
+                background: #f3ebfd; margin-bottom: 12px; }
+  .namesblock.namesblock--empty { border-style: dashed; border-color: #d8c6ee; background: #faf7fe; }
+  .namesblock__label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+                        color: #6a2fb0; margin-bottom: 8px; }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
   .chips li { font-family: Consolas, monospace; font-size: 12px; padding: 3px 8px; border-radius: 5px;
               background: #fff; border: 1px solid #bee3d3; color: #14171c; }
   .chips--drop li { border-color: #f0c7c1; color: #7a8190; text-decoration: line-through; text-decoration-color: #a6433a; }
-  .chips li.empty, .chips--drop li.empty { text-decoration: none; font-style: italic; color: #7a8190; border-style: dashed; }
+  .chips--names li { border-color: #c9a6f5; color: #4a1f80; font-weight: 600; }
+  .chips li.empty, .chips--drop li.empty, .chips--names li.empty { text-decoration: none; font-style: italic; color: #7a8190; border-style: dashed; }
   footer.note { margin-top: 36px; font-size: 12.5px; color: #7a8190; border-top: 1px solid #dde1e6; padding-top: 14px; }
   @media (max-width: 620px) { .file-card__body { grid-template-columns: 1fr; } .summary { flex-direction: column; }
     .summary .stat { border-right: none; border-bottom: 1px solid #dde1e6; } .summary .stat:last-child { border-bottom: none; } }
@@ -863,27 +915,35 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
     total_entries = sum(len(fp.entries) for fp in previews)
     total_kept = sum(len(e.tags) for fp in previews for e in fp.entries)
     total_dropped = sum(len(e.dropped) for fp in previews for e in fp.entries)
+    total_names = sum(len(e.names) for fp in previews for e in fp.entries)
+    entries_with_no_names = sum(1 for fp in previews for e in fp.entries if not e.names)
 
-    def chips(items: List[str], empty_label: str) -> str:
+    def chips(items: List[str], empty_label: str, css_class: str = "") -> str:
+        cls = f"chips {css_class}".strip()
         if not items:
-            return f'<li class="empty">{html.escape(empty_label)}</li>'
-        return "".join(f"<li>{html.escape(t)}</li>" for t in items)
+            return f'<ul class="{cls}"><li class="empty">{html.escape(empty_label)}</li></ul>'
+        return f'<ul class="{cls}">' + "".join(f"<li>{html.escape(t)}</li>" for t in items) + "</ul>"
 
     cards: List[str] = []
     for idx, fp in enumerate(previews, start=1):
         blocks: List[str] = []
         for entry in fp.entries:
             ns, _, rest = entry.original.partition(":")
+            names_empty = "" if entry.names else " namesblock--empty"
             blocks.append(f"""
+      <div class="namesblock{names_empty}">
+        <div class="namesblock__label">Detected names &mdash; {len(entry.names)}</div>
+        {chips(entry.names, "(none detected)", "chips--names")}
+      </div>
       <div class="file-card__path"><span class="ns">{html.escape(ns)}:</span>{html.escape(rest)}</div>
       <div class="file-card__body">
         <div class="tagblock tagblock--keep">
           <div class="tagblock__label">Kept &mdash; {len(entry.tags)} tag(s)</div>
-          <ul class="chips">{chips(entry.tags, "(nothing kept)")}</ul>
+          {chips(entry.tags, "(nothing kept)")}
         </div>
         <div class="tagblock tagblock--drop">
           <div class="tagblock__label">Dropped &mdash; {len(entry.dropped)} token(s)</div>
-          <ul class="chips chips--drop">{chips(entry.dropped, "(nothing dropped)")}</ul>
+          {chips(entry.dropped, "(nothing dropped)", "chips--drop")}
         </div>
       </div>""")
         cards.append(f"""
@@ -910,8 +970,10 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
     <div class="summary">
       <div class="stat"><div class="num">{total_files}</div><div class="label">files</div></div>
       <div class="stat"><div class="num">{total_entries}</div><div class="label">tags processed</div></div>
+      <div class="stat names"><div class="num">{total_names}</div><div class="label">names detected</div></div>
       <div class="stat keep"><div class="num">{total_kept}</div><div class="label">tags kept</div></div>
       <div class="stat drop"><div class="num">{total_dropped}</div><div class="label">tokens dropped</div></div>
+      <div class="stat drop"><div class="num">{entries_with_no_names}</div><div class="label">tag(s) with no name detected</div></div>
     </div>
   </header>
   <div class="files">{"".join(cards)}

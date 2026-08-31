@@ -503,6 +503,36 @@ def show_process_window(process_name: str) -> bool:
     return True
 
 
+def set_console_window_icon() -> None:
+    """Swaps this process's console window icon (titlebar + taskbar) from the generic
+    python.exe/cmd.exe icon to the same undertow.ico used for the Desktop shortcut and the web
+    dashboard favicon, so every place the app shows up - shortcut, taskbar, browser tab -
+    matches. Only matters for the brief window before hide_console_window() hides it (or for
+    anyone who un-hides it), so this is best-effort and never blocks startup."""
+    if not HAVE_WIN32:
+        return
+    try:
+        import ctypes
+
+        icon_path = Path(__file__).resolve().parent / "static" / "img" / "undertow.ico"
+        if not icon_path.exists():
+            return
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if not hwnd:
+            return
+        IMAGE_ICON = 1
+        LR_LOADFROMFILE = 0x00000010
+        LR_DEFAULTSIZE = 0x00000040
+        big = ctypes.windll.user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE)
+        small = ctypes.windll.user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+        if big:
+            win32gui.SendMessage(hwnd, win32con.WM_SETICON, 1, big)  # ICON_BIG
+        if small:
+            win32gui.SendMessage(hwnd, win32con.WM_SETICON, 0, small)  # ICON_SMALL
+    except Exception:
+        pass
+
+
 def hide_console_window() -> None:
     """Hides this process's own console window - called once the web dashboard is up and
     running as the primary interface, so the process keeps running in the background exactly

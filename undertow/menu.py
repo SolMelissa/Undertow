@@ -64,6 +64,8 @@ def _install_exit_handlers() -> None:
 
 
 def main() -> None:
+    services.set_console_window_icon()
+
     print("Checking Hydrus pipeline services...")
     services.start_required_services()
 
