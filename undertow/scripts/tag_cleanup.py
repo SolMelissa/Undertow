@@ -572,10 +572,23 @@ def prompt_name_list(label: str, default: List[str]) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def wizard_connect(saved: dict, reconfigure: bool) -> Tuple[HydrusClient, str, str]:
-    """Prompts for API URL/key (reusing saved values unless --reconfigure), validates the
-    connection against Hydrus, and returns the connected client plus the url/key used."""
-    default_url = saved.get("api_url", "http://127.0.0.1:45869")
-    saved_key = None if reconfigure else saved.get("api_key")
+    """Uses the saved API URL/key silently if both are present and they pass a connection
+    test; only prompts when reconfiguring, when either is missing, or when the saved
+    connection fails. Returns the connected client plus the url/key used."""
+    saved_url = saved.get("api_url")
+    saved_key = saved.get("api_key")
+
+    if not reconfigure and saved_url and saved_key:
+        client = HydrusClient(saved_url, saved_key)
+        try:
+            client.get_services()
+        except (requests.RequestException, RuntimeError):
+            print(f"Saved Hydrus connection ({saved_url}) did not respond - reconfigure it below.")
+        else:
+            return client, saved_url, saved_key
+
+    default_url = saved_url or "http://127.0.0.1:45869"
+    saved_key = None if reconfigure else saved_key
 
     while True:
         api_url = prompt_text("Hydrus Client API URL", default=default_url)
