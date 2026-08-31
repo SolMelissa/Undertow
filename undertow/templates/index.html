@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Undertow v{{ version_info.version }} ({{ version_info.commit }}){% if version_info.status != 'current' %} - outdated{% endif %}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/undertow.ico') }}">
 <script>
 // Girly (kawaii) is the only mode under active development - hacker/terminal mode is
 // deprecated (still present in the DOM as #hacker-view, but no longer reachable from the UI).
@@ -175,11 +176,13 @@
 
   <div class="navbar bg-[#030805] border-b border-[var(--term-dim)] px-4 py-1.5 min-h-0 flex-wrap gap-y-1.5">
     <div class="flex items-center gap-3 flex-wrap">
+      <img src="{{ url_for('static', filename='img/undertow.ico') }}" alt="" width="24" height="24" class="kawaii-hide" style="image-rendering:auto;">
       <span class="glitch vt text-2xl font-bold text-[var(--term-green)] kawaii-hide" data-text="UNDERTOW">UNDERTOW</span>
+      <img src="{{ url_for('static', filename='img/undertow.ico') }}" alt="" width="24" height="24" class="kawaii-only" style="border-radius:6px;">
       <span class="kawaii-only" style="font-family:'Baloo 2',sans-serif; font-weight:700; font-size:1.35rem;
             background:linear-gradient(90deg,#ff3d94,#ff85c2,#ffd1e8,#ff85c2,#ff3d94); background-size:250% auto;
             -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
-            animation:kawaii-shimmer 5s linear infinite;">&#128142; Undertow</span>
+            animation:kawaii-shimmer 5s linear infinite;">Undertow</span>
       <span class="text-[10px] text-[#ff9d3c] hidden sm:inline tracking-widest kawaii-hide">::UPLINK_ESTABLISHED::</span>
 
       {% include "partials/version_check.html" %}
