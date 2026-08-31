@@ -24,7 +24,9 @@ for name detection; without it, only the configured known_names list is used.
 from __future__ import annotations
 
 import argparse
+import datetime
 import getpass
+import html
 import json
 import os
 import random
@@ -192,6 +194,15 @@ class ParsedTag:
     namespace_stripped: str
     tags: List[str]
     dropped: List[str]
+
+
+@dataclass
+class FilePreview:
+    """One real file (or one offline fixture), with every namespaced tag it had
+    parsed. Almost always a single entry, but a file can carry more than one
+    dir: tag, so entries stays a list rather than collapsing to one ParsedTag."""
+    label: str
+    entries: List[ParsedTag]
 
 
 def parse_filename_tag(raw_tag: str, cfg: Config) -> ParsedTag:
@@ -436,42 +447,173 @@ class ProgressPrinter:
         sys.stdout.flush()
 
 
-# Above this many tags, the full IN/OUT/DROPPED table is written to a log file
-# instead of the terminal, and only a sample plus the summary line is printed -
-# scrolling tens of thousands of lines is neither readable nor useful.
+# Above this many files, the full IN/OUT/DROPPED breakdown is written to a log file
+# instead of the terminal, and only the first 10 files plus the summary line are
+# printed - scrolling tens of thousands of lines is neither readable nor useful.
 PREVIEW_INLINE_LIMIT = 40
 
 
-def print_preview_table(results: List[ParsedTag], log_path: Optional[Path] = None) -> None:
-    if not results:
+def _render_file_block(idx: int, total: int, fp: FilePreview) -> List[str]:
+    lines = [f"===== File {idx}/{total} - {fp.label} ====="]
+    for entry in fp.entries:
+        out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
+        dropped_str = ", ".join(entry.dropped) if entry.dropped else "-"
+        lines.append(f"  IN:      {entry.original}")
+        lines.append(f"  OUT:     {out_str}")
+        lines.append(f"  DROPPED: {dropped_str}")
+    lines.append("")
+    return lines
+
+
+def print_preview_table(previews: List[FilePreview], log_path: Optional[Path] = None) -> None:
+    if not previews:
         print("(nothing to preview)")
         return
 
-    inline = len(results) <= PREVIEW_INLINE_LIMIT
+    inline = len(previews) <= PREVIEW_INLINE_LIMIT
+    shown = previews if inline else previews[:10]
+
     lines: List[str] = []
-    for idx, r in enumerate(results, start=1):
-        out_str = ", ".join(r.tags) if r.tags else "(nothing kept)"
-        dropped_str = ", ".join(r.dropped) if r.dropped else "-"
-        lines.append(f"[{idx}] IN:      {r.original}")
-        lines.append(f"    OUT:     {out_str}")
-        lines.append(f"    DROPPED: {dropped_str}")
-        lines.append("-" * 70)
+    for idx, fp in enumerate(shown, start=1):
+        lines.extend(_render_file_block(idx, len(previews), fp))
+    print("\n".join(lines).rstrip("\n"))
 
-    if inline:
-        print("\n".join(lines))
-    else:
-        sample = lines[:4 * 10]  # first 10 entries
-        print("\n".join(sample))
-        print(f"... {len(results) - 10} more not shown here ...")
-        if log_path:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(log_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(lines) + "\n")
-            print(f"Full IN/OUT/DROPPED detail for all {len(results)} tag(s) written to: {log_path}")
+    if not inline:
+        print(f"... {len(previews) - len(shown)} more file(s) not shown here ...")
 
-    total_kept = sum(len(r.tags) for r in results)
-    total_dropped = sum(len(r.dropped) for r in results)
-    print(f"Summary: {len(results)} tag(s) processed, {total_kept} tag(s) kept, {total_dropped} token(s) dropped.")
+    if log_path and not inline:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        full_lines: List[str] = []
+        for idx, fp in enumerate(previews, start=1):
+            full_lines.extend(_render_file_block(idx, len(previews), fp))
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(full_lines) + "\n")
+        print(f"Full IN/OUT/DROPPED detail for all {len(previews)} file(s) written to: {log_path}")
+
+    total_entries = sum(len(fp.entries) for fp in previews)
+    total_kept = sum(len(e.tags) for fp in previews for e in fp.entries)
+    total_dropped = sum(len(e.dropped) for fp in previews for e in fp.entries)
+    print(f"Summary: {len(previews)} file(s), {total_entries} tag(s) processed, "
+          f"{total_kept} tag(s) kept, {total_dropped} token(s) dropped.")
+
+
+# Local, offline HTML report - never uploaded anywhere. Regenerated fresh every run
+# so it always reflects the most recent preview only; old reports aren't kept around.
+HTML_OUTPUT_DIR = Path(__file__).resolve().parent / "output" / "html"
+
+_HTML_STYLE = """
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f5f7; color: #14171c;
+         font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .page { max-width: 860px; margin: 0 auto; padding: 40px 24px 72px; }
+  .eyebrow { font-family: Consolas, "Courier New", monospace; font-size: 12px; letter-spacing: .1em;
+             text-transform: uppercase; color: #7a8190; margin: 0 0 8px; }
+  h1 { font-size: 28px; margin: 0 0 10px; }
+  .lede { font-size: 15px; line-height: 1.55; color: #4b515c; max-width: 70ch; margin: 0 0 22px; }
+  .summary { display: flex; border: 1px solid #dde1e6; border-radius: 10px; overflow: hidden; background: #fff; }
+  .summary .stat { flex: 1; padding: 14px 18px; border-right: 1px solid #dde1e6; }
+  .summary .stat:last-child { border-right: none; }
+  .summary .stat .num { font-family: Consolas, monospace; font-size: 22px; font-weight: 700; }
+  .summary .stat .label { font-size: 12px; color: #7a8190; margin-top: 4px; }
+  .summary .stat.keep .num { color: #1e7a5e; }
+  .summary .stat.drop .num { color: #a6433a; }
+  .files { display: flex; flex-direction: column; gap: 18px; margin-top: 32px; }
+  .file-card { background: #fff; border: 1px solid #dde1e6; border-radius: 12px; padding: 18px 20px 20px; }
+  .file-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .file-card__eyebrow { font-family: Consolas, monospace; font-size: 11px; letter-spacing: .08em; color: #7a8190; }
+  .file-card__title { font-size: 16px; font-weight: 600; margin: 0; }
+  .file-card__path { font-family: Consolas, "Courier New", monospace; font-size: 12.5px; line-height: 1.6;
+                      background: #eef0f3; border: 1px solid #dde1e6; border-radius: 8px; padding: 9px 12px;
+                      color: #4b515c; overflow-x: auto; white-space: pre; margin: 0 0 14px; }
+  .file-card__path .ns { color: #205c4b; font-weight: 700; }
+  .file-card__body { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .tagblock { border-radius: 8px; padding: 10px 12px 12px; border: 1px solid; }
+  .tagblock--keep { background: #e4f4ee; border-color: #bee3d3; }
+  .tagblock--drop { background: #fbeae8; border-color: #f0c7c1; }
+  .tagblock__label { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
+  .tagblock--keep .tagblock__label { color: #1e7a5e; }
+  .tagblock--drop .tagblock__label { color: #a6433a; }
+  .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips li { font-family: Consolas, monospace; font-size: 12px; padding: 3px 8px; border-radius: 5px;
+              background: #fff; border: 1px solid #bee3d3; color: #14171c; }
+  .chips--drop li { border-color: #f0c7c1; color: #7a8190; text-decoration: line-through; text-decoration-color: #a6433a; }
+  .chips li.empty, .chips--drop li.empty { text-decoration: none; font-style: italic; color: #7a8190; border-style: dashed; }
+  footer.note { margin-top: 36px; font-size: 12.5px; color: #7a8190; border-top: 1px solid #dde1e6; padding-top: 14px; }
+  @media (max-width: 620px) { .file-card__body { grid-template-columns: 1fr; } .summary { flex-direction: column; }
+    .summary .stat { border-right: none; border-bottom: 1px solid #dde1e6; } .summary .stat:last-child { border-bottom: none; } }
+"""
+
+
+def write_html_report(previews: List[FilePreview], title: str, summary_note: str) -> Path:
+    HTML_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_path = HTML_OUTPUT_DIR / f"tag-cleanup-{stamp}.html"
+
+    total_files = len(previews)
+    total_entries = sum(len(fp.entries) for fp in previews)
+    total_kept = sum(len(e.tags) for fp in previews for e in fp.entries)
+    total_dropped = sum(len(e.dropped) for fp in previews for e in fp.entries)
+
+    def chips(items: List[str], empty_label: str) -> str:
+        if not items:
+            return f'<li class="empty">{html.escape(empty_label)}</li>'
+        return "".join(f"<li>{html.escape(t)}</li>" for t in items)
+
+    cards: List[str] = []
+    for idx, fp in enumerate(previews, start=1):
+        blocks: List[str] = []
+        for entry in fp.entries:
+            ns, _, rest = entry.original.partition(":")
+            blocks.append(f"""
+      <div class="file-card__path"><span class="ns">{html.escape(ns)}:</span>{html.escape(rest)}</div>
+      <div class="file-card__body">
+        <div class="tagblock tagblock--keep">
+          <div class="tagblock__label">Kept &mdash; {len(entry.tags)} tag(s)</div>
+          <ul class="chips">{chips(entry.tags, "(nothing kept)")}</ul>
+        </div>
+        <div class="tagblock tagblock--drop">
+          <div class="tagblock__label">Dropped &mdash; {len(entry.dropped)} token(s)</div>
+          <ul class="chips chips--drop">{chips(entry.dropped, "(nothing dropped)")}</ul>
+        </div>
+      </div>""")
+        cards.append(f"""
+    <section class="file-card">
+      <div class="file-card__head">
+        <span class="file-card__eyebrow">FILE {idx:02d} / {total_files}</span>
+        <h2 class="file-card__title">{html.escape(fp.label)}</h2>
+      </div>{"".join(blocks)}
+    </section>""")
+
+    doc = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{html.escape(title)}</title>
+<style>{_HTML_STYLE}</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <p class="eyebrow">tag_cleanup.py</p>
+    <h1>{html.escape(title)}</h1>
+    <p class="lede">{html.escape(summary_note)}</p>
+    <div class="summary">
+      <div class="stat"><div class="num">{total_files}</div><div class="label">files</div></div>
+      <div class="stat"><div class="num">{total_entries}</div><div class="label">tags processed</div></div>
+      <div class="stat keep"><div class="num">{total_kept}</div><div class="label">tags kept</div></div>
+      <div class="stat drop"><div class="num">{total_dropped}</div><div class="label">tokens dropped</div></div>
+    </div>
+  </header>
+  <div class="files">{"".join(cards)}
+  </div>
+  <footer class="note">Generated {datetime.datetime.now().isoformat(timespec="seconds")} by tag_cleanup.py. Local file only - nothing here is uploaded anywhere.</footer>
+</div>
+</body>
+</html>
+"""
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(doc)
+    return out_path
 
 
 FIXTURES = [
@@ -489,10 +631,17 @@ FIXTURES = [
 
 
 def run_self_test(cfg: Config) -> None:
-    results = [parse_filename_tag(t, cfg) for t in FIXTURES]
-    print_preview_table(results)
+    previews = [FilePreview(label=f"fixture {i}", entries=[parse_filename_tag(t, cfg)])
+                for i, t in enumerate(FIXTURES, start=1)]
+    print_preview_table(previews)
+    report_path = write_html_report(
+        previews, title="Self-Test Preview",
+        summary_note=f"Offline preview of the {len(FIXTURES)} built-in fixture tags in FIXTURES - "
+                      "no Hydrus connection involved.")
+    print(f"HTML report written to: {report_path}")
+
     expected = ["sunset", "hike", "teen", "couple", "full moon", "lake", "long trail"]
-    actual = results[0].tags
+    actual = previews[0].entries[0].tags
     if actual == expected:
         print("Fixture 1 matches expected output. OK.")
     else:
@@ -687,20 +836,23 @@ def wizard_build_config(saved: dict) -> Config:
 DRY_RUN_SAMPLE_SIZE = 25
 
 
-def _build_plan(metadata: Dict[int, List[str]], cfg: Config) -> Tuple[Dict[int, Tuple[List[str], List[str]]], List[ParsedTag]]:
+def _build_plan(metadata: Dict[int, List[str]], cfg: Config) -> Tuple[Dict[int, Tuple[List[str], List[str]]], List[FilePreview]]:
     """Turns raw {file_id: [current tags]} metadata into a write plan (fid -> (tags_to_add,
-    tags_to_delete)) plus the flat list of parsed tags, for previewing or applying."""
+    tags_to_delete)) plus one FilePreview per file, for previewing or applying."""
     plan: Dict[int, Tuple[List[str], List[str]]] = {}
-    previews: List[ParsedTag] = []
+    previews: List[FilePreview] = []
     for fid, current_tags in metadata.items():
+        entries: List[ParsedTag] = []
         for raw_tag in current_tags:
             if not raw_tag.startswith(f"{cfg.source_namespace}:"):
                 continue
             parsed = parse_filename_tag(raw_tag, cfg)
-            previews.append(parsed)
+            entries.append(parsed)
             to_add, to_delete = plan.setdefault(fid, ([], []))
             to_add.extend(t for t in parsed.tags if t not in to_add)
             to_delete.append(raw_tag)
+        if entries:
+            previews.append(FilePreview(label=f"file_id {fid}", entries=entries))
     return plan, previews
 
 
@@ -742,6 +894,12 @@ def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: ServiceS
         return 0
 
     print_preview_table(sample_previews)
+    report_path = write_html_report(
+        sample_previews, title="Dry-Run Sample Preview",
+        summary_note=f"Random sample of {sample_size} file(s) out of {len(file_ids):,} matched by "
+                     f"{cfg.target_tag_wildcards}, fetched from {services.source_tag_service_name!r} "
+                     "before touching anything.")
+    print(f"HTML report written to: {report_path}")
 
     if not prompt_yes_no(
             f"\nAbove is a preview of {sample_size} randomly-sampled file(s) out of {len(file_ids):,} "
@@ -787,8 +945,10 @@ def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: ServiceS
         groups.setdefault(key, []).append(fid)
     batches = [(key, batch) for key, fids in groups.items() for batch in _chunked(fids, cfg.batch_size)]
 
-    print(f"\nWriting {len(previews)} cleaned-up tag(s) across {files_affected:,} file(s) {dest_note} "
-          f"({len(groups):,} distinct tag change(s), sent as {len(batches):,} batched API call(s))...")
+    total_raw_tags = sum(len(fp.entries) for fp in previews)
+    print(f"\nWriting cleaned-up tags for {total_raw_tags} raw tag(s) across {files_affected:,} file(s) "
+          f"{dest_note} ({len(groups):,} distinct tag change(s), sent as {len(batches):,} batched "
+          f"API call(s))...")
 
     def apply_batch(fids: List[int], tags_to_add: List[str], tags_to_delete: List[str]) -> None:
         if same_service:

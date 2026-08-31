@@ -19,6 +19,9 @@ launcher/obj/
 # undertow/webui.py) - regenerated automatically, not something to track in source control.
 undertow/static/images/anime/.gallery_stats.json
 
+# tag_cleanup.py's local HTML dry-run reports - regenerated fresh every run, not app assets.
+undertow/scripts/output/
+
 # User-dropped girly-mode gallery images themselves aren't tracked (they're the user's own
 # pictures, not app assets) - only the README explaining the folder is.
 undertow/static/images/anime/*
