@@ -1,0 +1,15 @@
+{% if not available %}
+<div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+  TagRank isn't checked out on this machine (expected at the configured TAGRANK_DIR in
+  undertow/config.py), so this tab has nothing to drive.
+</div>
+
+{% elif error %}
+<div class="kawaii-card" style="color:var(--k-danger-text);">{{ error }}</div>
+
+{% elif session_id %}
+{% include "partials/girly/tagrank_session.html" %}
+
+{% else %}
+{% include "partials/girly/tagrank_picker.html" %}
+{% endif %}

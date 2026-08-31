@@ -1,0 +1,40 @@
+<p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
+  Click a tag pill to start a comparison round built around it - TagRank pulls a pool of files
+  from Hydrus matching that tag and asks you to judge pairs head-to-head.
+</p>
+
+{% macro pill_group(title, options) %}
+<p class="kawaii-section-title" style="font-size:1rem; margin-top:1rem;">{{ title }}</p>
+<div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+  {% for opt in options %}
+  <button type="button" class="kawaii-pill" style="cursor:pointer; border:none;"
+          title="TrueSkill score {{ '%.2f'|format(opt.score) }} &middot; {{ opt.file_count }} file(s)"
+          hx-post="/tagrank/start" hx-target="#tagrank-root" hx-swap="innerHTML"
+          hx-vals='{"tag": {{ opt.tag|tojson }}}'>
+    {{ opt.tag }}
+  </button>
+  {% else %}
+  <span class="text-xs" style="color:var(--k-text-dim-text);">none yet</span>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{{ pill_group("&#11014; Top rated", search_options.top if search_options else []) }}
+{{ pill_group("&#127922; Random", search_options.random if search_options else []) }}
+{{ pill_group("&#11015; Bottom rated", search_options.bottom if search_options else []) }}
+
+<p class="kawaii-section-title" style="margin-top:1.5rem;">&#128202; Rating History</p>
+{% if graphs %}
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:0.75rem;">
+  {% for g in graphs %}
+  <div class="kawaii-card">
+    <p style="font-weight:600; margin-bottom:0.4rem;">{{ g.title }}</p>
+    <img src="data:image/png;base64,{{ g.png_base64 }}" style="width:100%; height:auto; border-radius:0.4rem;">
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+  No rating history yet - judge a few comparisons to populate these.
+</div>
+{% endif %}

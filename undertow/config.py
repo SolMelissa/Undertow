@@ -65,6 +65,33 @@ def find_systray_exe() -> Path | None:
     return matches[0] if matches else None
 
 
+# TagRank (github.com's own separate project, not part of the HydrusPipeline install tree) -
+# a standalone tool that rates Hydrus tags/files via pairwise comparison. Undertow drives it
+# headlessly through its local HTTP API (see undertow/tagrank_client.py and
+# tagrank/docs/api.md) rather than importing it as a library, so only a filesystem path and a
+# port are needed here, not a dependency. This is a fixed dev-machine path, not something the
+# installer provisions - if TagRank isn't checked out there, the TagRank tab just reports it's
+# unavailable instead of erroring the rest of the app.
+TAGRANK_DIR = Path(r"F:\0DocsF\0Docs\AI\Claude\tagrank")
+TAGRANK_PORT = 8420
+TAGRANK_API_URL = f"http://127.0.0.1:{TAGRANK_PORT}"
+
+
+def find_tagrank_python() -> Path | None:
+    """TagRank runs out of its own venv (created via its own requirements.txt, not Undertow's
+    interpreter) - prefer that venv's python.exe so its FastAPI/torch/etc deps resolve, falling
+    back to a bare 'python' on PATH if the venv hasn't been set up."""
+    venv_python = TAGRANK_DIR / ".venv" / "Scripts" / "python.exe"
+    if venv_python.exists():
+        return venv_python
+    return None
+
+
+def find_tagrank_main() -> Path | None:
+    main_py = TAGRANK_DIR / "main.py"
+    return main_py if main_py.exists() else None
+
+
 # ---------------------------------------------------------------------- settings-aware getters
 # The constants above are the ultimate hardcoded fallbacks; these getters check settings.json
 # (via undertow.settings) for a user override first. Each imports `settings` inside the
