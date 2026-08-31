@@ -53,6 +53,13 @@ except ImportError:
     print("This tool requires the 'wordfreq' package: pip install wordfreq", file=sys.stderr)
     sys.exit(1)
 
+try:
+    from rich.console import Console
+    from rich.text import Text
+except ImportError:
+    print("This tool requires the 'rich' package: pip install rich", file=sys.stderr)
+    sys.exit(1)
+
 
 # ---------------------------------------------------------------------------
 # Locally-stored settings (API URL/key, last-picked services, preferences)
@@ -180,6 +187,14 @@ class Config:
     dictionary_truncation_enabled: bool = True
     min_token_len: int = 2
     drop_resolution_like: bool = True
+    # Tags that are a single word, or whose full raw text is shorter than this,
+    # are never parsed at all - splitting a single word is meaningless, and a
+    # short tag is almost always already atomic. Skipping them outright (rather
+    # than running them through the pipeline and keeping them unchanged) also
+    # keeps their vocabulary out of the corpus-global name-inference pass,
+    # which otherwise gets noisier the more short/atomic tags feed into it.
+    skip_single_word_tags: bool = True
+    min_process_tag_length: int = 35
     batch_size: int = 512
     max_workers: int = 8
     interactive: bool = True
@@ -240,6 +255,16 @@ class ParsedTag:
     # names separately from ordinary content/attribute tags - deliberately not
     # folded into `tags`' own dataclass since every name IS also in `tags`.
     names: List[str] = field(default_factory=list)
+    # Ordered (display_text, kind) pairs spanning the whole original tag -
+    # namespace, number prefix, block separators, and every individual token
+    # tagged with its fate ("name", "attribute", "reserved", "content",
+    # "dropped_glue", "dropped_short", "dropped_resolution",
+    # "dropped_truncation") - this is the "exploded view" the preview renders.
+    exploded: List[Tuple[str, str]] = field(default_factory=list)
+    # True when this tag was never parsed at all because it's a single word or
+    # shorter than cfg.min_process_tag_length - `tags` is just [namespace_stripped]
+    # unchanged, `exploded` is a single "skipped" entry.
+    skipped: bool = False
 
 
 @dataclass
@@ -290,22 +315,30 @@ def _tokenize_block_for_names(block: str, cfg: Config) -> List[str]:
     return tokens
 
 
-def _tokenize_raw_tag(raw_tag: str, cfg: Config) -> Tuple[str, List[List[str]]]:
+def _tokenize_raw_tag(raw_tag: str, cfg: Config) -> Tuple[str, List[List[str]], str, str]:
     """Namespace-strip, block-split, and tokenize a raw tag - but don't drop or
     classify anything yet, so name-block detection (which must run first, before
     any other token handling) can still see every token, including glue/verb
-    words, short initials, and list separators."""
+    words, short initials, and list separators. Also returns the stripped
+    namespace prefix and number prefix verbatim (e.g. "dir:", "12-") purely so
+    the exploded-view preview can show them as their own leading elements."""
     value = raw_tag
     prefix = f"{cfg.source_namespace}:"
+    namespace_text = ""
     if value.startswith(prefix):
+        namespace_text = prefix
         value = value[len(prefix):]
     original_value = value
 
     blocks = value.split(cfg.primary_delimiter)
+    number_prefix_text = ""
     if cfg.strip_leading_number_prefix and blocks:
+        m = NUMBER_PREFIX_RE.match(blocks[0])
+        if m:
+            number_prefix_text = m.group(0)
         blocks[0] = strip_number_prefix(blocks[0])
 
-    return original_value, [_tokenize_block_for_names(block, cfg) for block in blocks]
+    return original_value, [_tokenize_block_for_names(block, cfg) for block in blocks], namespace_text, number_prefix_text
 
 
 def _classify_token(tok: str, cfg: Config) -> str:
@@ -497,14 +530,21 @@ def _collapse_names(tokens: List[str], categories: List[str],
     return merged_tokens, merged_categories
 
 
-def _process_block(tokens: List[str], categories: List[str], is_last_block: bool, cfg: Config) -> Tuple[List[str], List[str]]:
+def _process_block(tokens: List[str], categories: List[str], is_last_block: bool,
+                    cfg: Config) -> Tuple[List[str], List[str], List[Tuple[str, str]]]:
     """Runs on the name-collapsed token stream: drop glue/junk, then assemble
     phrases (reserved-standalone, age pattern, compound-noun pairs, attribute
     stacking + noun merge). A "name" category token was already fully resolved
     by _carve_name_blocks/_collapse_names, so it's never dropped, never merged
-    into an attribute phrase, and never subjected to the truncation rule."""
+    into an attribute phrase, and never subjected to the truncation rule.
+    Also returns a per-token trace, in original order, of (token, kind) for
+    every input token - the "kind" is exactly the drop-reason or category
+    decided below, used to render the exploded view. This intentionally
+    reflects each token's own fate, not the merged phrase it ends up part of,
+    matching the requested one-bracket-per-word exploded layout."""
     n = len(tokens)
     dropped: List[str] = []
+    trace: List[Tuple[str, str]] = []
 
     candidates: List[str] = []
     candidate_idx: List[int] = []
@@ -512,15 +552,19 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
         if categories[i] == "name":
             candidates.append(tok)
             candidate_idx.append(i)
+            trace.append((tok, "name"))
             continue
         if len(tok) < cfg.min_token_len:
             dropped.append(tok)
+            trace.append((tok, "dropped_short"))
             continue
         if categories[i] == "glue":
             dropped.append(tok)
+            trace.append((tok, "dropped_glue"))
             continue
         if cfg.drop_resolution_like and RESOLUTION_RE.match(tok):
             dropped.append(tok)
+            trace.append((tok, "dropped_resolution"))
             continue
         is_last_token_overall = is_last_block and i == n - 1
         if cfg.drop_suspected_truncation and is_last_token_overall:
@@ -533,14 +577,17 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
             # absorbed into the protected "name" token above.
             if len(tok) <= 2:
                 dropped.append(tok)
+                trace.append((tok, "dropped_truncation"))
                 continue
             is_trunc = (looks_truncated_dictionary(tok) if cfg.dictionary_truncation_enabled
                         else looks_truncated_legacy(tok, cfg.min_token_len))
             if is_trunc:
                 dropped.append(tok)
+                trace.append((tok, "dropped_truncation"))
                 continue
         candidates.append(tok)
         candidate_idx.append(i)
+        trace.append((tok, categories[i]))
 
     kept: List[str] = []
     i = 0
@@ -588,20 +635,44 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
         kept.append(tok)
         i += 1
 
-    return kept, dropped
+    return kept, dropped, trace
+
+
+def _should_skip_processing(raw_tag: str, cfg: Config) -> bool:
+    """A tag is left completely unparsed when it's a single word, or its full
+    raw text is shorter than cfg.min_process_tag_length - splitting either is
+    pointless work, and skipping them also keeps their vocabulary out of the
+    corpus-global name-inference pass (see Config.skip_single_word_tags)."""
+    if not cfg.skip_single_word_tags:
+        return False
+    value = raw_tag
+    prefix = f"{cfg.source_namespace}:"
+    if value.startswith(prefix):
+        value = value[len(prefix):]
+    if cfg.strip_leading_number_prefix:
+        block0, _, rest = value.partition(cfg.primary_delimiter)
+        value = strip_number_prefix(block0) + (cfg.primary_delimiter + rest if rest else "")
+    word_count = len(value.split())
+    return word_count <= 1 or len(raw_tag) < cfg.min_process_tag_length
 
 
 def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag]:
     """Parse a batch of raw namespaced tags together, so corpus-global name
     inference (which needs to see the whole batch) can actually run. Name
     detection happens first, per block, before glue-dropping or phrase
-    assembly - see _carve_name_blocks."""
-    tokenized = [(raw_tag,) + _tokenize_raw_tag(raw_tag, cfg) for raw_tag in raw_tags]
+    assembly - see _carve_name_blocks. Tags matching _should_skip_processing
+    are excluded from tokenization/corpus stats entirely and passed through
+    unchanged, in place, so batch order is preserved."""
+    skip_flags = [_should_skip_processing(raw_tag, cfg) for raw_tag in raw_tags]
+    process_indices = [i for i, skip in enumerate(skip_flags) if not skip]
+    to_process = [raw_tags[i] for i in process_indices]
+
+    tokenized = [(raw_tag,) + _tokenize_raw_tag(raw_tag, cfg) for raw_tag in to_process]
 
     per_block_categories: List[List[List[str]]] = []
     per_block_runs: List[List[List[List[int]]]] = []
     per_block_slots: List[List[Set[int]]] = []
-    for _, _, blocks_tokens in tokenized:
+    for _, _, blocks_tokens, _, _ in tokenized:
         cats_for_file = [[_classify_token(t, cfg) for t in tokens] for tokens in blocks_tokens]
         runs_for_file = [_find_name_shape_runs(tokens, cats)
                           for tokens, cats in zip(blocks_tokens, cats_for_file)]
@@ -613,25 +684,33 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag
     corpus_bigram_counts: Counter = Counter()
     if cfg.corpus_global_name_pass:
         flat = [(tokens, runs)
-                for (_, _, blocks_tokens), runs_for_file in zip(tokenized, per_block_runs)
+                for (_, _, blocks_tokens, _, _), runs_for_file in zip(tokenized, per_block_runs)
                 for tokens, runs in zip(blocks_tokens, runs_for_file)]
         _, corpus_bigram_counts = compute_corpus_name_stats(flat)
 
-    results: List[ParsedTag] = []
-    for (raw_tag, original_value, blocks_tokens), cats_for_file, slots_for_file in zip(
+    processed_results: List[ParsedTag] = []
+    for (raw_tag, original_value, blocks_tokens, namespace_text, number_prefix_text), cats_for_file, slots_for_file in zip(
             tokenized, per_block_categories, per_block_slots):
         dropped: List[str] = []
         kept_tags: List[str] = []
         name_tags: List[str] = []
+        exploded: List[Tuple[str, str]] = []
+        if namespace_text:
+            exploded.append((namespace_text, "namespace"))
+        if number_prefix_text:
+            exploded.append((number_prefix_text, "number"))
         for block_idx, (tokens, categories, slots) in enumerate(zip(blocks_tokens, cats_for_file, slots_for_file)):
             is_last_block = block_idx == len(blocks_tokens) - 1
+            if block_idx > 0:
+                exploded.append((cfg.primary_delimiter.strip(), "structure"))
             name_by_start, consumed = _carve_name_blocks(tokens, categories, slots, is_last_block,
                                                            cfg, corpus_bigram_counts)
             name_tags.extend(name_by_start.values())
             merged_tokens, merged_categories = _collapse_names(tokens, categories, name_by_start, consumed)
-            kept, blk_dropped = _process_block(merged_tokens, merged_categories, is_last_block, cfg)
+            kept, blk_dropped, blk_trace = _process_block(merged_tokens, merged_categories, is_last_block, cfg)
             kept_tags.extend(kept)
             dropped.extend(blk_dropped)
+            exploded.extend(blk_trace)
 
         seen: Set[str] = set()
         deduped: List[str] = []
@@ -640,9 +719,28 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag
                 seen.add(t)
                 deduped.append(t)
 
-        results.append(ParsedTag(original=raw_tag, namespace_stripped=original_value,
-                                  tags=deduped, dropped=dropped, names=name_tags))
-    return results
+        processed_results.append(ParsedTag(original=raw_tag, namespace_stripped=original_value,
+                                            tags=deduped, dropped=dropped, names=name_tags,
+                                            exploded=exploded))
+
+    results: List[Optional[ParsedTag]] = [None] * len(raw_tags)
+    for i, parsed in zip(process_indices, processed_results):
+        results[i] = parsed
+    for i, raw_tag in enumerate(raw_tags):
+        if results[i] is None:
+            value = raw_tag
+            prefix = f"{cfg.source_namespace}:"
+            if value.startswith(prefix):
+                value = value[len(prefix):]
+            if cfg.strip_leading_number_prefix:
+                block0, _, rest = value.partition(cfg.primary_delimiter)
+                value = strip_number_prefix(block0) + (cfg.primary_delimiter + rest if rest else "")
+            results[i] = ParsedTag(
+                original=raw_tag, namespace_stripped=value,
+                tags=[value] if value else [], dropped=[], names=[],
+                exploded=[(raw_tag, "skipped")], skipped=True,
+            )
+    return results  # type: ignore[return-value]
 
 
 def parse_filename_tag(raw_tag: str, cfg: Config) -> ParsedTag:
@@ -810,60 +908,148 @@ class ProgressPrinter:
         sys.stdout.flush()
 
 
-# Above this many files, the full IN/OUT/DROPPED breakdown is written to a log file
-# instead of the terminal, and only the first 10 files plus the summary line are
+# Above this many tags, the full exploded-view breakdown is written to a log file
+# instead of the terminal, and only the first 10 tags plus the summary line are
 # printed - scrolling tens of thousands of lines is neither readable nor useful.
 PREVIEW_INLINE_LIMIT = 40
 
+# kind -> rich style, for the colored terminal exploded view. Every element of
+# ParsedTag.exploded is rendered as one bracketed "[text]" chip in this style,
+# so the sequence reads as an exploded view of exactly what happened to the
+# tag, word by word: [dir:][12-][DROP:watches][tag][NAME:paige owens][tag]...
+KIND_STYLES_RICH = {
+    "namespace": "bold cyan",
+    "number": "dim white",
+    "dropped_glue": "strike dim",
+    "dropped_short": "strike dim",
+    "dropped_resolution": "strike dim",
+    "dropped_truncation": "strike bold red",
+    "reserved": "bold yellow",
+    "attribute": "cyan",
+    "content": "green",
+    "name": "bold magenta",
+    "skipped": "italic dim",
+}
 
-def _render_file_block(idx: int, total: int, fp: FilePreview) -> List[str]:
-    lines = [f"===== File {idx}/{total} - {fp.label} ====="]
-    for entry in fp.entries:
-        names_str = ", ".join(entry.names) if entry.names else "(none detected)"
-        out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
-        dropped_str = ", ".join(entry.dropped) if entry.dropped else "-"
-        # NAMES is listed first and marked with ">>>" so it stands out from the
-        # OUT line even in a plain scrolled terminal - this is what the parser
-        # thinks is a name, called out separately so a run of "(none detected)"
-        # across a real library is easy to spot as a name-detection problem.
-        lines.append(f"  >>> NAMES: {names_str}")
-        lines.append(f"  IN:      {entry.original}")
-        lines.append(f"  OUT:     {out_str}")
-        lines.append(f"  DROPPED: {dropped_str}")
+# Short plain-text label used inside the bracket for non-obvious kinds, for the
+# log-file fallback (no color available there).
+KIND_PLAIN_LABEL = {
+    "namespace": "NS",
+    "number": "NUM",
+    "dropped_glue": "DROP",
+    "dropped_short": "DROP",
+    "dropped_resolution": "DROP",
+    "dropped_truncation": "DROP",
+    "reserved": "RES",
+    "attribute": "ATTR",
+    "name": "NAME",
+    "skipped": "SKIP",
+}
+
+
+def render_exploded_rich(exploded: List[Tuple[str, str]]) -> Text:
+    t = Text()
+    first = True
+    for text, kind in exploded:
+        if not first:
+            t.append(" ")
+        first = False
+        if kind == "structure":
+            t.append(text, style="dim")
+            continue
+        t.append(f"[{text}]", style=KIND_STYLES_RICH.get(kind, ""))
+    return t
+
+
+def render_exploded_plain(exploded: List[Tuple[str, str]]) -> str:
+    parts: List[str] = []
+    for text, kind in exploded:
+        if kind == "structure":
+            parts.append(text)
+            continue
+        label = KIND_PLAIN_LABEL.get(kind)
+        parts.append(f"[{label}:{text}]" if label else f"[{text}]")
+    return " ".join(parts)
+
+
+_console = Console()
+
+
+def _render_tag_section(idx: int, total: int, label: str, entry: ParsedTag) -> None:
+    """Prints one tag-centered section: the full original tag, then its
+    exploded view (colored/struck/bold to show what the parser did to it),
+    then the NAMES/OUT/DROPPED summary lines."""
+    _console.print(f"===== Tag {idx}/{total} - {label} =====", style="bold")
+    if entry.skipped:
+        _console.print(f"  TAG: {entry.original}")
+        _console.print("  (skipped - single word or shorter than the min-process-length threshold)",
+                        style="italic dim")
+        _console.print()
+        return
+    _console.print(f"  TAG: {entry.original}")
+    _console.print("  ", render_exploded_rich(entry.exploded), sep="")
+    names_str = ", ".join(entry.names) if entry.names else "(none detected)"
+    out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
+    dropped_str = ", ".join(entry.dropped) if entry.dropped else "-"
+    _console.print(f"  >>> NAMES: {names_str}", style="magenta")
+    _console.print(f"  OUT:     {out_str}")
+    _console.print(f"  DROPPED: {dropped_str}")
+    _console.print()
+
+
+def _render_tag_section_plain(idx: int, total: int, label: str, entry: ParsedTag) -> List[str]:
+    lines = [f"===== Tag {idx}/{total} - {label} ====="]
+    if entry.skipped:
+        lines.append(f"  TAG: {entry.original}")
+        lines.append("  (skipped - single word or shorter than the min-process-length threshold)")
+        lines.append("")
+        return lines
+    lines.append(f"  TAG: {entry.original}")
+    lines.append(f"  {render_exploded_plain(entry.exploded)}")
+    names_str = ", ".join(entry.names) if entry.names else "(none detected)"
+    out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
+    dropped_str = ", ".join(entry.dropped) if entry.dropped else "-"
+    lines.append(f"  >>> NAMES: {names_str}")
+    lines.append(f"  OUT:     {out_str}")
+    lines.append(f"  DROPPED: {dropped_str}")
     lines.append("")
     return lines
 
 
 def print_preview_table(previews: List[FilePreview], log_path: Optional[Path] = None) -> None:
-    if not previews:
+    """Tag-centered preview: every raw namespaced tag gets its own section
+    (rather than grouping sections by file), headed by the full tag and an
+    exploded, color-coded breakdown of exactly how the parser split it."""
+    flat: List[Tuple[str, ParsedTag]] = [(fp.label, e) for fp in previews for e in fp.entries]
+    if not flat:
         print("(nothing to preview)")
         return
 
-    inline = len(previews) <= PREVIEW_INLINE_LIMIT
-    shown = previews if inline else previews[:10]
+    inline = len(flat) <= PREVIEW_INLINE_LIMIT
+    shown = flat if inline else flat[:10]
 
-    lines: List[str] = []
-    for idx, fp in enumerate(shown, start=1):
-        lines.extend(_render_file_block(idx, len(previews), fp))
-    print("\n".join(lines).rstrip("\n"))
+    for idx, (label, entry) in enumerate(shown, start=1):
+        _render_tag_section(idx, len(flat), label, entry)
 
     if not inline:
-        print(f"... {len(previews) - len(shown)} more file(s) not shown here ...")
+        print(f"... {len(flat) - len(shown)} more tag(s) not shown here ...")
 
     if log_path and not inline:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         full_lines: List[str] = []
-        for idx, fp in enumerate(previews, start=1):
-            full_lines.extend(_render_file_block(idx, len(previews), fp))
+        for idx, (label, entry) in enumerate(flat, start=1):
+            full_lines.extend(_render_tag_section_plain(idx, len(flat), label, entry))
         with open(log_path, "w", encoding="utf-8") as f:
             f.write("\n".join(full_lines) + "\n")
-        print(f"Full IN/OUT/DROPPED detail for all {len(previews)} file(s) written to: {log_path}")
+        print(f"Full exploded-view detail for all {len(flat)} tag(s) written to: {log_path}")
 
-    total_entries = sum(len(fp.entries) for fp in previews)
-    total_kept = sum(len(e.tags) for fp in previews for e in fp.entries)
-    total_dropped = sum(len(e.dropped) for fp in previews for e in fp.entries)
-    print(f"Summary: {len(previews)} file(s), {total_entries} tag(s) processed, "
-          f"{total_kept} tag(s) kept, {total_dropped} token(s) dropped.")
+    total_entries = len(flat)
+    total_kept = sum(len(e.tags) for _, e in flat)
+    total_dropped = sum(len(e.dropped) for _, e in flat)
+    total_skipped = sum(1 for _, e in flat if e.skipped)
+    print(f"Summary: {len(previews)} file(s), {total_entries} tag(s) processed "
+          f"({total_skipped} skipped as single-word/short), {total_kept} tag(s) kept, "
+          f"{total_dropped} token(s) dropped.")
 
 
 # Local, offline HTML report - never uploaded anywhere. Regenerated fresh every run
@@ -914,10 +1100,50 @@ _HTML_STYLE = """
   .chips--drop li { border-color: #f0c7c1; color: #7a8190; text-decoration: line-through; text-decoration-color: #a6433a; }
   .chips--names li { border-color: #c9a6f5; color: #4a1f80; font-weight: 600; }
   .chips li.empty, .chips--drop li.empty, .chips--names li.empty { text-decoration: none; font-style: italic; color: #7a8190; border-style: dashed; }
+  .exploded { font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 2.1;
+              background: #14171c; border-radius: 8px; padding: 12px 14px; margin: 0 0 14px;
+              word-break: break-word; }
+  .expl-tok { display: inline-block; padding: 1px 5px; margin: 2px 2px; border-radius: 4px; }
+  .expl-structure { color: #6b7280; margin: 0 4px; }
+  .expl-ns { color: #7dd3fc; font-weight: 700; }
+  .expl-num { color: #9ca3af; }
+  .expl-drop { color: #8b8f98; text-decoration: line-through; }
+  .expl-drop-trunc { color: #f87171; text-decoration: line-through; font-weight: 700; }
+  .expl-reserved { color: #facc15; font-weight: 700; }
+  .expl-attribute { color: #67e8f9; }
+  .expl-content { color: #86efac; }
+  .expl-name { color: #e879f9; font-weight: 700; }
+  .expl-skipped { color: #9ca3af; font-style: italic; }
+  .skipnote { font-size: 12.5px; color: #7a8190; font-style: italic; margin: 0 0 14px; }
   footer.note { margin-top: 36px; font-size: 12.5px; color: #7a8190; border-top: 1px solid #dde1e6; padding-top: 14px; }
   @media (max-width: 620px) { .file-card__body { grid-template-columns: 1fr; } .summary { flex-direction: column; }
     .summary .stat { border-right: none; border-bottom: 1px solid #dde1e6; } .summary .stat:last-child { border-bottom: none; } }
 """
+
+_HTML_KIND_CSS = {
+    "namespace": "expl-ns",
+    "number": "expl-num",
+    "dropped_glue": "expl-drop",
+    "dropped_short": "expl-drop",
+    "dropped_resolution": "expl-drop",
+    "dropped_truncation": "expl-drop-trunc",
+    "reserved": "expl-reserved",
+    "attribute": "expl-attribute",
+    "content": "expl-content",
+    "name": "expl-name",
+    "skipped": "expl-skipped",
+}
+
+
+def _render_exploded_html(exploded: List[Tuple[str, str]]) -> str:
+    parts: List[str] = []
+    for text, kind in exploded:
+        if kind == "structure":
+            parts.append(f'<span class="expl-structure">{html.escape(text)}</span>')
+            continue
+        cls = _HTML_KIND_CSS.get(kind, "")
+        parts.append(f'<span class="expl-tok {cls}">[{html.escape(text)}]</span>')
+    return "".join(parts)
 
 
 def write_html_report(previews: List[FilePreview], title: str, summary_note: str) -> Path:
@@ -925,12 +1151,14 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = HTML_OUTPUT_DIR / f"tag-cleanup-{stamp}.html"
 
+    flat: List[Tuple[str, ParsedTag]] = [(fp.label, e) for fp in previews for e in fp.entries]
     total_files = len(previews)
-    total_entries = sum(len(fp.entries) for fp in previews)
-    total_kept = sum(len(e.tags) for fp in previews for e in fp.entries)
-    total_dropped = sum(len(e.dropped) for fp in previews for e in fp.entries)
-    total_names = sum(len(e.names) for fp in previews for e in fp.entries)
-    entries_with_no_names = sum(1 for fp in previews for e in fp.entries if not e.names)
+    total_entries = len(flat)
+    total_kept = sum(len(e.tags) for _, e in flat)
+    total_dropped = sum(len(e.dropped) for _, e in flat)
+    total_names = sum(len(e.names) for _, e in flat)
+    total_skipped = sum(1 for _, e in flat if e.skipped)
+    entries_with_no_names = sum(1 for _, e in flat if not e.names and not e.skipped)
 
     def chips(items: List[str], empty_label: str, css_class: str = "") -> str:
         cls = f"chips {css_class}".strip()
@@ -938,18 +1166,34 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
             return f'<ul class="{cls}"><li class="empty">{html.escape(empty_label)}</li></ul>'
         return f'<ul class="{cls}">' + "".join(f"<li>{html.escape(t)}</li>" for t in items) + "</ul>"
 
+    # Tag-centered: one card per raw namespaced tag (not grouped by file), headed
+    # by the full tag text, then an exploded, color/strikethrough/bold-coded view
+    # of exactly what the parser decided about every word in it.
     cards: List[str] = []
-    for idx, fp in enumerate(previews, start=1):
-        blocks: List[str] = []
-        for entry in fp.entries:
-            ns, _, rest = entry.original.partition(":")
-            names_empty = "" if entry.names else " namesblock--empty"
-            blocks.append(f"""
+    for idx, (label, entry) in enumerate(flat, start=1):
+        if entry.skipped:
+            cards.append(f"""
+    <section class="file-card">
+      <div class="file-card__head">
+        <span class="file-card__eyebrow">TAG {idx:02d} / {total_entries} &middot; {html.escape(label)}</span>
+        <h2 class="file-card__title">(skipped)</h2>
+      </div>
+      <div class="file-card__path">{html.escape(entry.original)}</div>
+      <p class="skipnote">Skipped &mdash; single word or shorter than the min-process-length threshold.</p>
+    </section>""")
+            continue
+        names_empty = "" if entry.names else " namesblock--empty"
+        cards.append(f"""
+    <section class="file-card">
+      <div class="file-card__head">
+        <span class="file-card__eyebrow">TAG {idx:02d} / {total_entries} &middot; {html.escape(label)}</span>
+        <h2 class="file-card__title">{html.escape(entry.original)}</h2>
+      </div>
+      <div class="exploded">{_render_exploded_html(entry.exploded)}</div>
       <div class="namesblock{names_empty}">
         <div class="namesblock__label">Detected names &mdash; {len(entry.names)}</div>
         {chips(entry.names, "(none detected)", "chips--names")}
       </div>
-      <div class="file-card__path"><span class="ns">{html.escape(ns)}:</span>{html.escape(rest)}</div>
       <div class="file-card__body">
         <div class="tagblock tagblock--keep">
           <div class="tagblock__label">Kept &mdash; {len(entry.tags)} tag(s)</div>
@@ -959,13 +1203,7 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
           <div class="tagblock__label">Dropped &mdash; {len(entry.dropped)} token(s)</div>
           {chips(entry.dropped, "(nothing dropped)", "chips--drop")}
         </div>
-      </div>""")
-        cards.append(f"""
-    <section class="file-card">
-      <div class="file-card__head">
-        <span class="file-card__eyebrow">FILE {idx:02d} / {total_files}</span>
-        <h2 class="file-card__title">{html.escape(fp.label)}</h2>
-      </div>{"".join(blocks)}
+      </div>
     </section>""")
 
     doc = f"""<!doctype html>
@@ -988,6 +1226,7 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
       <div class="stat keep"><div class="num">{total_kept}</div><div class="label">tags kept</div></div>
       <div class="stat drop"><div class="num">{total_dropped}</div><div class="label">tokens dropped</div></div>
       <div class="stat drop"><div class="num">{entries_with_no_names}</div><div class="label">tag(s) with no name detected</div></div>
+      <div class="stat"><div class="num">{total_skipped}</div><div class="label">tag(s) skipped (short/single-word)</div></div>
     </div>
   </header>
   <div class="files">{"".join(cards)}
@@ -1047,6 +1286,12 @@ FIXTURES = [
     # and that will never recur in this corpus - must still be caught on the
     # strength of position alone, with zero corpus/known-list support.
     "dir:115-lake shoot - young zhulinskaya wozniaczek walks by an old dock in soft light",
+    # -- Skip-filter fixtures: a single-word tag and a short multi-word tag
+    # (under Config.min_process_tag_length) must never be parsed at all - both
+    # come back as one unchanged tag, with an "exploded" trace of just one
+    # "skipped" element, and never reach tokenization/corpus-stats. --
+    "dir:mountain",
+    "dir:5-old barn",
 ]
 
 
@@ -1110,6 +1355,10 @@ def run_self_test(cfg: Config) -> None:
         ("Zero-frequency (fully unrecognized) name caught by position alone, "
          "with no corpus recurrence or known_names support",
          "zhulinskaya wozniaczek" in all_tags),
+        ("Single-word tag is skipped entirely, kept unchanged",
+         previews[-2].entries[0].skipped and previews[-2].entries[0].tags == ["mountain"]),
+        ("Short (<35 char) multi-word tag is skipped entirely, kept unchanged",
+         previews[-1].entries[0].skipped and previews[-1].entries[0].tags == ["old barn"]),
     ]
     print("\nRegression checks:")
     for label, passed in checks:
