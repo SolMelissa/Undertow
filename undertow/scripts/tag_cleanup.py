@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -74,7 +75,7 @@ class Config:
         "watches", "records", "picks", "pulls", "drifts", "rolls", "rains", "soaks",
         "reads", "spots", "parts", "gives", "takes", "gets", "after", "then",
         "rise", "delivers", "pours", "taps", "blows", "off", "them", "near", "during",
-        "while", "across", "as", "them off"})
+        "while", "across", "as"})
     attribute_lexicon: set = field(default_factory=lambda: {
         # neutral generics ONLY: colors, sizes, ages, materials, qualities
         "red", "green", "blue", "gray", "grey", "brown", "white", "black", "pale", "tan",
@@ -267,16 +268,22 @@ class HydrusClient:
 
     def resolve_service_key(self, name: str) -> str:
         services = self.get_services()
-        for group in services.get("services", {}).values() if isinstance(services.get("services"), dict) else []:
-            pass
-        # Hydrus returns {"services": {service_key: {...}}} in newer API versions,
-        # but also a flat "tag_services"/"file_services" style in older ones.
         services_dict = services.get("services", {})
         if isinstance(services_dict, dict):
             for key, svc in services_dict.items():
                 if svc.get("name") == name:
                     return key
-        raise ValueError(f"No Hydrus service found with name {name!r}")
+        available = sorted(svc.get("name", "?") for svc in services_dict.values()) if isinstance(services_dict, dict) else []
+        raise ValueError(
+            f"No Hydrus service found named {name!r}. Available services: {', '.join(available) or '(none returned)'}"
+        )
+
+    def list_service_names(self) -> List[str]:
+        services = self.get_services()
+        services_dict = services.get("services", {})
+        if not isinstance(services_dict, dict):
+            return []
+        return sorted(svc.get("name", "?") for svc in services_dict.values())
 
     def search_files(self, tags: List[str], file_service_key: str) -> List[int]:
         params = {
@@ -320,14 +327,19 @@ class HydrusClient:
 # ---------------------------------------------------------------------------
 
 def print_preview_table(results: List[ParsedTag]) -> None:
-    for r in results:
-        in_str = r.original
+    if not results:
+        print("(nothing to preview)")
+        return
+    for idx, r in enumerate(results, start=1):
         out_str = ", ".join(r.tags) if r.tags else "(nothing kept)"
         dropped_str = ", ".join(r.dropped) if r.dropped else "-"
-        print(f"IN:      {in_str}")
-        print(f"OUT:     {out_str}")
-        print(f"DROPPED: {dropped_str}")
+        print(f"[{idx}] IN:      {r.original}")
+        print(f"    OUT:     {out_str}")
+        print(f"    DROPPED: {dropped_str}")
         print("-" * 70)
+    total_kept = sum(len(r.tags) for r in results)
+    total_dropped = sum(len(r.dropped) for r in results)
+    print(f"Summary: {len(results)} tag(s) processed, {total_kept} tag(s) kept, {total_dropped} token(s) dropped.")
 
 
 FIXTURES = [
@@ -356,27 +368,50 @@ def run_self_test(cfg: Config) -> None:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Clean up filename-derived Hydrus tags.")
-    p.add_argument("--source-namespace", default="dir", help="Namespace holding raw filename tags (default: dir)")
-    p.add_argument("--wildcard", action="append", dest="wildcards",
+    p = argparse.ArgumentParser(
+        description="Clean up filename-derived Hydrus tags: split, relabel, and rewrite via the Client API.",
+        epilog=(
+            "Examples:\n"
+            "  python tag_cleanup.py --preview\n"
+            "  python tag_cleanup.py --dry-run --api-key <key>\n"
+            "  python tag_cleanup.py --apply --api-key <key> --yes\n"
+            "  python tag_cleanup.py --list-services --api-key <key>\n\n"
+            "The API key can also be set via the HYDRUS_API_KEY environment variable."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--source-namespace", default="dir", metavar="NS",
+                    help="Namespace holding raw filename tags (default: dir)")
+    p.add_argument("--wildcard", action="append", dest="wildcards", metavar="TAG",
                     help="Tag wildcard to search for (repeatable, default: '<namespace>:*')")
-    p.add_argument("--file-service", default="all local files", help="Hydrus file service name")
-    p.add_argument("--tag-service", default="my tags", help="Hydrus tag service name to read/write")
-    p.add_argument("--api-url", default="http://127.0.0.1:45869", help="Hydrus Client API base URL")
-    p.add_argument("--api-key", help="Hydrus Client API access key")
-    p.add_argument("--known-names", nargs="*", default=[], help="Extra known name tokens")
-    p.add_argument("--no-truncation-drop", action="store_true", help="Disable trailing-truncation drop heuristic")
+    p.add_argument("--file-service", default="all local files", metavar="NAME",
+                    help="Hydrus file service name (default: 'all local files')")
+    p.add_argument("--tag-service", default="my tags", metavar="NAME",
+                    help="Hydrus tag service name to read/write (default: 'my tags')")
+    p.add_argument("--api-url", default="http://127.0.0.1:45869", metavar="URL",
+                    help="Hydrus Client API base URL (default: http://127.0.0.1:45869)")
+    p.add_argument("--api-key", default=os.environ.get("HYDRUS_API_KEY"), metavar="KEY",
+                    help="Hydrus Client API access key (or set HYDRUS_API_KEY)")
+    p.add_argument("--known-names", nargs="*", default=[], metavar="NAME",
+                    help="Extra known name tokens to always treat as character: tags")
+    p.add_argument("--no-truncation-drop", action="store_true",
+                    help="Disable the trailing-truncation drop heuristic (keep suspect trailing tokens)")
+    p.add_argument("-y", "--yes", action="store_true",
+                    help="Skip the confirmation prompt before --apply writes changes")
 
     mode = p.add_mutually_exclusive_group()
-    mode.add_argument("--preview", action="store_true", help="Run against built-in fixtures only, no API calls")
-    mode.add_argument("--dry-run", action="store_true", help="Fetch real tags from Hydrus, show planned changes, write nothing")
-    mode.add_argument("--apply", action="store_true", help="Fetch real tags, and write add/delete changes to Hydrus")
+    mode.add_argument("--preview", action="store_true",
+                       help="Run against the 10 built-in fixtures only, no Hydrus connection made (default mode)")
+    mode.add_argument("--dry-run", action="store_true",
+                       help="Fetch real tags from Hydrus, show the planned changes, write nothing")
+    mode.add_argument("--apply", action="store_true",
+                       help="Fetch real tags from Hydrus and write the add/delete changes")
+    mode.add_argument("--list-services", action="store_true",
+                       help="Print the Hydrus service names available at --api-url, then exit")
     return p
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    args = build_arg_parser().parse_args(argv)
-
+def build_config(args: argparse.Namespace) -> Config:
     cfg = Config(
         source_namespace=args.source_namespace,
         target_service_name=args.tag_service,
@@ -384,65 +419,118 @@ def main(argv: Optional[List[str]] = None) -> int:
         drop_suspected_truncation=not args.no_truncation_drop,
     )
     if args.known_names:
-        cfg.known_names |= set(k.lower() for k in args.known_names)
-    if args.wildcards:
-        cfg.target_tag_wildcards = args.wildcards
-    else:
-        cfg.target_tag_wildcards = [f"{cfg.source_namespace}:*"]
+        cfg.known_names |= {k.lower() for k in args.known_names}
+    cfg.target_tag_wildcards = args.wildcards if args.wildcards else [f"{cfg.source_namespace}:*"]
+    return cfg
 
-    if args.preview or not (args.dry_run or args.apply):
-        print("Running preview against built-in fixtures (no Hydrus connection made).\n")
+
+def require_api_key(args: argparse.Namespace) -> Optional[str]:
+    if not args.api_key:
+        print(
+            "An API key is required for this mode: pass --api-key or set the HYDRUS_API_KEY "
+            "environment variable. Find/create one in Hydrus under services > review services > "
+            "the 'client api' tab.",
+            file=sys.stderr,
+        )
+        return None
+    return args.api_key
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    cfg = build_config(args)
+
+    if not (args.dry_run or args.apply or args.list_services):
+        args.preview = True
+
+    if args.preview:
+        print("Running preview against the 10 built-in fixtures (no Hydrus connection made).\n")
         run_self_test(cfg)
         return 0
 
-    if not args.api_key:
-        print("--api-key is required for --dry-run or --apply", file=sys.stderr)
+    api_key = require_api_key(args)
+    if not api_key:
         return 1
 
-    client = HydrusClient(args.api_url, args.api_key)
-    file_service_key = client.resolve_service_key(cfg.file_service_name)
-    tag_service_key = client.resolve_service_key(cfg.target_service_name)
+    try:
+        client = HydrusClient(args.api_url, api_key)
 
-    file_ids = client.search_files(cfg.target_tag_wildcards, file_service_key)
-    print(f"Found {len(file_ids)} file(s) matching {cfg.target_tag_wildcards}.")
-    if not file_ids:
-        return 0
+        if args.list_services:
+            names = client.list_service_names()
+            if not names:
+                print("No services returned by Hydrus.")
+            else:
+                print("Available Hydrus services:")
+                for name in names:
+                    print(f"  - {name}")
+            return 0
 
-    metadata = client.fetch_metadata(file_ids, tag_service_key)
+        file_service_key = client.resolve_service_key(cfg.file_service_name)
+        tag_service_key = client.resolve_service_key(cfg.target_service_name)
 
-    plan: List[Tuple[int, str, ParsedTag]] = []
+        file_ids = client.search_files(cfg.target_tag_wildcards, file_service_key)
+        print(f"Found {len(file_ids)} file(s) matching {cfg.target_tag_wildcards} "
+              f"in service {cfg.file_service_name!r}.")
+        if not file_ids:
+            return 0
+
+        metadata = client.fetch_metadata(file_ids, tag_service_key)
+    except (requests.RequestException, RuntimeError, ValueError) as exc:
+        print(f"Could not reach Hydrus: {exc}", file=sys.stderr)
+        return 1
+
+    # plan: fid -> (tags_to_add, tags_to_delete, [ParsedTag ...] for preview)
+    plan: Dict[int, Tuple[List[str], List[str]]] = {}
+    previews: List[ParsedTag] = []
     for fid, current_tags in metadata.items():
         for raw_tag in current_tags:
             if not raw_tag.startswith(f"{cfg.source_namespace}:"):
                 continue
             parsed = parse_filename_tag(raw_tag, cfg)
-            plan.append((fid, raw_tag, parsed))
+            previews.append(parsed)
+            to_add, to_delete = plan.setdefault(fid, ([], []))
+            to_add.extend(t for t in parsed.tags if t not in to_add)
+            to_delete.append(raw_tag)
 
-    print_preview_table([p for _, _, p in plan])
-
-    if args.dry_run:
-        print(f"\nDRY RUN: would update {len(plan)} tag(s) across {len(file_ids)} file(s). No changes written.")
+    if not previews:
+        print(f"No tags with namespace {cfg.source_namespace!r} found on the matched files. Nothing to do.")
         return 0
 
-    if args.interactive if hasattr(args, "interactive") else True:
-        confirm = input(f"\nApply {len(plan)} tag change(s) to Hydrus now? [y/N] ").strip().lower()
+    print_preview_table(previews)
+    files_affected = len(plan)
+
+    if args.dry_run:
+        print(f"\nDRY RUN: would rewrite {len(previews)} tag(s) across {files_affected} file(s). No changes written.")
+        return 0
+
+    if not args.yes:
+        confirm = input(
+            f"\nApply changes to {files_affected} file(s) ({len(previews)} tag(s) rewritten) to Hydrus now? [y/N] "
+        ).strip().lower()
         if confirm != "y":
             print("Aborted, no changes written.")
             return 0
 
-    batch_size = cfg.batch_size
-    for i in range(0, len(plan), batch_size):
-        batch = plan[i:i + batch_size]
-        for fid, raw_tag, parsed in batch:
+    try:
+        for fid, (tags_to_add, tags_to_delete) in plan.items():
             client.add_tags(
                 file_ids=[fid],
                 tag_service_key=tag_service_key,
-                tags_to_add=parsed.tags,
-                tags_to_delete=[raw_tag],
+                tags_to_add=tags_to_add,
+                tags_to_delete=tags_to_delete,
             )
-    print(f"Submitted {len(plan)} tag change(s) to Hydrus's add_tags queue.")
+    except (requests.RequestException, RuntimeError) as exc:
+        print(f"Stopped partway through after a Hydrus request failure: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Submitted changes for {files_affected} file(s) to Hydrus's add_tags queue "
+          f"(applies in the background).")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\nInterrupted, no further changes made.", file=sys.stderr)
+        sys.exit(130)
