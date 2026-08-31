@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -344,16 +345,25 @@ class HydrusClient:
         result = self._get("/get_files/search_files", params)
         return result.get("file_ids", [])
 
-    def fetch_metadata(self, file_ids: List[int], tag_service_key: str) -> Dict[int, List[str]]:
-        params = {"file_ids": json.dumps(file_ids)}
-        result = self._get("/get_files/file_metadata", params)
+    def fetch_metadata(self, file_ids: List[int], tag_service_key: str,
+                        chunk_size: int = 256, on_progress=None) -> Dict[int, List[str]]:
+        """Chunked so a large library (tens of thousands of files) doesn't build one giant
+        query string and time out in a single request; on_progress(done, total), if given, is
+        called after each chunk so the caller can print progress."""
         out: Dict[int, List[str]] = {}
-        for meta in result.get("metadata", []):
-            fid = meta.get("file_id")
-            tags_block = meta.get("tags", {}).get(tag_service_key, {})
-            storage = tags_block.get("storage_tags", {})
-            current = storage.get("0", [])
-            out[fid] = current
+        total = len(file_ids)
+        for start in range(0, total, chunk_size):
+            chunk = file_ids[start:start + chunk_size]
+            params = {"file_ids": json.dumps(chunk)}
+            result = self._get("/get_files/file_metadata", params)
+            for meta in result.get("metadata", []):
+                fid = meta.get("file_id")
+                tags_block = meta.get("tags", {}).get(tag_service_key, {})
+                storage = tags_block.get("storage_tags", {})
+                current = storage.get("0", [])
+                out[fid] = current
+            if on_progress:
+                on_progress(min(start + chunk_size, total), total)
         return out
 
     def add_tags(self, file_ids: List[int], tag_service_key: str,
@@ -387,17 +397,72 @@ class HydrusClient:
 # Preview / apply orchestration
 # ---------------------------------------------------------------------------
 
-def print_preview_table(results: List[ParsedTag]) -> None:
+class ProgressPrinter:
+    """Prints a single overwritten status line, throttled to at most once every
+    `min_interval` seconds, so a long-running fetch/apply loop never looks hung
+    even when nothing else in the terminal is moving."""
+
+    def __init__(self, label: str, total: int, min_interval: float = 0.5):
+        self.label = label
+        self.total = total
+        self.min_interval = min_interval
+        self.start = time.monotonic()
+        self._last_print = 0.0
+
+    def update(self, done: int, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and now - self._last_print < self.min_interval and done < self.total:
+            return
+        self._last_print = now
+        elapsed = now - self.start
+        rate = done / elapsed if elapsed > 0 else 0.0
+        pct = (done / self.total * 100) if self.total else 100.0
+        eta = (self.total - done) / rate if rate > 0 else 0.0
+        sys.stdout.write(
+            f"\r{self.label}: {done:,}/{self.total:,} ({pct:4.1f}%)  "
+            f"{rate:,.0f}/s  elapsed {elapsed:6.0f}s  eta {eta:6.0f}s   "
+        )
+        sys.stdout.flush()
+
+    def done(self) -> None:
+        self.update(self.total, force=True)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
+
+# Above this many tags, the full IN/OUT/DROPPED table is written to a log file
+# instead of the terminal, and only a sample plus the summary line is printed -
+# scrolling tens of thousands of lines is neither readable nor useful.
+PREVIEW_INLINE_LIMIT = 40
+
+
+def print_preview_table(results: List[ParsedTag], log_path: Optional[Path] = None) -> None:
     if not results:
         print("(nothing to preview)")
         return
+
+    inline = len(results) <= PREVIEW_INLINE_LIMIT
+    lines: List[str] = []
     for idx, r in enumerate(results, start=1):
         out_str = ", ".join(r.tags) if r.tags else "(nothing kept)"
         dropped_str = ", ".join(r.dropped) if r.dropped else "-"
-        print(f"[{idx}] IN:      {r.original}")
-        print(f"    OUT:     {out_str}")
-        print(f"    DROPPED: {dropped_str}")
-        print("-" * 70)
+        lines.append(f"[{idx}] IN:      {r.original}")
+        lines.append(f"    OUT:     {out_str}")
+        lines.append(f"    DROPPED: {dropped_str}")
+        lines.append("-" * 70)
+
+    if inline:
+        print("\n".join(lines))
+    else:
+        sample = lines[:4 * 10]  # first 10 entries
+        print("\n".join(sample))
+        print(f"... {len(results) - 10} more not shown here ...")
+        if log_path:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            print(f"Full IN/OUT/DROPPED detail for all {len(results)} tag(s) written to: {log_path}")
+
     total_kept = sum(len(r.tags) for r in results)
     total_dropped = sum(len(r.dropped) for r in results)
     print(f"Summary: {len(results)} tag(s) processed, {total_kept} tag(s) kept, {total_dropped} token(s) dropped.")
@@ -608,16 +673,30 @@ def wizard_pick_mode() -> str:
 
 def run_dry_run_or_apply(client: HydrusClient, cfg: Config, services: ServiceSelection, apply: bool) -> int:
     same_service = services.source_tag_service_key == services.dest_tag_service_key
+
+    print(f"\nSearching {services.file_service_name!r} for {cfg.target_tag_wildcards}...")
     try:
         file_ids = client.search_files(cfg.target_tag_wildcards, services.file_service_key)
-        print(f"\nFound {len(file_ids)} file(s) matching {cfg.target_tag_wildcards} "
-              f"in service {services.file_service_name!r}.")
-        if not file_ids:
-            return 0
-        metadata = client.fetch_metadata(file_ids, services.source_tag_service_key)
     except (requests.RequestException, RuntimeError, ValueError) as exc:
         print(f"Could not reach Hydrus: {exc}", file=sys.stderr)
         return 1
+    print(f"Found {len(file_ids):,} file(s).")
+    if not file_ids:
+        return 0
+
+    print(f"Fetching tag data from {services.source_tag_service_name!r} "
+          f"(in batches of 256, this is the slow part on a large library)...")
+    fetch_progress = ProgressPrinter("Fetching tags", len(file_ids))
+    try:
+        metadata = client.fetch_metadata(
+            file_ids, services.source_tag_service_key,
+            on_progress=lambda done, total: fetch_progress.update(done),
+        )
+    except (requests.RequestException, RuntimeError, ValueError) as exc:
+        fetch_progress.done()
+        print(f"Could not reach Hydrus while fetching tags: {exc}", file=sys.stderr)
+        return 1
+    fetch_progress.done()
 
     # plan: fid -> (tags_to_add_at_dest, tags_to_delete_at_source)
     plan: Dict[int, Tuple[List[str], List[str]]] = {}
@@ -637,7 +716,8 @@ def run_dry_run_or_apply(client: HydrusClient, cfg: Config, services: ServiceSel
               f"{services.source_tag_service_name!r} on the matched files. Nothing to do.")
         return 0
 
-    print_preview_table(previews)
+    log_path = LOCAL_CONFIG_FILE.parent / "tag-cleanup-last-preview.txt"
+    print_preview_table(previews, log_path=log_path)
     files_affected = len(plan)
     dest_note = (f"in place in {services.source_tag_service_name!r}" if same_service else
                  f"into {services.dest_tag_service_name!r}, deleting the raw tag from "
@@ -653,29 +733,51 @@ def run_dry_run_or_apply(client: HydrusClient, cfg: Config, services: ServiceSel
         print("Aborted, no changes written.")
         return 0
 
-    try:
-        for fid, (tags_to_add, tags_to_delete) in plan.items():
-            if same_service:
-                client.add_tags(
-                    file_ids=[fid],
-                    tag_service_key=services.dest_tag_service_key,
-                    tags_to_add=tags_to_add,
-                    tags_to_delete=tags_to_delete,
-                )
-            else:
-                client.add_tags_multi(
-                    file_ids=[fid],
-                    service_actions={
-                        services.dest_tag_service_key: (tags_to_add, []),
-                        services.source_tag_service_key: ([], tags_to_delete),
-                    },
-                )
-    except (requests.RequestException, RuntimeError) as exc:
-        print(f"Stopped partway through after a Hydrus request failure: {exc}", file=sys.stderr)
-        return 1
+    def apply_one(fid: int, tags_to_add: List[str], tags_to_delete: List[str]) -> None:
+        if same_service:
+            client.add_tags(
+                file_ids=[fid],
+                tag_service_key=services.dest_tag_service_key,
+                tags_to_add=tags_to_add,
+                tags_to_delete=tags_to_delete,
+            )
+        else:
+            client.add_tags_multi(
+                file_ids=[fid],
+                service_actions={
+                    services.dest_tag_service_key: (tags_to_add, []),
+                    services.source_tag_service_key: ([], tags_to_delete),
+                },
+            )
 
-    print(f"Submitted changes for {files_affected} file(s) to Hydrus's add_tags queue (applies in the background).")
-    return 0
+    print(f"Writing changes for {files_affected:,} file(s) (up to {cfg.max_workers} at a time)...")
+    apply_progress = ProgressPrinter("Applying", files_affected)
+    errors: List[str] = []
+    done_count = 0
+    with ThreadPoolExecutor(max_workers=cfg.max_workers) as pool:
+        futures = {
+            pool.submit(apply_one, fid, tags_to_add, tags_to_delete): fid
+            for fid, (tags_to_add, tags_to_delete) in plan.items()
+        }
+        for future in as_completed(futures):
+            fid = futures[future]
+            try:
+                future.result()
+            except (requests.RequestException, RuntimeError) as exc:
+                errors.append(f"file {fid}: {exc}")
+            done_count += 1
+            apply_progress.update(done_count)
+    apply_progress.done()
+
+    if errors:
+        print(f"{len(errors)} file(s) failed to update (first 10 shown):", file=sys.stderr)
+        for line in errors[:10]:
+            print(f"  - {line}", file=sys.stderr)
+
+    succeeded = files_affected - len(errors)
+    print(f"Submitted changes for {succeeded:,}/{files_affected:,} file(s) to Hydrus's add_tags queue "
+          f"(applies in the background).")
+    return 1 if errors else 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:
