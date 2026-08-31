@@ -1,0 +1,77 @@
+{% if not names %}
+<div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+  No scripts found in undertow/scripts/.
+</div>
+{% else %}
+<div class="kawaii-card" style="margin-bottom:1rem;">
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+    {% for name in names %}
+    <button type="button" class="kawaii-btn" id="script-pill-{{ name }}"
+            onclick="runScript('{{ name }}')" {% if running.get(name) %}disabled{% endif %}>
+      &#9654; {{ name }}
+    </button>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+<div class="kawaii-card">
+  <pre id="script-term" style="margin:0; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-family:'Consolas','Courier New',monospace; font-size:12px; background:#0d0f12; color:#c9f7c9; border-radius:8px; padding:0.75rem;">Pick a script above to run it.</pre>
+</div>
+
+<script>
+(function () {
+  if (window.__scriptsTabInit) return;
+  window.__scriptsTabInit = true;
+
+  window.scriptOffset = null;
+  window.scriptRunning = null;
+  window.scriptPollTimer = null;
+
+  window.runScript = async function (name) {
+    const term = document.getElementById('script-term');
+    term.textContent = '';
+    window.scriptOffset = null;
+    window.scriptRunning = name;
+    document.querySelectorAll('[id^="script-pill-"]').forEach(function (btn) { btn.disabled = true; });
+    try {
+      await fetch('/scripts/run/' + encodeURIComponent(name), { method: 'POST' });
+    } catch (e) {
+      term.textContent = 'Failed to start: ' + e;
+      window.scriptRunning = null;
+      document.querySelectorAll('[id^="script-pill-"]').forEach(function (btn) { btn.disabled = false; });
+      return;
+    }
+    pollScriptOutput();
+  };
+
+  async function pollScriptOutput() {
+    clearTimeout(window.scriptPollTimer);
+    const name = window.scriptRunning;
+    if (!name) return;
+    try {
+      const url = window.scriptOffset === null
+        ? '/scripts/output/' + encodeURIComponent(name)
+        : '/scripts/output/' + encodeURIComponent(name) + '?since=' + window.scriptOffset;
+      const r = await fetch(url);
+      const d = await r.json();
+      window.scriptOffset = d.offset;
+      const term = document.getElementById('script-term');
+      if (d.lines && d.lines.length) {
+        const atBottom = term.scrollTop + term.clientHeight >= term.scrollHeight - 10;
+        term.textContent += d.lines.join('\n') + '\n';
+        if (atBottom) term.scrollTop = term.scrollHeight;
+      }
+      if (!d.running) {
+        const term2 = document.getElementById('script-term');
+        term2.textContent += '\n[exited ' + (d.returncode === null ? '?' : d.returncode) + ']\n';
+        window.scriptRunning = null;
+        document.querySelectorAll('[id^="script-pill-"]').forEach(function (btn) { btn.disabled = false; });
+        return;
+      }
+    } catch (e) {
+      // transient fetch error - keep polling
+    }
+    window.scriptPollTimer = setTimeout(pollScriptOutput, 800);
+  }
+})();
+</script>

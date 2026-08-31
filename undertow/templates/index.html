@@ -414,6 +414,8 @@
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'media' }" @click="girlyTab = 'media'">&#128444; Media</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; Status</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'tags' }" @click="girlyTab = 'tags'">&#127991; Tag Relations</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'tagrank' }" @click="girlyTab = 'tagrank'">&#127942; TagRank</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'scripts' }" @click="girlyTab = 'scripts'">&#128187; Scripts</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'changelog' }" @click="girlyTab = 'changelog'">&#128220; Changelog</button>
     </div>
 
@@ -523,6 +525,20 @@
         loading&hellip;
       </div>
     </div><!-- /girlyTab === 'tags' -->
+
+    <div x-show="girlyTab === 'tagrank'" x-cloak>
+      <p class="kawaii-section-title">&#127942; TagRank</p>
+      <div id="tagrank-root" hx-get="/partials/tagrank" hx-trigger="load" hx-swap="innerHTML">
+        loading&hellip;
+      </div>
+    </div><!-- /girlyTab === 'tagrank' -->
+
+    <div x-show="girlyTab === 'scripts'" x-cloak>
+      <p class="kawaii-section-title">&#128187; Scripts</p>
+      <div id="girly-scripts-panel" hx-get="/partials/scripts" hx-trigger="load" hx-swap="innerHTML">
+        loading&hellip;
+      </div>
+    </div><!-- /girlyTab === 'scripts' -->
 
     <div x-show="girlyTab === 'changelog'" x-cloak>
       <p class="kawaii-section-title">&#128220; Changelog</p>

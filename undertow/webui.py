@@ -35,7 +35,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-from . import api_client, api_keys, config, hydrus_client, logtail, media, services, settings, subscriptions, tags, version, watchdog
+from . import api_client, api_keys, config, hydrus_client, logtail, media, scripts_runner, services, settings, subscriptions, tags, tagrank_client, version, watchdog
 from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -636,6 +636,25 @@ if HAVE_FLASK:
         since = request.args.get("since", type=int)
         lines, offset = logtail.read_since(since)
         return jsonify({"lines": lines, "offset": offset})
+
+    # ---------------------------------------------------------------- scripts
+
+    @app.route("/partials/scripts")
+    def partial_scripts():
+        names = scripts_runner.list_scripts()
+        running = {n: scripts_runner.is_running(n) for n in names}
+        return render_template("partials/scripts.html", names=names, running=running)
+
+    @app.route("/scripts/run/<name>", methods=["POST"])
+    def scripts_run(name):
+        scripts_runner.start(name)
+        return "", 204
+
+    @app.route("/scripts/output/<name>")
+    def scripts_output(name):
+        since = request.args.get("since", type=int)
+        lines, offset, running, returncode = scripts_runner.read_since(name, since)
+        return jsonify({"lines": lines, "offset": offset, "running": running, "returncode": returncode})
 
     # ---------------------------------------------------------------- subscriptions: add
 
@@ -1457,6 +1476,111 @@ if HAVE_FLASK:
             message, error = f"Migrated {old_tag!r} to {new_tag!r} on {count} file(s).", False
         return render_template("partials/girly/tag_migration_panel.html", **_tag_migration_ctx(old_tag, new_tag, extra, message, error))
 
+    # ---------------------------------------------------------------- TagRank
+    # Drives TagRank's own headless API as a subprocess (see undertow/tagrank_client.py and
+    # tagrank/docs/api.md) rather than reimplementing its comparison logic - Undertow is just
+    # the pill-picker/voting front end. The active TagRank session id lives in an unsigned
+    # cookie, same pattern as the Media tab's search state (_media_sid above); every route here
+    # re-renders #tagrank-root so htmx swaps land wherever the button was clicked from.
+
+    _TAGRANK_SID_COOKIE = "undertow_tagrank_sid"
+
+    def _tagrank_sid() -> str | None:
+        return request.cookies.get(_TAGRANK_SID_COOKIE)
+
+    def _tagrank_picker_ctx() -> dict:
+        if not tagrank_client.is_available():
+            return {"available": False}
+        ok, err = tagrank_client.ensure_server_running()
+        if not ok:
+            return {"available": True, "error": err}
+        search_options, so_err = tagrank_client.get_search_options()
+        graphs, g_err = tagrank_client.get_graphs()
+        return {
+            "available": True,
+            "error": so_err or g_err,
+            "session_id": None,
+            "search_options": search_options,
+            "graphs": graphs,
+        }
+
+    def _tagrank_pair_ctx(session_id: str) -> dict:
+        pair, err = tagrank_client.next_pair(session_id)
+        ctx = {
+            "available": True, "error": None, "session_id": session_id,
+            "started_tag": tagrank_client.get_session_tag(session_id),
+        }
+        if err:
+            ctx["pair_error"] = err
+        elif pair.get("done"):
+            ctx["done"] = True
+        else:
+            ctx["left"], ctx["right"] = pair["left"], pair["right"]
+        return ctx
+
+    @app.route("/partials/tagrank")
+    def partial_tagrank():
+        sid = _tagrank_sid()
+        if sid:
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(sid))
+        return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+
+    @app.route("/tagrank/start", methods=["POST"])
+    def tagrank_start():
+        tag = (request.form.get("tag") or "").strip()
+        if not tag:
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+        ok, err = tagrank_client.ensure_server_running()
+        if not ok:
+            return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
+        job, err = tagrank_client.start_session([tag])
+        if err:
+            return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
+        return render_template("partials/girly/tagrank_starting.html", job_id=job["job_id"], tag=tag)
+
+    @app.route("/tagrank/job/<job_id>")
+    def tagrank_job(job_id: str):
+        job, err = tagrank_client.get_job(job_id)
+        if err:
+            return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
+        if job["status"] == "pending":
+            return render_template("partials/girly/tagrank_starting.html", job_id=job_id, tag=request.args.get("tag", ""))
+        if job["status"] == "error":
+            return render_template("partials/girly/tagrank_inner.html", available=True, error=job.get("error") or "TagRank session failed to start.")
+        session_id = job["session_id"]
+        tag = request.args.get("tag", "")
+        tagrank_client.remember_session_tag(session_id, tag)
+        resp = make_response(render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(session_id)))
+        resp.set_cookie(_TAGRANK_SID_COOKIE, session_id, httponly=True, samesite="Lax")
+        return resp
+
+    @app.route("/tagrank/session/vote", methods=["POST"])
+    def tagrank_vote():
+        sid = _tagrank_sid()
+        choice = request.form.get("choice")
+        if sid and choice in ("left", "right"):
+            tagrank_client.submit_result(sid, choice)
+        if not sid:
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+        return render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(sid))
+
+    @app.route("/tagrank/session/undo", methods=["POST"])
+    def tagrank_undo():
+        sid = _tagrank_sid()
+        if sid:
+            tagrank_client.undo(sid)
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(sid))
+        return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+
+    @app.route("/tagrank/session/end", methods=["POST"])
+    def tagrank_end():
+        sid = _tagrank_sid()
+        if sid:
+            tagrank_client.end_session(sid)
+        resp = make_response(render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx()))
+        resp.set_cookie(_TAGRANK_SID_COOKIE, "", expires=0)
+        return resp
+
     # ---------------------------------------------------------------- API keys
 
     @app.route("/api-keys")
@@ -1622,6 +1746,7 @@ if HAVE_FLASK:
                 # Still exit even if the idle-stop failed (nothing left to shut down cleanly
                 # otherwise) - log it so a failed stop isn't silently lost.
                 logging.getLogger(__name__).exception("stop_idle_components failed during shutdown")
+            tagrank_client.stop_server()
             sys.stdout.flush()  # os._exit() skips normal interpreter cleanup, flush included
             os._exit(0)
 
@@ -1643,6 +1768,7 @@ if HAVE_FLASK:
                 services.stop_everything()
             except Exception:
                 logging.getLogger(__name__).exception("stop_everything failed during full shutdown")
+            tagrank_client.stop_server()
             sys.stdout.flush()
             os._exit(0)
 
