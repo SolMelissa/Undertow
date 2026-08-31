@@ -17,10 +17,11 @@ key, and your last picks are stored locally so you don't have to retype them
 next time - see `--reconfigure` to start over, or `--self-test` to preview the
 built-in fixture tags offline without connecting to Hydrus.
 
-Hard dependencies: requests and wordfreq. wordfreq drives name detection (a
-Zipf-frequency outlier heuristic, refined by a corpus-global positional-slot
-pass) and truncated-token detection (dictionary-membership on the trailing
-token of a block).
+Hard dependencies: requests and wordfreq. wordfreq drives truncated-token
+detection (dictionary-membership on the trailing token of a block). There is
+no name detection - it was tried and dropped as too heavy and unreliable for
+what it cost; names pass through the same content/attribute pipeline as any
+other word.
 """
 
 from __future__ import annotations
@@ -35,7 +36,6 @@ import random
 import re
 import sys
 import time
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -135,15 +135,11 @@ class Config:
         "reads", "spots", "parts", "gives", "takes", "gets", "after", "then",
         "rise", "delivers", "pours", "taps", "blows", "off", "them", "near", "during",
         "while", "across", "as",
-        # Common scene-description verbs. These matter beyond ordinary glue-dropping:
-        # once a name is confirmed, the parser grabs one adjacent CONTENT token as its
-        # partner word with no rarity check of its own (many real second-name-words -
-        # "star", "cruz", "baby" - are themselves common English words), so the verb
-        # that follows a name MUST be classified glue or it gets swept into the name.
+        # Common scene-description verbs.
         "tries", "poses", "shows", "strips", "rocks", "flaunt", "flaunts", "spreads",
         "spreading", "plays", "joins", "enjoys", "rides", "teases", "wears", "grabs",
         "loves", "wants", "rubs", "kisses", "strolls", "walks", "lingers", "sprints",
-        "climbs", "sits", "stands", "rests", "relax", "relaxes", "leans", "poses"})
+        "climbs", "sits", "stands", "rests", "relax", "relaxes", "leans"})
     attribute_lexicon: set = field(default_factory=lambda: {
         # neutral generics ONLY: colors, sizes, ages, materials, qualities. Deliberately
         # excludes any token in `always_split` below - reserved standalone words are
@@ -152,9 +148,7 @@ class Config:
         "small", "big", "large", "massive", "tall", "short", "long", "thin", "slim", "thick",
         "wide", "young", "old", "quiet", "rustic", "fresh", "steep", "cool", "warm",
         "soft", "rare", "full", "wet", "dry", "clean", "bright", "dark",
-        # Demographic/scene-descriptor adjectives that otherwise sit directly in front
-        # of a name and, if left uncategorized as "content", either get wrongly grabbed
-        # as part of the name or break the attribute-run that seeds the name slot.
+        # Demographic/scene-descriptor adjectives.
         "petite", "ebony", "american", "latina", "asian", "sexy", "hot", "chick",
         "cougar", "milf", "curvy", "busty", "naughty", "brunette", "redhead",
         "amateur", "real", "wild", "kinky", "angelic", "babe", "babes"})
@@ -172,27 +166,6 @@ class Config:
     # through to two standalone tags. Kept as an explicit allowlist rather than
     # generic noun-pair NLP, to stay high-precision.
     compound_noun_pairs: set = field(default_factory=lambda: {("first", "timer")})
-    proper_noun_min_words: int = 2
-    # Upper bound on a name-candidate's BEST-wordlist zipf score, checked only
-    # after the stricter "small" wordlist has already scored it 0.0 (fully
-    # unrecognized). Filters out the rare ordinary word the small wordlist
-    # happens to be missing (e.g. a body-part euphemism) that would otherwise
-    # slip through as a false-positive name - a genuine name never scores much
-    # above this even on the broader list, since it's still not real English.
-    wordfreq_min_zipf_for_tag: float = 2.8
-    known_names: set = field(default_factory=set)
-    # Unused since Phase 3 (name-block-first detection): a detected name is now
-    # emitted as a plain unqualified tag, not namespaced. Field kept only so a
-    # saved local config from an older version doesn't error on load.
-    name_namespace: str = "character"
-    # Corpus-global name inference: a token repeatedly seen in the name-shaped
-    # position (right after a leading attribute run, or at the very start of a
-    # block, and before a glue/verb word) across the whole batch is treated as
-    # a name even if it's also a common English word (e.g. "naomi", "jennifer")
-    # that a Zipf-frequency check alone would miss. This is the PRIMARY name
-    # detection signal - wordfreq rarity and known_names are secondary/tertiary.
-    corpus_global_name_pass: bool = True
-    corpus_name_min_occurrences: int = 3
     # \d+ year(s) old -> a single grouped token, with the following adjective
     # (if any) continuing as its own tag rather than being absorbed.
     age_pattern_enabled: bool = True
@@ -210,10 +183,7 @@ class Config:
     drop_resolution_like: bool = True
     # Tags that are a single word, or whose full raw text is shorter than this,
     # are never parsed at all - splitting a single word is meaningless, and a
-    # short tag is almost always already atomic. Skipping them outright (rather
-    # than running them through the pipeline and keeping them unchanged) also
-    # keeps their vocabulary out of the corpus-global name-inference pass,
-    # which otherwise gets noisier the more short/atomic tags feed into it.
+    # short tag is almost always already atomic.
     skip_single_word_tags: bool = True
     min_process_tag_length: int = 35
     batch_size: int = 512
@@ -271,14 +241,9 @@ class ParsedTag:
     namespace_stripped: str
     tags: List[str]
     dropped: List[str]
-    # Which of `tags` were produced by name-block detection specifically (see
-    # _carve_name_blocks), so a preview can call out what the parser thinks are
-    # names separately from ordinary content/attribute tags - deliberately not
-    # folded into `tags`' own dataclass since every name IS also in `tags`.
-    names: List[str] = field(default_factory=list)
     # Ordered (display_text, kind) pairs spanning the whole original tag -
     # namespace, number prefix, block separators, and every individual token
-    # tagged with its fate ("name", "attribute", "reserved", "content",
+    # tagged with its fate ("attribute", "reserved", "content",
     # "dropped_glue", "dropped_short", "dropped_resolution",
     # "dropped_truncation") - this is the "exploded view" the preview renders.
     exploded: List[Tuple[str, str]] = field(default_factory=list)
@@ -308,27 +273,19 @@ def strip_trailing_marker(tok: str) -> str:
     return m.group(1) if m else tok
 
 
-def _tokenize_block_for_names(block: str, cfg: Config) -> List[str]:
-    """Like the old tokenizer, but strips trailing (N)/-N filename artifacts per
-    word first, and keeps "," and "&" as their own standalone tokens (name-list
-    separators) instead of stripping them - both needed for name-block-first
-    detection, which runs on this token stream before anything else."""
+def _tokenize_block(block: str, cfg: Config) -> List[str]:
+    """Camel-case split, erase configured delimiters (plus "&", not always
+    present in a user's delimiter list) to spaces, then per-word cleanup:
+    strip a trailing filename artifact, then normalize."""
     block = split_camel_case(block)
     for delim in cfg.delimiters:
-        # "," is handled specially below (kept as its own name-list-separator
-        # token) rather than erased like the other secondary delimiters.
-        if delim == ",":
-            continue
         block = block.replace(delim, " ")
-    block = block.replace(",", " , ")
+    block = block.replace("&", " ")
 
     tokens: List[str] = []
     for raw in block.split(" "):
         raw = raw.strip()
         if not raw:
-            continue
-        if raw in (",", "&"):
-            tokens.append(raw)
             continue
         norm = normalize_token(strip_trailing_marker(raw))
         if norm:
@@ -337,12 +294,10 @@ def _tokenize_block_for_names(block: str, cfg: Config) -> List[str]:
 
 
 def _tokenize_raw_tag(raw_tag: str, cfg: Config) -> Tuple[str, List[List[str]], str, str]:
-    """Namespace-strip, block-split, and tokenize a raw tag - but don't drop or
-    classify anything yet, so name-block detection (which must run first, before
-    any other token handling) can still see every token, including glue/verb
-    words, short initials, and list separators. Also returns the stripped
-    namespace prefix and number prefix verbatim (e.g. "dir:", "12-") purely so
-    the exploded-view preview can show them as their own leading elements."""
+    """Namespace-strip, block-split, and tokenize a raw tag. Also returns the
+    stripped namespace prefix and number prefix verbatim (e.g. "dir:", "12-")
+    purely so the exploded-view preview can show them as their own leading
+    elements."""
     value = raw_tag
     prefix = f"{cfg.source_namespace}:"
     namespace_text = ""
@@ -359,16 +314,14 @@ def _tokenize_raw_tag(raw_tag: str, cfg: Config) -> Tuple[str, List[List[str]], 
             number_prefix_text = m.group(0)
         blocks[0] = strip_number_prefix(blocks[0])
 
-    return original_value, [_tokenize_block_for_names(block, cfg) for block in blocks], namespace_text, number_prefix_text
+    return original_value, [_tokenize_block(block, cfg) for block in blocks], namespace_text, number_prefix_text
 
 
 def _classify_token(tok: str, cfg: Config) -> str:
-    """One of "sep", "reserved", "glue", "attribute", or "content". Checked in
-    this order so a token can't be in both `always_split` and `attribute_lexicon`
+    """One of "reserved", "glue", "attribute", or "content". Checked in this
+    order so a token can't be in both `always_split` and `attribute_lexicon`
     (the always_split entries are meant to be removed from attribute_lexicon,
     but this keeps the classifier correct even if a caller forgets to)."""
-    if tok in (",", "&", "and"):
-        return "sep"
     if tok in cfg.always_split:
         return "reserved"
     if tok in cfg.function_words or tok in cfg.corpus_glue_words:
@@ -378,210 +331,15 @@ def _classify_token(tok: str, cfg: Config) -> str:
     return "content"
 
 
-def _find_name_shape_runs(tokens: List[str], categories: List[str]) -> List[List[int]]:
-    """The observed name pattern: a 1-2 token run of "content" tokens sitting
-    right after a run of "attribute" tokens, OR right at the start of the block
-    (the primary-keyword block itself may open directly with the name, with no
-    leading attribute). Returns each such run as a list of 1 or 2 token
-    indices, used both as a positional signal for name detection and to seed
-    the corpus-global bigram occurrence count."""
-    runs: List[List[int]] = []
-    n = len(tokens)
-
-    def add_run(start: int) -> int:
-        k = start
-        idxs: List[int] = []
-        while k < n and categories[k] == "content" and len(idxs) < 2:
-            idxs.append(k)
-            k += 1
-        if idxs:
-            runs.append(idxs)
-        return k
-
-    add_run(0)
-    i = 0
-    while i < n:
-        # A reserved token (e.g. "teen") plays the same descriptive-lead-in role as
-        # an attribute run for this purpose, even though it's never merged into a
-        # phrase with what follows - both seed the search for a following name.
-        if categories[i] not in ("attribute", "reserved"):
-            i += 1
-            continue
-        j = i
-        while j < n and categories[j] in ("attribute", "reserved"):
-            j += 1
-        k = add_run(j)
-        i = k if k > j else j + 1
-    return runs
-
-
-def _find_name_slot_indices(tokens: List[str], categories: List[str]) -> Set[int]:
-    slots: Set[int] = set()
-    for run in _find_name_shape_runs(tokens, categories):
-        slots.update(run)
-    return slots
-
-
-def compute_corpus_name_stats(per_block: List[Tuple[List[str], List[List[int]]]]) -> Tuple[Counter, Counter]:
-    """Counts (a) how often each token appears in the name-shaped positional
-    slot, and (b) how often each ADJACENT pair of slot tokens recurs together
-    as a bigram, across the whole batch - one (tokens, shape_runs) entry per
-    block of every raw tag in the batch. The bigram count is the real primary
-    signal: a genuine recurring name (the same two words, in that order, over
-    and over - the same person appearing in many photos) produces a strong
-    bigram signal that an incidental, unrelated pair of common words sharing
-    the slot position by coincidence essentially never will. A bare unigram
-    count is comparatively weak/noisy and is NOT used alone to confirm a name
-    - see _carve_name_blocks."""
-    unigram: Counter = Counter()
-    bigram: Counter = Counter()
-    for tokens, runs in per_block:
-        for run in runs:
-            unigram[tokens[run[0]]] += 1
-            if len(run) == 2:
-                unigram[tokens[run[1]]] += 1
-                bigram[(tokens[run[0]], tokens[run[1]])] += 1
-    return unigram, bigram
-
-
-def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: Set[int], is_last_block: bool,
-                        cfg: Config, corpus_bigram_counts: Counter,
-                        keyword_echo_words: Set[str] = frozenset()) -> Tuple[Dict[int, str], Set[int]]:
-    """Name detection, run FIRST, before any glue-dropping or phrase assembly.
-    Finds every name block in a token stream and returns {start_index: composed
-    name string} plus the full set of consumed token indices (including any
-    absorbed initial and consumed separator). `slot_indices` (attribute/reserved-
-    adjacent content runs) is NOT used to gate confirmation here - real captions
-    put common demographic filler words in that exact position too often for
-    position alone to be trustworthy (see corpus_glue_words/attribute_lexicon
-    docstrings). It's only used upstream to build corpus-global bigram stats.
-
-    A token is confirmed as (the anchor of) a name by any ONE of, independently:
-      (1) immediately preceded by an already-consumed separator (","/"&"/"and")
-          - another name in a list, no further check needed;
-      (2) known_names allowlist;
-      (3) corpus-global recurring bigram (this token + the next both show up
-          together at least corpus_name_min_occurrences times across the batch)
-          - catches common-word names wordfreq can't, IF they recur enough;
-      (4) wordfreq: the "small" wordlist doesn't recognize the word AT ALL
-          (zipf == 0.0) - i.e. it is, in the user's framing, "clearly not an
-          English word". This is deliberately the ONLY wordfreq-based trigger -
-          a looser "somewhat rare" threshold was tried and rejected: real
-          filler nouns (e.g. "reeds", "pines") score in the same range as real
-          but uncommon surnames, so anything looser produces false positives.
-          Excluded specifically at a block's trailing token, since that
-          position is ambiguous with a truncated filename fragment (also
-          zero-frequency) and is truncation's job to resolve instead.
-
-    Once an anchor is confirmed, exactly one ADJACENT content token is grabbed
-    as its partner with NO rarity check of its own - real second name-words are
-    often ordinary English words ("star", "cruz", "baby"). Forward is tried
-    first (matching "<name> <name> <verb>"); if the following token isn't
-    content (glue/attribute/reserved/end-of-block), backward is tried instead
-    (matching "<filler> <name> <name-anchor>"), as long as that token hasn't
-    already been consumed by an earlier run. A single-letter token immediately
-    after the run is absorbed as a trailing initial (e.g. "anna r")."""
-    n = len(tokens)
-    consumed: Set[int] = set()
-    name_by_start: Dict[int, str] = {}
-    def is_name_eligible(idx: int) -> bool:
-        # A resolution-like token ("1920x1080") is also "content" and also
-        # wordfreq-unrecognized, but it's a filename artifact, not a name -
-        # never eligible as an anchor or as a grabbed partner. Same for a word
-        # that also appears in block 0 (the directory/keyword segment): a
-        # keyword phrase repeated verbatim right before the name in the
-        # sentence (e.g. "... in yoga pants kayte ...") is a restated keyword,
-        # not part of the name, however name-shaped it looks in isolation.
-        return (categories[idx] == "content" and not RESOLUTION_RE.match(tokens[idx])
-                and tokens[idx] not in keyword_echo_words)
-
-    i = 0
-    while i < n:
-        if not is_name_eligible(i) or i in consumed:
-            i += 1
-            continue
-
-        tok = tokens[i]
-        preceded_by_sep = i > 0 and categories[i - 1] == "sep" and (i - 1) in consumed
-        next_is_content = i + 1 < n and is_name_eligible(i + 1)
-        tok2 = tokens[i + 1] if next_is_content else None
-        is_last_token_overall = is_last_block and i == n - 1
-        bigram_hit = (next_is_content and cfg.corpus_global_name_pass
-                      and corpus_bigram_counts.get((tok, tok2), 0) >= cfg.corpus_name_min_occurrences)
-
-        if preceded_by_sep or tok in cfg.known_names or bigram_hit:
-            confirmed = True
-        else:
-            zipf_small = zipf_frequency(tok, "en", wordlist="small")
-            unrecognized = zipf_small == 0.0 and not is_last_token_overall
-            confirmed = unrecognized and zipf_frequency(tok, "en") < cfg.wordfreq_min_zipf_for_tag
-
-        if not confirmed:
-            i += 1
-            continue
-
-        run = [i]
-        if next_is_content:
-            run.append(i + 1)
-        elif (not preceded_by_sep and i > 0 and is_name_eligible(i - 1)
-                and (i - 1) not in consumed):
-            run.insert(0, i - 1)
-
-        tail = run[-1]
-        if (tail + 1 < n and is_name_eligible(tail + 1)
-                and len(tokens[tail + 1]) == 1 and tokens[tail + 1].isalpha()):
-            run.append(tail + 1)
-            tail += 1
-
-        name_by_start[run[0]] = " ".join(tokens[k] for k in run)
-        consumed.update(run)
-
-        if tail + 1 < n and categories[tail + 1] == "sep":
-            consumed.add(tail + 1)
-            i = tail + 2
-            continue
-        i = tail + 1
-
-    return name_by_start, consumed
-
-
-def _collapse_names(tokens: List[str], categories: List[str],
-                     name_by_start: Dict[int, str], consumed: Set[int]) -> Tuple[List[str], List[str]]:
-    """Replaces each carved-out name span with a single atomic "name"-category
-    token (the composed name string) at the span's start position, and drops
-    any consumed continuation token or list separator. The rest of the token
-    stream keeps its original adjacency, so an attribute immediately before a
-    carved name still correctly sees it as a hard boundary (never merges)
-    rather than silently reaching past it to whatever comes after."""
-    merged_tokens: List[str] = []
-    merged_categories: List[str] = []
-    i = 0
-    n = len(tokens)
-    while i < n:
-        if i in name_by_start:
-            merged_tokens.append(name_by_start[i])
-            merged_categories.append("name")
-        elif i in consumed or categories[i] == "sep":
-            pass
-        else:
-            merged_tokens.append(tokens[i])
-            merged_categories.append(categories[i])
-        i += 1
-    return merged_tokens, merged_categories
-
-
 def _process_block(tokens: List[str], categories: List[str], is_last_block: bool,
                     cfg: Config) -> Tuple[List[str], List[str], List[Tuple[str, str]]]:
-    """Runs on the name-collapsed token stream: drop glue/junk, then assemble
-    phrases (reserved-standalone, age pattern, compound-noun pairs, attribute
-    stacking + noun merge). A "name" category token was already fully resolved
-    by _carve_name_blocks/_collapse_names, so it's never dropped, never merged
-    into an attribute phrase, and never subjected to the truncation rule.
-    Also returns a per-token trace, in original order, of (token, kind) for
-    every input token - the "kind" is exactly the drop-reason or category
-    decided below, used to render the exploded view. This intentionally
-    reflects each token's own fate, not the merged phrase it ends up part of,
-    matching the requested one-bracket-per-word exploded layout."""
+    """Drops glue/junk, then assembles phrases (reserved-standalone, age
+    pattern, compound-noun pairs, attribute stacking + noun merge). Also
+    returns a per-token trace, in original order, of (token, kind) for every
+    input token - the "kind" is exactly the drop-reason or category decided
+    below, used to render the exploded view. This intentionally reflects each
+    token's own fate, not the merged phrase it ends up part of, matching the
+    one-bracket-per-word exploded layout."""
     n = len(tokens)
     dropped: List[str] = []
     trace: List[Tuple[str, str]] = []
@@ -589,11 +347,6 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
     candidates: List[str] = []
     candidate_idx: List[int] = []
     for i, tok in enumerate(tokens):
-        if categories[i] == "name":
-            candidates.append(tok)
-            candidate_idx.append(i)
-            trace.append((tok, "name"))
-            continue
         if len(tok) < cfg.min_token_len:
             dropped.append(tok)
             trace.append((tok, "dropped_short"))
@@ -636,7 +389,7 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
         orig_idx = candidate_idx[i]
         cat = categories[orig_idx]
 
-        if cat in ("reserved", "name"):
+        if cat == "reserved":
             kept.append(tok)
             i += 1
             continue
@@ -647,7 +400,7 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
             i += 3
             continue
 
-        if (i + 1 < len(candidates) and categories[candidate_idx[i + 1]] not in ("reserved", "name")
+        if (i + 1 < len(candidates) and categories[candidate_idx[i + 1]] != "reserved"
                 and (tok, candidates[i + 1]) in cfg.compound_noun_pairs):
             kept.append(f"{tok} {candidates[i + 1]}")
             i += 2
@@ -661,7 +414,7 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
                     run.append(candidates[j])
                     j += 1
             if (j < len(candidates) and candidates[j] not in cfg.no_merge_target_nouns
-                    and categories[candidate_idx[j]] not in ("reserved", "name")):
+                    and categories[candidate_idx[j]] != "reserved"):
                 run.append(candidates[j])
                 kept.append(" ".join(run))
                 i = j + 1
@@ -681,8 +434,7 @@ def _process_block(tokens: List[str], categories: List[str], is_last_block: bool
 def _should_skip_processing(raw_tag: str, cfg: Config) -> bool:
     """A tag is left completely unparsed when it's a single word, or its full
     raw text is shorter than cfg.min_process_tag_length - splitting either is
-    pointless work, and skipping them also keeps their vocabulary out of the
-    corpus-global name-inference pass (see Config.skip_single_word_tags)."""
+    pointless work (see Config.skip_single_word_tags)."""
     if not cfg.skip_single_word_tags:
         return False
     value = raw_tag
@@ -697,76 +449,39 @@ def _should_skip_processing(raw_tag: str, cfg: Config) -> bool:
 
 
 def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag]:
-    """Parse a batch of raw namespaced tags together, so corpus-global name
-    inference (which needs to see the whole batch) can actually run. Name
-    detection happens first, per block, before glue-dropping or phrase
-    assembly - see _carve_name_blocks. Tags matching _should_skip_processing
-    are excluded from tokenization/corpus stats entirely and passed through
-    unchanged, in place, so batch order is preserved."""
-    skip_flags = [_should_skip_processing(raw_tag, cfg) for raw_tag in raw_tags]
-    process_indices = [i for i, skip in enumerate(skip_flags) if not skip]
-    to_process = [raw_tags[i] for i in process_indices]
+    """Parse a batch of raw namespaced tags. Tags matching _should_skip_processing
+    are passed through unchanged, in place, so batch order is preserved."""
+    results: List[ParsedTag] = []
+    for raw_tag in raw_tags:
+        if _should_skip_processing(raw_tag, cfg):
+            value = raw_tag
+            prefix = f"{cfg.source_namespace}:"
+            if value.startswith(prefix):
+                value = value[len(prefix):]
+            if cfg.strip_leading_number_prefix:
+                block0, _, rest = value.partition(cfg.primary_delimiter)
+                value = strip_number_prefix(block0) + (cfg.primary_delimiter + rest if rest else "")
+            results.append(ParsedTag(
+                original=raw_tag, namespace_stripped=value,
+                tags=[value] if value else [], dropped=[],
+                exploded=[(raw_tag, "skipped")], skipped=True,
+            ))
+            continue
 
-    tokenized = [(raw_tag,) + _tokenize_raw_tag(raw_tag, cfg) for raw_tag in to_process]
-
-    per_block_categories: List[List[List[str]]] = []
-    per_block_runs: List[List[List[List[int]]]] = []
-    per_block_slots: List[List[Set[int]]] = []
-    for _, _, blocks_tokens, _, _ in tokenized:
-        cats_for_file = [[_classify_token(t, cfg) for t in tokens] for tokens in blocks_tokens]
-        runs_for_file = [_find_name_shape_runs(tokens, cats)
-                          for tokens, cats in zip(blocks_tokens, cats_for_file)]
-        slots_for_file = [{i for run in runs for i in run} for runs in runs_for_file]
-        per_block_categories.append(cats_for_file)
-        per_block_runs.append(runs_for_file)
-        per_block_slots.append(slots_for_file)
-
-    corpus_bigram_counts: Counter = Counter()
-    if cfg.corpus_global_name_pass:
-        # Block 0 (the directory/keyword segment, when multi-block) is excluded
-        # here too - the same folder keyword phrase repeating across every file
-        # from that folder would otherwise trip the bigram-recurrence threshold
-        # on its own and get mistaken for a recurring name.
-        flat = [(tokens, runs)
-                for (_, _, blocks_tokens, _, _), runs_for_file in zip(tokenized, per_block_runs)
-                for block_idx, (tokens, runs) in enumerate(zip(blocks_tokens, runs_for_file))
-                if not (block_idx == 0 and len(blocks_tokens) > 1)]
-        _, corpus_bigram_counts = compute_corpus_name_stats(flat)
-
-    processed_results: List[ParsedTag] = []
-    for (raw_tag, original_value, blocks_tokens, namespace_text, number_prefix_text), cats_for_file, slots_for_file in zip(
-            tokenized, per_block_categories, per_block_slots):
+        original_value, blocks_tokens, namespace_text, number_prefix_text = _tokenize_raw_tag(raw_tag, cfg)
         dropped: List[str] = []
         kept_tags: List[str] = []
-        name_tags: List[str] = []
         exploded: List[Tuple[str, str]] = []
         if namespace_text:
             exploded.append((namespace_text, "namespace"))
         if number_prefix_text:
             exploded.append((number_prefix_text, "number"))
-        for block_idx, (tokens, categories, slots) in enumerate(zip(blocks_tokens, cats_for_file, slots_for_file)):
+        for block_idx, tokens in enumerate(blocks_tokens):
             is_last_block = block_idx == len(blocks_tokens) - 1
             if block_idx > 0:
                 exploded.append((cfg.primary_delimiter.strip(), "structure"))
-            # Block 0 is the directory/keyword segment when there's more than one
-            # block (e.g. "yoga pants" in "dir:yoga pants - hot babe in yoga
-            # pants kayte..."), never the descriptive sentence a name lives in -
-            # never search it for names. When a tag has only one block, that
-            # block IS the whole sentence, so it's still searched normally.
-            if block_idx == 0 and len(blocks_tokens) > 1:
-                name_by_start, consumed = {}, set()
-            else:
-                # Only exclude a MULTI-word block-0 phrase ("yoga pants") as a
-                # keyword restatement - a single-word block 0 is just as likely
-                # to be a folder literally named after the person ("madelyn"),
-                # which must NOT disqualify their own name from being detected.
-                keyword_echo = (set(blocks_tokens[0]) if len(blocks_tokens) > 1
-                                 and len(blocks_tokens[0]) > 1 else set())
-                name_by_start, consumed = _carve_name_blocks(tokens, categories, slots, is_last_block,
-                                                               cfg, corpus_bigram_counts, keyword_echo)
-            name_tags.extend(name_by_start.values())
-            merged_tokens, merged_categories = _collapse_names(tokens, categories, name_by_start, consumed)
-            kept, blk_dropped, blk_trace = _process_block(merged_tokens, merged_categories, is_last_block, cfg)
+            categories = [_classify_token(t, cfg) for t in tokens]
+            kept, blk_dropped, blk_trace = _process_block(tokens, categories, is_last_block, cfg)
             kept_tags.extend(kept)
             dropped.extend(blk_dropped)
             exploded.extend(blk_trace)
@@ -778,34 +493,14 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag
                 seen.add(t)
                 deduped.append(t)
 
-        processed_results.append(ParsedTag(original=raw_tag, namespace_stripped=original_value,
-                                            tags=deduped, dropped=dropped, names=name_tags,
-                                            exploded=exploded))
-
-    results: List[Optional[ParsedTag]] = [None] * len(raw_tags)
-    for i, parsed in zip(process_indices, processed_results):
-        results[i] = parsed
-    for i, raw_tag in enumerate(raw_tags):
-        if results[i] is None:
-            value = raw_tag
-            prefix = f"{cfg.source_namespace}:"
-            if value.startswith(prefix):
-                value = value[len(prefix):]
-            if cfg.strip_leading_number_prefix:
-                block0, _, rest = value.partition(cfg.primary_delimiter)
-                value = strip_number_prefix(block0) + (cfg.primary_delimiter + rest if rest else "")
-            results[i] = ParsedTag(
-                original=raw_tag, namespace_stripped=value,
-                tags=[value] if value else [], dropped=[], names=[],
-                exploded=[(raw_tag, "skipped")], skipped=True,
-            )
-    return results  # type: ignore[return-value]
+        results.append(ParsedTag(original=raw_tag, namespace_stripped=original_value,
+                                  tags=deduped, dropped=dropped, exploded=exploded))
+    return results
 
 
 def parse_filename_tag(raw_tag: str, cfg: Config) -> ParsedTag:
     """Parse a single raw namespaced tag (e.g. 'dir:12-sunset hike - ...'). Thin
-    wrapper around parse_filename_tag_batch for single-item callers; corpus-global
-    name inference only has one item to look at in this shape."""
+    wrapper around parse_filename_tag_batch for single-item callers."""
     return parse_filename_tag_batch([raw_tag], cfg)[0]
 
 
@@ -975,7 +670,7 @@ PREVIEW_INLINE_LIMIT = 40
 # kind -> rich style, for the colored terminal exploded view. Every element of
 # ParsedTag.exploded is rendered as one bracketed "[text]" chip in this style,
 # so the sequence reads as an exploded view of exactly what happened to the
-# tag, word by word: [dir:][12-][DROP:watches][tag][NAME:paige owens][tag]...
+# tag, word by word: [dir:][12-][DROP:watches][tag][tag]...
 KIND_STYLES_RICH = {
     "namespace": "bold cyan",
     "number": "dim white",
@@ -986,7 +681,6 @@ KIND_STYLES_RICH = {
     "reserved": "bold yellow",
     "attribute": "cyan",
     "content": "green",
-    "name": "bold magenta",
     "skipped": "italic dim",
 }
 
@@ -1001,7 +695,6 @@ KIND_PLAIN_LABEL = {
     "dropped_truncation": "DROP",
     "reserved": "RES",
     "attribute": "ATTR",
-    "name": "NAME",
     "skipped": "SKIP",
 }
 
@@ -1037,7 +730,7 @@ _console = Console()
 def _render_tag_section(idx: int, total: int, label: str, entry: ParsedTag) -> None:
     """Prints one tag-centered section: the full original tag, then its
     exploded view (colored/struck/bold to show what the parser did to it),
-    then the NAMES/OUT/DROPPED summary lines."""
+    then the OUT/DROPPED summary lines."""
     _console.print(f"===== Tag {idx}/{total} - {label} =====", style="bold")
     if entry.skipped:
         _console.print(f"  TAG: {entry.original}")
@@ -1047,10 +740,8 @@ def _render_tag_section(idx: int, total: int, label: str, entry: ParsedTag) -> N
         return
     _console.print(f"  TAG: {entry.original}")
     _console.print("  ", render_exploded_rich(entry.exploded), sep="")
-    names_str = ", ".join(entry.names) if entry.names else "(none detected)"
     out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
     dropped_str = ", ".join(entry.dropped) if entry.dropped else "-"
-    _console.print(f"  >>> NAMES: {names_str}", style="magenta")
     _console.print(f"  OUT:     {out_str}")
     _console.print(f"  DROPPED: {dropped_str}")
     _console.print()
@@ -1065,10 +756,8 @@ def _render_tag_section_plain(idx: int, total: int, label: str, entry: ParsedTag
         return lines
     lines.append(f"  TAG: {entry.original}")
     lines.append(f"  {render_exploded_plain(entry.exploded)}")
-    names_str = ", ".join(entry.names) if entry.names else "(none detected)"
     out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
     dropped_str = ", ".join(entry.dropped) if entry.dropped else "-"
-    lines.append(f"  >>> NAMES: {names_str}")
     lines.append(f"  OUT:     {out_str}")
     lines.append(f"  DROPPED: {dropped_str}")
     lines.append("")
@@ -1135,7 +824,6 @@ _HTML_STYLE = """
   .summary .stat .label { font-size: 12px; color: #7a8190; margin-top: 4px; }
   .summary .stat.keep .num { color: #1e7a5e; }
   .summary .stat.drop .num { color: #a6433a; }
-  .summary .stat.names .num { color: #8a4fc9; }
   .files { display: flex; flex-direction: column; gap: 18px; margin-top: 32px; }
   .file-card { background: #fff; border: 1px solid #dde1e6; border-radius: 12px; padding: 18px 20px 20px; }
   .file-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -1152,17 +840,11 @@ _HTML_STYLE = """
   .tagblock__label { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
   .tagblock--keep .tagblock__label { color: #1e7a5e; }
   .tagblock--drop .tagblock__label { color: #a6433a; }
-  .namesblock { border-radius: 8px; padding: 10px 12px 12px; border: 2px solid #c9a6f5;
-                background: #f3ebfd; margin-bottom: 12px; }
-  .namesblock.namesblock--empty { border-style: dashed; border-color: #d8c6ee; background: #faf7fe; }
-  .namesblock__label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-                        color: #6a2fb0; margin-bottom: 8px; }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
   .chips li { font-family: Consolas, monospace; font-size: 12px; padding: 3px 8px; border-radius: 5px;
               background: #fff; border: 1px solid #bee3d3; color: #14171c; }
   .chips--drop li { border-color: #f0c7c1; color: #7a8190; text-decoration: line-through; text-decoration-color: #a6433a; }
-  .chips--names li { border-color: #c9a6f5; color: #4a1f80; font-weight: 600; }
-  .chips li.empty, .chips--drop li.empty, .chips--names li.empty { text-decoration: none; font-style: italic; color: #7a8190; border-style: dashed; }
+  .chips li.empty, .chips--drop li.empty { text-decoration: none; font-style: italic; color: #7a8190; border-style: dashed; }
   .exploded { font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 2.1;
               background: #14171c; border-radius: 8px; padding: 12px 14px; margin: 0 0 14px;
               word-break: break-word; }
@@ -1175,7 +857,6 @@ _HTML_STYLE = """
   .expl-reserved { color: #facc15; font-weight: 700; }
   .expl-attribute { color: #67e8f9; }
   .expl-content { color: #86efac; }
-  .expl-name { color: #e879f9; font-weight: 700; }
   .expl-skipped { color: #9ca3af; font-style: italic; }
   .skipnote { font-size: 12.5px; color: #7a8190; font-style: italic; margin: 0 0 14px; }
   footer.note { margin-top: 36px; font-size: 12.5px; color: #7a8190; border-top: 1px solid #dde1e6; padding-top: 14px; }
@@ -1193,7 +874,6 @@ _HTML_KIND_CSS = {
     "reserved": "expl-reserved",
     "attribute": "expl-attribute",
     "content": "expl-content",
-    "name": "expl-name",
     "skipped": "expl-skipped",
 }
 
@@ -1222,9 +902,7 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
     total_entries = len(flat)
     total_kept = sum(len(e.tags) for _, e in flat)
     total_dropped = sum(len(e.dropped) for _, e in flat)
-    total_names = sum(len(e.names) for _, e in flat)
     total_skipped = len(all_flat) - len(flat)
-    entries_with_no_names = sum(1 for _, e in flat if not e.names)
 
     def chips(items: List[str], empty_label: str, css_class: str = "") -> str:
         cls = f"chips {css_class}".strip()
@@ -1237,7 +915,6 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
     # of exactly what the parser decided about every word in it.
     cards: List[str] = []
     for idx, (label, entry) in enumerate(flat, start=1):
-        names_empty = "" if entry.names else " namesblock--empty"
         cards.append(f"""
     <section class="file-card">
       <div class="file-card__head">
@@ -1245,10 +922,6 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
         <h2 class="file-card__title">{html.escape(entry.original)}</h2>
       </div>
       <div class="exploded">{_render_exploded_html(entry.exploded)}</div>
-      <div class="namesblock{names_empty}">
-        <div class="namesblock__label">Detected names &mdash; {len(entry.names)}</div>
-        {chips(entry.names, "(none detected)", "chips--names")}
-      </div>
       <div class="file-card__body">
         <div class="tagblock tagblock--keep">
           <div class="tagblock__label">Kept &mdash; {len(entry.tags)} tag(s)</div>
@@ -1277,10 +950,8 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
     <div class="summary">
       <div class="stat"><div class="num">{total_files}</div><div class="label">files</div></div>
       <div class="stat"><div class="num">{total_entries}</div><div class="label">tags processed</div></div>
-      <div class="stat names"><div class="num">{total_names}</div><div class="label">names detected</div></div>
       <div class="stat keep"><div class="num">{total_kept}</div><div class="label">tags kept</div></div>
       <div class="stat drop"><div class="num">{total_dropped}</div><div class="label">tokens dropped</div></div>
-      <div class="stat drop"><div class="num">{entries_with_no_names}</div><div class="label">tag(s) with no name detected</div></div>
       <div class="stat"><div class="num">{total_skipped}</div><div class="label">tag(s) skipped (short/single-word)</div></div>
     </div>
   </header>
@@ -1324,37 +995,6 @@ FIXTURES = [
     "dir:76-study break - reader browses a tall shelf inside the librar",
     "dir:79-project notes - focused engineer reviews a long report marked deepl",
     "dir:82-camera roll - wide landscape shows a bright field at 1920x1080 b",
-    # -- Phase 3 regression fixtures: name-block-first detection, plain (un-
-    # namespaced) name tags, comma/"&" multi-name lists, single-letter initial
-    # absorption, trailing (N)/-N marker stripping. --
-    "dir:85-beach day - paige owens poses by an old fence in soft light",
-    "dir:88-rooftop scene - scarlett pain leans against a bright wall near quiet steps",
-    "dir:91-cafe visit - madison mia relaxes on a warm bench by tall trees",
-    "dir:94-studio light - alli rae walks past a rustic gate under bright sky",
-    "dir:97-harbor walk - sabrina fox(1) sits near a quiet pier under warm sun",
-    "dir:100-spring outing - anna r stands by an old wall in soft shade",
-    "dir:103-orchard visit - milana k rests on a warm step near tall grass",
-    "dir:106-canyon trip - zuzana d walks along a quiet path under bright trees",
-    "dir:109-vineyard tour - chloe lacourt, vanessa staylon pose by a quiet fountain",
-    "dir:112-plaza stroll - lolli moon & jennifer clark relax near a bright pool",
-    # A genuinely foreign/unique name wordfreq has never heard of (zipf 0.0)
-    # and that will never recur in this corpus - must still be caught on the
-    # strength of position alone, with zero corpus/known-list support.
-    "dir:115-lake shoot - young zhulinskaya wozniaczek walks by an old dock in soft light",
-    # -- Real-world-shaped regression fixtures: position-independent wordfreq
-    # name detection (no attribute-adjacency required), forward/backward
-    # partner-grab with no rarity check on the partner, the block-0-keyword-
-    # phrase exclusion (and its single-word carve-out for a folder literally
-    # named after the person), the best-wordlist upper bound that rejects an
-    # ordinary word the small wordlist happens to miss, and "and" as a name-
-    # list separator alongside ","/"&". --
-    "dir:1-blonde - blonde babe lily rader takes a load",
-    "dir:yoga pants - cougar darryl hanah tries baseball",
-    "dir:1-blonde - sexy blonde chick katerina konec rocks her nice melons in the kitchen",
-    "dir:1-lily - lilian lee poses in the garden",
-    "dir:yoga pants - hot babe in yoga pants kayte strips wallpaper",
-    "dir:1-babes - babes jeny baby and carmen flaunt their wealth",
-    "dir:1-madelyn - madelyn walks alone in the rain",
     # -- Skip-filter fixtures: a single-word tag and a short multi-word tag
     # (under Config.min_process_tag_length) must never be parsed at all - both
     # come back as one unchanged tag, with an "exploded" trace of just one
@@ -1365,16 +1005,6 @@ FIXTURES = [
 
 
 def run_self_test(cfg: Config) -> None:
-    # Offline demo only: seed known_names with the fixtures' common-word given/
-    # family names above, since a tiny 25-ish-fixture corpus can't realistically
-    # repeat every one of them 3x for the corpus-global pass to kick in on its
-    # own (the corpus-global path is still proven separately below, via "grace
-    # hall" - a name deliberately NOT in this list, repeated across 3 fixtures).
-    cfg.known_names |= {
-        "paige", "owens", "scarlett", "pain", "madison", "mia", "alli", "rae", "anna",
-        "sabrina", "fox", "chloe", "lacourt", "vanessa", "staylon", "moon", "jennifer", "clark",
-    }
-
     previews = [FilePreview(label=f"fixture {i}", entries=[parsed])
                 for i, parsed in enumerate(parse_filename_tag_batch(FIXTURES, cfg), start=1)]
     print_preview_table(previews)
@@ -1408,40 +1038,10 @@ def run_self_test(cfg: Config) -> None:
          not any(t in ("sto", "swe", "librar", "deepl") for t in all_tags)
          and all(frag in all_dropped for frag in ("sto", "swe", "librar", "deepl"))),
         ("Single-char remnant 'b' dropped", "b" not in all_tags and "b" in all_dropped),
-        ("Corpus-global-only name pass catches a common word not in known_names",
-         "grace hall" in all_tags),
-        ("known_names-anchored plain names each produce ONE tag, no split words",
-         all(name in all_tags for name in ("paige owens", "scarlett pain", "madison mia", "alli rae"))),
-        ("Trailing (N) marker stripped cleanly - 'sabrina fox', not 'fox1'",
-         "sabrina fox" in all_tags and "fox1" not in all_tags and "fox" not in all_tags),
-        ("Single-letter initials absorbed, never dropped",
-         all(name in all_tags for name in ("anna r", "milana k", "zuzana d"))
-         and not any(t in ("r", "k", "d") for t in all_tags)),
-        ("Comma-separated name list splits into two separate plain tags",
-         "chloe lacourt" in all_tags and "vanessa staylon" in all_tags),
-        ("'&'-separated name list splits into two separate plain tags",
-         "lolli moon" in all_tags and "jennifer clark" in all_tags),
-        ("Zero-frequency (fully unrecognized) name caught by position alone, "
-         "with no corpus recurrence or known_names support",
-         "zhulinskaya wozniaczek" in all_tags),
         ("Single-word tag is skipped entirely, kept unchanged",
          previews[-2].entries[0].skipped and previews[-2].entries[0].tags == ["mountain"]),
         ("Short (<35 char) multi-word tag is skipped entirely, kept unchanged",
          previews[-1].entries[0].skipped and previews[-1].entries[0].tags == ["old barn"]),
-        ("Name caught with no attribute immediately before it ('babe' isn't in "
-         "attribute_lexicon) via backward partner-grab", "lily rader" in all_tags),
-        ("Name caught via forward partner-grab when the anchor is the FIRST word",
-         "darryl hanah" in all_tags),
-        ("A real word the small wordlist happens to miss ('melons') is NOT "
-         "grabbed as a false-positive name partner", "nice melons" not in all_tags
-         and "katerina konec" in all_tags),
-        ("Directory keyword phrase ('yoga pants', restated in the sentence) is "
-         "excluded from name detection - only 'kayte' is caught, not 'pants kayte'",
-         "kayte" in all_tags and "pants kayte" not in all_tags),
-        ("A single-word directory name matching the person's own name does NOT "
-         "block their name from being detected", "madelyn" in all_tags),
-        ("'and' works as a name-list separator alongside ','/'&'",
-         "jeny baby" in all_tags and "carmen" in all_tags),
     ]
     print("\nRegression checks:")
     for label, passed in checks:
@@ -1508,14 +1108,6 @@ def prompt_choice(label: str, options: List[Tuple[str, str]], default_key: Optio
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return options[int(raw) - 1][1]
         print("  Not a valid choice, try again.")
-
-
-def prompt_name_list(label: str, default: List[str]) -> List[str]:
-    default_str = ", ".join(default) if default else "(none)"
-    raw = input(f"{label} (comma-separated) [{default_str}]: ").strip()
-    if not raw:
-        return default
-    return [part.strip().lower() for part in raw.split(",") if part.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -1619,18 +1211,15 @@ def wizard_pick_services(client: HydrusClient, saved: dict) -> ServiceSelection:
 def wizard_build_config(saved: dict) -> Config:
     print()
     source_namespace = prompt_text("Namespace holding the raw filename tags", default=saved.get("source_namespace", "dir"))
-    known_names = prompt_name_list("Extra known name tokens to always tag as character:", default=saved.get("known_names", []))
     drop_truncation = prompt_yes_no("Drop suspected truncated trailing tokens (short consonant-only remnants)?",
                                      default=saved.get("drop_suspected_truncation", True))
 
     save_local_config({
         "source_namespace": source_namespace,
-        "known_names": known_names,
         "drop_suspected_truncation": drop_truncation,
     })
 
     cfg = Config(source_namespace=source_namespace, drop_suspected_truncation=drop_truncation)
-    cfg.known_names |= set(known_names)
     cfg.target_tag_wildcards = [f"{source_namespace}:*"]
     return cfg
 
