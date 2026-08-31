@@ -15,7 +15,12 @@
 </div>
 {% endif %}
 <div class="kawaii-card">
-  <pre id="script-term" style="margin:0; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-family:'Consolas','Courier New',monospace; font-size:12px; background:#0d0f12; color:#c9f7c9; border-radius:8px; padding:0.75rem;">Pick a script above to run it.</pre>
+  <pre id="script-term" style="margin:0 0 0.5rem; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-family:'Consolas','Courier New',monospace; font-size:12px; background:#0d0f12; color:#c9f7c9; border-radius:8px; padding:0.75rem;">Pick a script above to run it.</pre>
+  <form onsubmit="return sendScriptInput(event)" style="display:flex; gap:0.5rem;">
+    <input type="text" id="script-input" placeholder="Type a response and press Enter&hellip;" disabled
+           style="flex:1; font-family:'Consolas','Courier New',monospace; font-size:12px; padding:0.4rem 0.6rem; border-radius:6px; border:1px solid var(--k-border, #ccc); background:#0d0f12; color:#c9f7c9;">
+    <button type="submit" class="kawaii-btn" id="script-input-send" disabled>Send</button>
+  </form>
 </div>
 
 <script>
@@ -26,11 +31,13 @@
   window.scriptOffset = null;
   window.scriptRunning = null;
   window.scriptPollTimer = null;
+  window.scriptCompletedText = '';
 
   window.runScript = async function (name) {
     const term = document.getElementById('script-term');
     term.textContent = '';
     window.scriptOffset = null;
+    window.scriptCompletedText = '';
     window.scriptRunning = name;
     document.querySelectorAll('[id^="script-pill-"]').forEach(function (btn) { btn.disabled = true; });
     try {
@@ -41,7 +48,28 @@
       document.querySelectorAll('[id^="script-pill-"]').forEach(function (btn) { btn.disabled = false; });
       return;
     }
+    document.getElementById('script-input').disabled = false;
+    document.getElementById('script-input-send').disabled = false;
     pollScriptOutput();
+  };
+
+  window.sendScriptInput = function (evt) {
+    evt.preventDefault();
+    const name = window.scriptRunning;
+    const input = document.getElementById('script-input');
+    if (!name || !input.value) return false;
+    const text = input.value;
+    input.value = '';
+    window.scriptCompletedText += '> ' + text + '\n';
+    const term = document.getElementById('script-term');
+    term.textContent = window.scriptCompletedText;
+    term.scrollTop = term.scrollHeight;
+    fetch('/scripts/input/' + encodeURIComponent(name), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'text=' + encodeURIComponent(text),
+    });
+    return false;
   };
 
   async function pollScriptOutput() {
@@ -57,21 +85,27 @@
       window.scriptOffset = d.offset;
       const term = document.getElementById('script-term');
       if (d.lines && d.lines.length) {
-        const atBottom = term.scrollTop + term.clientHeight >= term.scrollHeight - 10;
-        term.textContent += d.lines.join('\n') + '\n';
-        if (atBottom) term.scrollTop = term.scrollHeight;
+        window.scriptCompletedText += d.lines.join('\n') + '\n';
       }
+      const atBottom = term.scrollTop + term.clientHeight >= term.scrollHeight - 10;
+      // The partial (a prompt like input()'s that hasn't hit a newline yet) is always
+      // re-sent in full and re-rendered on top of the stable text, never appended - see
+      // ScriptRun.partial in scripts_runner.py.
+      term.textContent = window.scriptCompletedText + (d.partial || '');
+      if (atBottom) term.scrollTop = term.scrollHeight;
       if (!d.running) {
-        const term2 = document.getElementById('script-term');
-        term2.textContent += '\n[exited ' + (d.returncode === null ? '?' : d.returncode) + ']\n';
+        window.scriptCompletedText = term.textContent + '\n[exited ' + (d.returncode === null ? '?' : d.returncode) + ']\n';
+        term.textContent = window.scriptCompletedText;
         window.scriptRunning = null;
         document.querySelectorAll('[id^="script-pill-"]').forEach(function (btn) { btn.disabled = false; });
+        document.getElementById('script-input').disabled = true;
+        document.getElementById('script-input-send').disabled = true;
         return;
       }
     } catch (e) {
       // transient fetch error - keep polling
     }
-    window.scriptPollTimer = setTimeout(pollScriptOutput, 800);
+    window.scriptPollTimer = setTimeout(pollScriptOutput, 400);
   }
 })();
 </script>
