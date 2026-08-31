@@ -8,9 +8,11 @@ Hydrus via its Client API.
 
 Run it with no arguments and it walks you through a wizard: enter (or reuse a
 saved) Hydrus Client API URL and key, pick a file domain and tag service from
-the live list Hydrus reports, then it fetches your real tags, shows the full
-IN/OUT/DROPPED preview, and asks for confirmation before writing anything -
-there's no separate preview/dry-run/apply menu to pick from first. The URL,
+the live list Hydrus reports, then it dry-runs a small random sample of your
+real files first, shows the IN/OUT/DROPPED preview for just that sample, and
+asks for confirmation before it touches the rest - there's no separate
+preview/dry-run/apply menu to pick from first, and no second confirmation once
+the sample is approved: it goes straight on to the full library. The URL,
 key, and your last picks are stored locally so you don't have to retype them
 next time - see `--reconfigure` to start over, or `--self-test` to preview the
 built-in fixture tags offline without connecting to Hydrus.
@@ -25,6 +27,7 @@ import argparse
 import getpass
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -668,6 +671,30 @@ def wizard_build_config(saved: dict) -> Config:
     return cfg
 
 
+DRY_RUN_SAMPLE_SIZE = 25
+
+
+def _build_plan(metadata: Dict[int, List[str]], cfg: Config) -> Tuple[Dict[int, Tuple[List[str], List[str]]], List[ParsedTag]]:
+    """Turns raw {file_id: [current tags]} metadata into a write plan (fid -> (tags_to_add,
+    tags_to_delete)) plus the flat list of parsed tags, for previewing or applying."""
+    plan: Dict[int, Tuple[List[str], List[str]]] = {}
+    previews: List[ParsedTag] = []
+    for fid, current_tags in metadata.items():
+        for raw_tag in current_tags:
+            if not raw_tag.startswith(f"{cfg.source_namespace}:"):
+                continue
+            parsed = parse_filename_tag(raw_tag, cfg)
+            previews.append(parsed)
+            to_add, to_delete = plan.setdefault(fid, ([], []))
+            to_add.extend(t for t in parsed.tags if t not in to_add)
+            to_delete.append(raw_tag)
+    return plan, previews
+
+
+def _chunked(seq: List[int], size: int) -> List[List[int]]:
+    return [seq[start:start + size] for start in range(0, len(seq), size)]
+
+
 def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: ServiceSelection) -> int:
     same_service = services.source_tag_service_key == services.dest_tag_service_key
 
@@ -681,12 +708,41 @@ def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: ServiceS
     if not file_ids:
         return 0
 
-    print(f"Fetching tag data from {services.source_tag_service_name!r} "
-          f"(in batches of 256, this is the slow part on a large library)...")
+    # Dry run: preview a small random sample first rather than fetching/parsing the whole
+    # (possibly 100k+ file) library up front, so a bad config choice is caught in seconds
+    # instead of after minutes of fetching.
+    sample_size = min(DRY_RUN_SAMPLE_SIZE, len(file_ids))
+    sample_ids = random.sample(file_ids, sample_size)
+    print(f"\nDry run: fetching a random sample of {sample_size} file(s) to preview before touching "
+          f"the full library...")
+    try:
+        sample_metadata = client.fetch_metadata(sample_ids, services.source_tag_service_key,
+                                                  chunk_size=cfg.batch_size)
+    except (requests.RequestException, RuntimeError, ValueError) as exc:
+        print(f"Could not reach Hydrus while fetching sample tags: {exc}", file=sys.stderr)
+        return 1
+
+    _, sample_previews = _build_plan(sample_metadata, cfg)
+    if not sample_previews:
+        print(f"None of the {sample_size} sampled file(s) had a {cfg.source_namespace!r}-namespaced tag. "
+              "Nothing to preview.")
+        return 0
+
+    print_preview_table(sample_previews)
+
+    if not prompt_yes_no(
+            f"\nAbove is a preview of {sample_size} randomly-sampled file(s) out of {len(file_ids):,} "
+            f"found. Does this look right? Proceed to run on the full {len(file_ids):,} file(s)?",
+            default=False):
+        print("Aborted, no changes written.")
+        return 0
+
+    print(f"\nFetching tag data from {services.source_tag_service_name!r} for all {len(file_ids):,} "
+          f"file(s) (in batches of {cfg.batch_size}, this is the slow part on a large library)...")
     fetch_progress = ProgressPrinter("Fetching tags", len(file_ids))
     try:
         metadata = client.fetch_metadata(
-            file_ids, services.source_tag_service_key,
+            file_ids, services.source_tag_service_key, chunk_size=cfg.batch_size,
             on_progress=lambda done, total: fetch_progress.update(done),
         )
     except (requests.RequestException, RuntimeError, ValueError) as exc:
@@ -695,19 +751,7 @@ def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: ServiceS
         return 1
     fetch_progress.done()
 
-    # plan: fid -> (tags_to_add_at_dest, tags_to_delete_at_source)
-    plan: Dict[int, Tuple[List[str], List[str]]] = {}
-    previews: List[ParsedTag] = []
-    for fid, current_tags in metadata.items():
-        for raw_tag in current_tags:
-            if not raw_tag.startswith(f"{cfg.source_namespace}:"):
-                continue
-            parsed = parse_filename_tag(raw_tag, cfg)
-            previews.append(parsed)
-            to_add, to_delete = plan.setdefault(fid, ([], []))
-            to_add.extend(t for t in parsed.tags if t not in to_add)
-            to_delete.append(raw_tag)
-
+    plan, previews = _build_plan(metadata, cfg)
     if not previews:
         print(f"No tags with namespace {cfg.source_namespace!r} found in "
               f"{services.source_tag_service_name!r} on the matched files. Nothing to do.")
@@ -720,55 +764,66 @@ def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: ServiceS
                  f"into {services.dest_tag_service_name!r}, deleting the raw tag from "
                  f"{services.source_tag_service_name!r}")
 
-    if not prompt_yes_no(f"\nWrite {len(previews)} cleaned-up tag(s) across {files_affected} file(s) "
-                          f"{dest_note} now?", default=False):
-        print("Aborted, no changes written.")
-        return 0
+    # Group files by their exact (tags_to_add, tags_to_delete) outcome: every file bulk-
+    # imported from the same source directory shares the same raw dir: tag, so this
+    # typically collapses a 100k+ file library into a small number of distinct groups, each
+    # written in batches of cfg.batch_size file_ids per API call instead of one call per file.
+    groups: Dict[Tuple[Tuple[str, ...], Tuple[str, ...]], List[int]] = {}
+    for fid, (tags_to_add, tags_to_delete) in plan.items():
+        key = (tuple(tags_to_add), tuple(tags_to_delete))
+        groups.setdefault(key, []).append(fid)
+    batches = [(key, batch) for key, fids in groups.items() for batch in _chunked(fids, cfg.batch_size)]
 
-    def apply_one(fid: int, tags_to_add: List[str], tags_to_delete: List[str]) -> None:
+    print(f"\nWriting {len(previews)} cleaned-up tag(s) across {files_affected:,} file(s) {dest_note} "
+          f"({len(groups):,} distinct tag change(s), sent as {len(batches):,} batched API call(s))...")
+
+    def apply_batch(fids: List[int], tags_to_add: List[str], tags_to_delete: List[str]) -> None:
         if same_service:
             client.add_tags(
-                file_ids=[fid],
+                file_ids=fids,
                 tag_service_key=services.dest_tag_service_key,
                 tags_to_add=tags_to_add,
                 tags_to_delete=tags_to_delete,
             )
         else:
             client.add_tags_multi(
-                file_ids=[fid],
+                file_ids=fids,
                 service_actions={
                     services.dest_tag_service_key: (tags_to_add, []),
                     services.source_tag_service_key: ([], tags_to_delete),
                 },
             )
 
-    print(f"Writing changes for {files_affected:,} file(s) (up to {cfg.max_workers} at a time)...")
     apply_progress = ProgressPrinter("Applying", files_affected)
     errors: List[str] = []
-    done_count = 0
+    processed_count = 0
+    succeeded_count = 0
     with ThreadPoolExecutor(max_workers=cfg.max_workers) as pool:
         futures = {
-            pool.submit(apply_one, fid, tags_to_add, tags_to_delete): fid
-            for fid, (tags_to_add, tags_to_delete) in plan.items()
+            pool.submit(apply_batch, batch, list(tags_to_add), list(tags_to_delete)): batch
+            for (tags_to_add, tags_to_delete), batch in batches
         }
         for future in as_completed(futures):
-            fid = futures[future]
+            batch = futures[future]
             try:
                 future.result()
             except (requests.RequestException, RuntimeError) as exc:
-                errors.append(f"file {fid}: {exc}")
-            done_count += 1
-            apply_progress.update(done_count)
+                errors.append(f"{len(batch)} file(s) starting at file {batch[0]}: {exc}")
+            else:
+                succeeded_count += len(batch)
+            processed_count += len(batch)
+            apply_progress.update(processed_count)
     apply_progress.done()
 
     if errors:
-        print(f"{len(errors)} file(s) failed to update (first 10 shown):", file=sys.stderr)
+        failed_files = files_affected - succeeded_count
+        print(f"{len(errors)} batch(es) ({failed_files:,} file(s)) failed to update (first 10 shown):",
+              file=sys.stderr)
         for line in errors[:10]:
             print(f"  - {line}", file=sys.stderr)
 
-    succeeded = files_affected - len(errors)
-    print(f"Submitted changes for {succeeded:,}/{files_affected:,} file(s) to Hydrus's add_tags queue "
-          f"(applies in the background).")
+    print(f"Submitted changes for {succeeded_count:,}/{files_affected:,} file(s) to Hydrus's add_tags "
+          f"queue (applies in the background).")
     return 1 if errors else 0
 
 
@@ -789,9 +844,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     saved = load_local_config()
     cfg = wizard_build_config(saved)
 
-    # Always fetch real tags and show the full IN/OUT/DROPPED preview first;
-    # run_dry_run_then_apply asks for confirmation before writing anything, so
-    # there's no separate dry-run-only path to choose up front.
+    # run_dry_run_then_apply previews a small random sample first and asks for
+    # confirmation before ever touching the full library, so there's no separate
+    # dry-run-only path to choose up front.
     return run_dry_run_then_apply(client, cfg, services)
 
 
