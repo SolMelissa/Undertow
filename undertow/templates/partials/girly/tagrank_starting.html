@@ -1,3 +1,12 @@
+{% if not polling %}
+<div id="girly-toast-stack" hx-swap-oob="beforeend">
+  <div class="toast-item alert alert-success py-2 text-sm rounded-none font-mono shadow-lg flex items-start gap-2"
+       x-data x-init="setTimeout(() => $el.remove(), 4000)">
+    <span class="flex-1">Launching TagRank around "{{ tag }}"&hellip;</span>
+    <button type="button" class="opacity-70 hover:opacity-100 leading-none" @click="$el.closest('.toast-item').remove()">&times;</button>
+  </div>
+</div>
+{% endif %}
 <div class="kawaii-card" style="text-align:center;"
      hx-get="/tagrank/launch/poll?tag={{ tag|urlencode }}&started={{ started }}" hx-target="#tagrank-root" hx-swap="innerHTML"
      hx-trigger="load delay:700ms">

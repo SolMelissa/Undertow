@@ -9,7 +9,7 @@
   {% for opt in options %}
   <button type="button" class="kawaii-pill" style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
           title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
-          hx-post="/tagrank/launch" hx-target="#girly-toast-stack" hx-swap="beforeend"
+          hx-post="/tagrank/launch" hx-target="#tagrank-root" hx-swap="innerHTML"
           hx-vals='{"tag": {{ opt.tag|tojson }}}'>
     <span>{{ opt.tag }}</span>
     <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
