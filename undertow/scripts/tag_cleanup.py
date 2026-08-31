@@ -358,16 +358,27 @@ class HydrusClient:
 
     def add_tags(self, file_ids: List[int], tag_service_key: str,
                  tags_to_add: List[str], tags_to_delete: List[str]) -> None:
-        actions: Dict[str, List[str]] = {}
-        if tags_to_add:
-            actions["0"] = tags_to_add
-        if tags_to_delete:
-            actions["1"] = tags_to_delete
-        if not actions:
+        self.add_tags_multi(file_ids, {tag_service_key: (tags_to_add, tags_to_delete)})
+
+    def add_tags_multi(self, file_ids: List[int],
+                        service_actions: Dict[str, Tuple[List[str], List[str]]]) -> None:
+        """service_actions maps tag_service_key -> (tags_to_add, tags_to_delete), so a single
+        call can add to one tag service (e.g. the cleaned-tag destination) while deleting from a
+        different one (e.g. the raw-filename-tag source), when those aren't the same service."""
+        service_keys_to_actions_to_tags: Dict[str, Dict[str, List[str]]] = {}
+        for tag_service_key, (tags_to_add, tags_to_delete) in service_actions.items():
+            actions: Dict[str, List[str]] = {}
+            if tags_to_add:
+                actions["0"] = tags_to_add
+            if tags_to_delete:
+                actions["1"] = tags_to_delete
+            if actions:
+                service_keys_to_actions_to_tags[tag_service_key] = actions
+        if not service_keys_to_actions_to_tags:
             return
         payload = {
             "file_ids": file_ids,
-            "service_keys_to_actions_to_tags": {tag_service_key: actions},
+            "service_keys_to_actions_to_tags": service_keys_to_actions_to_tags,
         }
         self._post("/add_tags/add_tags", payload)
 
@@ -523,8 +534,17 @@ def wizard_connect(saved: dict, reconfigure: bool) -> Tuple[HydrusClient, str, s
         return client, api_url, api_key
 
 
-def wizard_pick_services(client: HydrusClient, saved: dict) -> Tuple[str, str, str, str]:
-    """Returns (file_service_name, file_service_key, tag_service_name, tag_service_key)."""
+@dataclass
+class ServiceSelection:
+    file_service_name: str
+    file_service_key: str
+    source_tag_service_name: str
+    source_tag_service_key: str
+    dest_tag_service_name: str
+    dest_tag_service_key: str
+
+
+def wizard_pick_services(client: HydrusClient, saved: dict) -> ServiceSelection:
     file_services = client.list_file_services()
     tag_services = client.list_tag_services()
     if not file_services:
@@ -538,15 +558,25 @@ def wizard_pick_services(client: HydrusClient, saved: dict) -> Tuple[str, str, s
     file_name = next(name for name, key, _ in file_services if key == file_key)
 
     tag_options = [(f"{name}  ({type_pretty})", key) for name, key, type_pretty in tag_services]
-    tag_key = prompt_choice("Which tag service holds the filename tags to clean up?", tag_options,
-                             default_key=saved.get("tag_service_key"))
-    tag_name = next(name for name, key, _ in tag_services if key == tag_key)
+    source_key = prompt_choice("Which tag service holds the raw filename tags to read and clean up?",
+                                tag_options, default_key=saved.get("source_tag_service_key"))
+    source_name = next(name for name, key, _ in tag_services if key == source_key)
+
+    print(f"\nBy default the cleaned-up tags are written back to the same service ({source_name!r}), "
+          "removing the raw filename tag from there. Choose a different service if you'd rather the "
+          "split tags land somewhere else (e.g. keep raw filename tags in one service, put clean "
+          "tags in your main tagging service).")
+    dest_default = saved.get("dest_tag_service_key", source_key)
+    dest_key = prompt_choice("Which tag service should the cleaned-up tags be written to?",
+                              tag_options, default_key=dest_default)
+    dest_name = next(name for name, key, _ in tag_services if key == dest_key)
 
     save_local_config({
         "file_service_name": file_name, "file_service_key": file_key,
-        "tag_service_name": tag_name, "tag_service_key": tag_key,
+        "source_tag_service_name": source_name, "source_tag_service_key": source_key,
+        "dest_tag_service_name": dest_name, "dest_tag_service_key": dest_key,
     })
-    return file_name, file_key, tag_name, tag_key
+    return ServiceSelection(file_name, file_key, source_name, source_key, dest_name, dest_key)
 
 
 def wizard_build_config(saved: dict) -> Config:
@@ -576,19 +606,20 @@ def wizard_pick_mode() -> str:
     ])
 
 
-def run_dry_run_or_apply(client: HydrusClient, cfg: Config, file_service_key: str,
-                          file_service_name: str, tag_service_key: str, apply: bool) -> int:
+def run_dry_run_or_apply(client: HydrusClient, cfg: Config, services: ServiceSelection, apply: bool) -> int:
+    same_service = services.source_tag_service_key == services.dest_tag_service_key
     try:
-        file_ids = client.search_files(cfg.target_tag_wildcards, file_service_key)
+        file_ids = client.search_files(cfg.target_tag_wildcards, services.file_service_key)
         print(f"\nFound {len(file_ids)} file(s) matching {cfg.target_tag_wildcards} "
-              f"in service {file_service_name!r}.")
+              f"in service {services.file_service_name!r}.")
         if not file_ids:
             return 0
-        metadata = client.fetch_metadata(file_ids, tag_service_key)
+        metadata = client.fetch_metadata(file_ids, services.source_tag_service_key)
     except (requests.RequestException, RuntimeError, ValueError) as exc:
         print(f"Could not reach Hydrus: {exc}", file=sys.stderr)
         return 1
 
+    # plan: fid -> (tags_to_add_at_dest, tags_to_delete_at_source)
     plan: Dict[int, Tuple[List[str], List[str]]] = {}
     previews: List[ParsedTag] = []
     for fid, current_tags in metadata.items():
@@ -602,29 +633,43 @@ def run_dry_run_or_apply(client: HydrusClient, cfg: Config, file_service_key: st
             to_delete.append(raw_tag)
 
     if not previews:
-        print(f"No tags with namespace {cfg.source_namespace!r} found on the matched files. Nothing to do.")
+        print(f"No tags with namespace {cfg.source_namespace!r} found in "
+              f"{services.source_tag_service_name!r} on the matched files. Nothing to do.")
         return 0
 
     print_preview_table(previews)
     files_affected = len(plan)
+    dest_note = (f"in place in {services.source_tag_service_name!r}" if same_service else
+                 f"into {services.dest_tag_service_name!r}, deleting the raw tag from "
+                 f"{services.source_tag_service_name!r}")
 
     if not apply:
-        print(f"\nDRY RUN: would rewrite {len(previews)} tag(s) across {files_affected} file(s). No changes written.")
+        print(f"\nDRY RUN: would rewrite {len(previews)} tag(s) across {files_affected} file(s), "
+              f"{dest_note}. No changes written.")
         return 0
 
-    if not prompt_yes_no(f"\nApply changes to {files_affected} file(s) ({len(previews)} tag(s) rewritten) now?",
-                          default=False):
+    if not prompt_yes_no(f"\nWrite {len(previews)} cleaned-up tag(s) across {files_affected} file(s) "
+                          f"{dest_note} now?", default=False):
         print("Aborted, no changes written.")
         return 0
 
     try:
         for fid, (tags_to_add, tags_to_delete) in plan.items():
-            client.add_tags(
-                file_ids=[fid],
-                tag_service_key=tag_service_key,
-                tags_to_add=tags_to_add,
-                tags_to_delete=tags_to_delete,
-            )
+            if same_service:
+                client.add_tags(
+                    file_ids=[fid],
+                    tag_service_key=services.dest_tag_service_key,
+                    tags_to_add=tags_to_add,
+                    tags_to_delete=tags_to_delete,
+                )
+            else:
+                client.add_tags_multi(
+                    file_ids=[fid],
+                    service_actions={
+                        services.dest_tag_service_key: (tags_to_add, []),
+                        services.source_tag_service_key: ([], tags_to_delete),
+                    },
+                )
     except (requests.RequestException, RuntimeError) as exc:
         print(f"Stopped partway through after a Hydrus request failure: {exc}", file=sys.stderr)
         return 1
@@ -647,11 +692,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     client, _, _ = wizard_connect(saved, args.reconfigure)
     saved = load_local_config()  # picks up the freshly-saved url/key
-    file_name, file_key, _, tag_key = wizard_pick_services(client, saved)
+    services = wizard_pick_services(client, saved)
     saved = load_local_config()
     cfg = wizard_build_config(saved)
 
-    return run_dry_run_or_apply(client, cfg, file_key, file_name, tag_key, apply=(mode == "apply"))
+    return run_dry_run_or_apply(client, cfg, services, apply=(mode == "apply"))
 
 
 if __name__ == "__main__":
