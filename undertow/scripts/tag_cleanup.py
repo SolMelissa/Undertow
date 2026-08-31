@@ -17,8 +17,10 @@ key, and your last picks are stored locally so you don't have to retype them
 next time - see `--reconfigure` to start over, or `--self-test` to preview the
 built-in fixture tags offline without connecting to Hydrus.
 
-Only hard dependency: requests. wordfreq is an optional soft dependency used
-for name detection; without it, only the configured known_names list is used.
+Hard dependencies: requests and wordfreq. wordfreq drives name detection (a
+Zipf-frequency outlier heuristic, refined by a corpus-global positional-slot
+pass) and truncated-token detection (dictionary-membership on the trailing
+token of a block).
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ import random
 import re
 import sys
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,9 +49,9 @@ except ImportError:
 
 try:
     from wordfreq import zipf_frequency
-    HAVE_WORDFREQ = True
 except ImportError:
-    HAVE_WORDFREQ = False
+    print("This tool requires the 'wordfreq' package: pip install wordfreq", file=sys.stderr)
+    sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -126,21 +129,51 @@ class Config:
         "rise", "delivers", "pours", "taps", "blows", "off", "them", "near", "during",
         "while", "across", "as"})
     attribute_lexicon: set = field(default_factory=lambda: {
-        # neutral generics ONLY: colors, sizes, ages, materials, qualities
+        # neutral generics ONLY: colors, sizes, ages, materials, qualities. Deliberately
+        # excludes any token in `always_split` below - reserved standalone words are
+        # removed from here so the merge path can never touch them.
         "red", "green", "blue", "gray", "grey", "brown", "white", "black", "pale", "tan",
-        "small", "big", "large", "tall", "short", "long", "thin", "slim", "thick", "wide",
-        "young", "old", "teen", "quiet", "rustic", "fresh", "steep", "cool", "warm",
+        "small", "big", "large", "massive", "tall", "short", "long", "thin", "slim", "thick",
+        "wide", "young", "old", "quiet", "rustic", "fresh", "steep", "cool", "warm",
         "soft", "rare", "full", "wet", "dry", "clean", "bright", "dark"})
     # Multi-person/group nouns that stay split from a preceding attribute
     # (e.g. "teen couple" -> "teen", "couple") since the demographic word is
     # itself a useful standalone tag when it describes a group, not a single
     # object or individual.
     no_merge_target_nouns: set = field(default_factory=lambda: {"couple", "group", "pair", "family"})
+    # Tokens that always emit as their own tag: never absorbed into an attribute
+    # phrase (leading or trailing), and act as a hard phrase-assembly boundary
+    # so e.g. "teen first timer" splits at "teen" instead of gluing across it.
+    always_split: set = field(default_factory=lambda: {"teen"})
+    # Explicit two-word compounds where the second word is a "strong" noun that
+    # should keep the pair together (e.g. "first timer") rather than falling
+    # through to two standalone tags. Kept as an explicit allowlist rather than
+    # generic noun-pair NLP, to stay high-precision.
+    compound_noun_pairs: set = field(default_factory=lambda: {("first", "timer")})
     proper_noun_min_words: int = 2
     wordfreq_min_zipf_for_tag: float = 2.0
     known_names: set = field(default_factory=set)
     name_namespace: str = "character"
+    # Corpus-global name inference: a token repeatedly seen in the name-shaped
+    # position (right after a leading attribute run, right before a glue/verb
+    # word) across the whole batch is treated as a name even if it's also a
+    # common English word (e.g. "emma", "linda") that a Zipf-frequency check
+    # alone would miss.
+    corpus_global_name_pass: bool = True
+    corpus_name_min_occurrences: int = 3
+    # \d+ year(s) old -> a single grouped token, with the following adjective
+    # (if any) continuing as its own tag rather than being absorbed.
+    age_pattern_enabled: bool = True
+    # Accumulate a run of consecutive attribute_lexicon tokens before the
+    # following noun into one phrase (e.g. "massive black boulder") instead of
+    # only ever merging a single leading adjective.
+    attribute_stacking_enabled: bool = True
     drop_suspected_truncation: bool = True
+    # When True, a block's trailing token is dropped as truncated if wordfreq
+    # doesn't recognize it as a real English word (catches clipped fragments
+    # like "librar" or "sto" that a length/vowel heuristic can't). When False,
+    # falls back to the legacy length/no-vowel heuristic.
+    dictionary_truncation_enabled: bool = True
     min_token_len: int = 2
     drop_resolution_like: bool = True
     batch_size: int = 512
@@ -151,6 +184,7 @@ class Config:
 
 NUMBER_PREFIX_RE = re.compile(r"^\d+-")
 RESOLUTION_RE = re.compile(r"^\d{2,4}x\d{2,4}$")
+AGE_UNIT_TOKENS = {"year", "years"}
 
 
 def split_camel_case(text: str) -> str:
@@ -163,9 +197,11 @@ def strip_number_prefix(block: str) -> str:
     return NUMBER_PREFIX_RE.sub("", block, count=1)
 
 
-def looks_truncated(tok: str, min_token_len: int) -> bool:
+def looks_truncated_legacy(tok: str, min_token_len: int) -> bool:
     # Heuristic: very short (<=2 char) alpha token with no vowel, at the very
     # end of a block, is very likely a truncated filename remnant (xz, qp, bk).
+    # Can't distinguish a real clipped word (e.g. "librar") from a genuine
+    # short token, which is why dictionary_truncation_enabled is preferred.
     if len(tok) > 2:
         return False
     if len(tok) < 1:
@@ -175,17 +211,18 @@ def looks_truncated(tok: str, min_token_len: int) -> bool:
     return not any(c in "aeiou" for c in tok)
 
 
-def is_name_candidate(tok: str, cfg: Config) -> bool:
-    if tok in cfg.known_names:
+def looks_truncated_dictionary(tok: str) -> bool:
+    # A single character is never a real trailing tag on its own, regardless of
+    # what wordfreq reports for it (single letters score high as pronouns/
+    # abbreviations, e.g. "i"). For everything else, the "small" wordlist is a
+    # much tighter membership check than "best" (which folds in noisy sources
+    # where short strings coincide with real abbreviations) - it correctly
+    # zeroes out clipped fragments like "librar" or "sto" that "best" does not.
+    if len(tok) <= 1:
         return True
-    if tok in cfg.function_words or tok in cfg.corpus_glue_words:
+    if not tok.isalpha():
         return False
-    if tok in cfg.attribute_lexicon:
-        return False
-    if not HAVE_WORDFREQ:
-        return False
-    zipf = zipf_frequency(tok, "en")
-    return zipf < cfg.wordfreq_min_zipf_for_tag and zipf > 0.0
+    return zipf_frequency(tok, "en", wordlist="small") <= 0.0
 
 
 @dataclass
@@ -205,88 +242,229 @@ class FilePreview:
     entries: List[ParsedTag]
 
 
-def parse_filename_tag(raw_tag: str, cfg: Config) -> ParsedTag:
-    """Parse a single raw namespaced tag (e.g. 'dir:12-sunset hike - ...')."""
+def _tokenize_block(block: str, cfg: Config) -> List[str]:
+    block = split_camel_case(block)
+    for delim in cfg.delimiters:
+        block = block.replace(delim, " ")
+    tokens = [normalize_token(t) for t in block.split(" ")]
+    return [t for t in tokens if t]
+
+
+def _tokenize_raw_tag(raw_tag: str, cfg: Config) -> Tuple[str, List[List[str]]]:
+    """Namespace-strip, block-split, and tokenize a raw tag - but don't drop or
+    classify anything yet, so a later pass can still see glue/verb words for
+    positional name detection."""
     value = raw_tag
     prefix = f"{cfg.source_namespace}:"
     if value.startswith(prefix):
         value = value[len(prefix):]
     original_value = value
 
-    # Split into blocks on primary delimiter (' - '), then on secondary
-    # delimiters within each block.
     blocks = value.split(cfg.primary_delimiter)
     if cfg.strip_leading_number_prefix and blocks:
         blocks[0] = strip_number_prefix(blocks[0])
 
+    return original_value, [_tokenize_block(block, cfg) for block in blocks]
+
+
+def _classify_token(tok: str, cfg: Config) -> str:
+    """One of "reserved", "glue", "attribute", or "content". Checked in this
+    order so a token can't be in both `always_split` and `attribute_lexicon`
+    (the always_split entries are meant to be removed from attribute_lexicon,
+    but this keeps the classifier correct even if a caller forgets to)."""
+    if tok in cfg.always_split:
+        return "reserved"
+    if tok in cfg.function_words or tok in cfg.corpus_glue_words:
+        return "glue"
+    if tok in cfg.attribute_lexicon:
+        return "attribute"
+    return "content"
+
+
+def _find_name_slot_indices(tokens: List[str], categories: List[str]) -> Set[int]:
+    """The observed name pattern: a 1-2 token run of "content" tokens sitting
+    right after a run of "attribute" tokens. Used as a positional signal for
+    name detection, and to seed the corpus-global occurrence count."""
+    slots: Set[int] = set()
+    i = 0
+    n = len(tokens)
+    while i < n:
+        if categories[i] != "attribute":
+            i += 1
+            continue
+        j = i
+        while j < n and categories[j] == "attribute":
+            j += 1
+        k = j
+        run_len = 0
+        while k < n and categories[k] == "content" and run_len < 2:
+            slots.add(k)
+            k += 1
+            run_len += 1
+        i = k if k > j else j + 1
+    return slots
+
+
+def compute_corpus_name_counts(all_blocks_tokens: List[List[List[str]]], cfg: Config) -> Counter:
+    """all_blocks_tokens: one entry per raw tag in the batch, each a list of
+    tokenized blocks. Counts how often each token appears in the name-shaped
+    positional slot across the whole batch."""
+    counts: Counter = Counter()
+    for blocks_tokens in all_blocks_tokens:
+        for tokens in blocks_tokens:
+            categories = [_classify_token(t, cfg) for t in tokens]
+            for idx in _find_name_slot_indices(tokens, categories):
+                counts[tokens[idx]] += 1
+    return counts
+
+
+def _process_block(tokens: List[str], categories: List[str], slot_indices: Set[int],
+                    is_last_block: bool, cfg: Config, corpus_name_counts: Counter) -> Tuple[List[str], List[str]]:
+    n = len(tokens)
     dropped: List[str] = []
-    kept_tags: List[str] = []
 
-    for block_idx, block in enumerate(blocks):
-        block = split_camel_case(block)
-        for delim in cfg.delimiters:
-            block = block.replace(delim, " ")
-
-        raw_tokens = [normalize_token(t) for t in block.split(" ")]
-        raw_tokens = [t for t in raw_tokens if t]
-
-        # Pass 1: drop function/glue words and junk, keep everything else as
-        # a candidate list preserving order.
-        candidates: List[str] = []
-        n = len(raw_tokens)
-        for i, tok in enumerate(raw_tokens):
-            if len(tok) < cfg.min_token_len:
+    # Pass 1: drop glue/function words and junk, physically now.
+    candidates: List[str] = []
+    candidate_idx: List[int] = []
+    for i, tok in enumerate(tokens):
+        if len(tok) < cfg.min_token_len:
+            dropped.append(tok)
+            continue
+        if categories[i] == "glue":
+            dropped.append(tok)
+            continue
+        if cfg.drop_resolution_like and RESOLUTION_RE.match(tok):
+            dropped.append(tok)
+            continue
+        is_last_token_overall = is_last_block and i == n - 1
+        if cfg.drop_suspected_truncation and is_last_token_overall:
+            is_trunc = (looks_truncated_dictionary(tok) if cfg.dictionary_truncation_enabled
+                        else looks_truncated_legacy(tok, cfg.min_token_len))
+            if is_trunc:
                 dropped.append(tok)
                 continue
-            if tok in cfg.function_words or tok in cfg.corpus_glue_words:
-                dropped.append(tok)
-                continue
-            if cfg.drop_resolution_like and RESOLUTION_RE.match(tok):
-                dropped.append(tok)
-                continue
-            is_last_token_overall = (block_idx == len(blocks) - 1) and (i == n - 1)
-            if cfg.drop_suspected_truncation and is_last_token_overall and looks_truncated(tok, cfg.min_token_len):
-                dropped.append(tok)
-                continue
-            candidates.append(tok)
+        candidates.append(tok)
+        candidate_idx.append(i)
 
-        # Pass 2: detect name runs among remaining candidates.
-        name_flags = [is_name_candidate(t, cfg) for t in candidates]
+    # Pass 2: detect names among remaining candidates - known_names allowlist,
+    # OR a positional-slot wordfreq outlier, OR (if enabled) a corpus-global
+    # occurrence count, checked before any phrase assembly.
+    name_flags: List[bool] = []
+    for pos, tok in enumerate(candidates):
+        orig_idx = candidate_idx[pos]
+        if tok in cfg.known_names:
+            name_flags.append(True)
+            continue
+        if categories[orig_idx] in ("attribute", "reserved"):
+            name_flags.append(False)
+            continue
+        positional = orig_idx in slot_indices
+        zipf = zipf_frequency(tok, "en")
+        wordfreq_hit = positional and 0.0 < zipf < cfg.wordfreq_min_zipf_for_tag
+        corpus_hit = (cfg.corpus_global_name_pass
+                      and corpus_name_counts.get(tok, 0) >= cfg.corpus_name_min_occurrences)
+        name_flags.append(wordfreq_hit or corpus_hit)
 
-        # Pass 3: merge attribute-adjective + following-noun phrases, and
-        # group consecutive name tokens into a single character: tag.
-        i = 0
-        while i < len(candidates):
-            tok = candidates[i]
-            if name_flags[i]:
-                run = [tok]
-                j = i + 1
-                while j < len(candidates) and name_flags[j]:
+    # Pass 3: assemble phrases. Names first, then the always_split reserved
+    # boundary, then the age-unit pattern, then explicit compound-noun pairs,
+    # then attribute (stacked or single) + noun merging, else standalone.
+    kept: List[str] = []
+    i = 0
+    while i < len(candidates):
+        tok = candidates[i]
+        orig_idx = candidate_idx[i]
+
+        if name_flags[i]:
+            run = [tok]
+            j = i + 1
+            while j < len(candidates) and name_flags[j]:
+                run.append(candidates[j])
+                j += 1
+            kept.append(f"{cfg.name_namespace}:{' '.join(run)}")
+            i = j
+            continue
+
+        if categories[orig_idx] == "reserved":
+            kept.append(tok)
+            i += 1
+            continue
+
+        if (cfg.age_pattern_enabled and tok.isdigit() and i + 2 < len(candidates)
+                and candidates[i + 1] in AGE_UNIT_TOKENS and candidates[i + 2] == "old"):
+            kept.append(f"{tok} {candidates[i + 1]} old")
+            i += 3
+            continue
+
+        if (i + 1 < len(candidates) and not name_flags[i + 1]
+                and (tok, candidates[i + 1]) in cfg.compound_noun_pairs):
+            kept.append(f"{tok} {candidates[i + 1]}")
+            i += 2
+            continue
+
+        if categories[orig_idx] == "attribute":
+            run = [tok]
+            j = i + 1
+            if cfg.attribute_stacking_enabled:
+                while (j < len(candidates) and categories[candidate_idx[j]] == "attribute"):
                     run.append(candidates[j])
                     j += 1
-                kept_tags.append(f"{cfg.name_namespace}:{' '.join(run)}")
-                i = j
+            if (j < len(candidates) and not name_flags[j] and candidates[j] not in cfg.no_merge_target_nouns
+                    and categories[candidate_idx[j]] != "reserved"):
+                run.append(candidates[j])
+                kept.append(" ".join(run))
+                i = j + 1
                 continue
+            # No noun to attach to (e.g. followed by a name, a no_merge_target_noun,
+            # a reserved word, or nothing) - keep the accumulated attributes standalone.
+            kept.extend(run)
+            i = j
+            continue
 
-            if (tok in cfg.attribute_lexicon and i + 1 < len(candidates) and not name_flags[i + 1]
-                    and candidates[i + 1] not in cfg.no_merge_target_nouns):
-                phrase = f"{tok} {candidates[i + 1]}"
-                kept_tags.append(phrase)
-                i += 2
-                continue
+        kept.append(tok)
+        i += 1
 
-            kept_tags.append(tok)
-            i += 1
+    return kept, dropped
 
-    # De-duplicate while preserving order.
-    seen: Set[str] = set()
-    deduped: List[str] = []
-    for t in kept_tags:
-        if t not in seen:
-            seen.add(t)
-            deduped.append(t)
 
-    return ParsedTag(original=raw_tag, namespace_stripped=original_value, tags=deduped, dropped=dropped)
+def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag]:
+    """Parse a batch of raw namespaced tags together, so corpus-global name
+    inference (which needs to see the whole batch) can actually run."""
+    tokenized = [(raw_tag,) + _tokenize_raw_tag(raw_tag, cfg) for raw_tag in raw_tags]
+
+    corpus_name_counts: Counter = Counter()
+    if cfg.corpus_global_name_pass:
+        corpus_name_counts = compute_corpus_name_counts([bt for _, _, bt in tokenized], cfg)
+
+    results: List[ParsedTag] = []
+    for raw_tag, original_value, blocks_tokens in tokenized:
+        dropped: List[str] = []
+        kept_tags: List[str] = []
+        for block_idx, tokens in enumerate(blocks_tokens):
+            categories = [_classify_token(t, cfg) for t in tokens]
+            slot_indices = _find_name_slot_indices(tokens, categories)
+            is_last_block = block_idx == len(blocks_tokens) - 1
+            kept, blk_dropped = _process_block(tokens, categories, slot_indices, is_last_block,
+                                                cfg, corpus_name_counts)
+            kept_tags.extend(kept)
+            dropped.extend(blk_dropped)
+
+        seen: Set[str] = set()
+        deduped: List[str] = []
+        for t in kept_tags:
+            if t not in seen:
+                seen.add(t)
+                deduped.append(t)
+
+        results.append(ParsedTag(original=raw_tag, namespace_stripped=original_value,
+                                  tags=deduped, dropped=dropped))
+    return results
+
+
+def parse_filename_tag(raw_tag: str, cfg: Config) -> ParsedTag:
+    """Parse a single raw namespaced tag (e.g. 'dir:12-sunset hike - ...'). Thin
+    wrapper around parse_filename_tag_batch for single-item callers; corpus-global
+    name inference only has one item to look at in this shape."""
+    return parse_filename_tag_batch([raw_tag], cfg)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -625,14 +803,31 @@ FIXTURES = [
     "dir:17-morning coffee - slim barista pours hot milk into large ceramic cup on rustic wooden counter vp",
     "dir:31-library quiet - short student reads thick novel while soft rain taps glass window during study mn",
     "dir:09-garden work - kind grandma pulls up long weeds after steady rain soaks green flower bed tr",
-    "dir:22-bike ride - fit courier delivers fresh bread across old stone bridge up steep city hill kx",
+    "dir:22-bike ride - fit courier delivers fresh bread across old stone tower up steep city hill kx",
     "dir:38-mountain view - young hiker spots a gray fox near high ridge trail as cool fog rolls in yd",
+    # -- Phase 2 regression fixtures: name detection, reserved-split, age pattern,
+    # compound-noun, attribute stacking, dictionary-based truncation drop. --
+    "dir:41-quiet moment - young anwen corvina watches distant boulder near an old gate",
+    "dir:44-morning walk - bright grace hall strolls along old canal past quiet chapel",
+    "dir:47-evening light - warm grace hall walks past a quiet meadow near soft hills",
+    "dir:49-sunset scene - soft grace hall lingers by a quiet dock under warm sky",
+    "dir:52-long walk - fit teen sprints across an old fence after steep climb",
+    "dir:55-desert trip - 18 year old redhead poses near old barn under bright sun",
+    "dir:58-quiet dawn - 25 years old traveler rests by a quiet lake near tall pines",
+    "dir:61-cliff day - eager first timer climbs steep cliff above rocky shore",
+    "dir:64-quarry walk - massive black boulder blocks a narrow forest path",
+    "dir:67-cabin trip - small dark red cabin sits near an old pine forest",
+    "dir:71-old photo - faded picture shows a dusty attic full of black sto",
+    "dir:73-travel log - tired hiker rests inside a warm mountain swe",
+    "dir:76-study break - reader browses a tall shelf inside the librar",
+    "dir:79-project notes - focused engineer reviews a long report marked deepl",
+    "dir:82-camera roll - wide landscape shows a bright field at 1920x1080 b",
 ]
 
 
 def run_self_test(cfg: Config) -> None:
-    previews = [FilePreview(label=f"fixture {i}", entries=[parse_filename_tag(t, cfg)])
-                for i, t in enumerate(FIXTURES, start=1)]
+    previews = [FilePreview(label=f"fixture {i}", entries=[parsed])
+                for i, parsed in enumerate(parse_filename_tag_batch(FIXTURES, cfg), start=1)]
     print_preview_table(previews)
     report_path = write_html_report(
         previews, title="Self-Test Preview",
@@ -640,12 +835,35 @@ def run_self_test(cfg: Config) -> None:
                       "no Hydrus connection involved.")
     print(f"HTML report written to: {report_path}")
 
-    expected = ["sunset", "hike", "teen", "couple", "full moon", "lake", "long trail"]
-    actual = previews[0].entries[0].tags
-    if actual == expected:
+    expected_fixture_1 = ["sunset", "hike", "teen", "couple", "full moon", "lake", "long trail"]
+    actual_fixture_1 = previews[0].entries[0].tags
+    if actual_fixture_1 == expected_fixture_1:
         print("Fixture 1 matches expected output. OK.")
     else:
-        print(f"Fixture 1 MISMATCH.\n  expected: {expected}\n  actual:   {actual}")
+        print(f"Fixture 1 MISMATCH.\n  expected: {expected_fixture_1}\n  actual:   {actual_fixture_1}")
+
+    all_tags = [t for fp in previews for e in fp.entries for t in e.tags]
+    all_dropped = [t for fp in previews for e in fp.entries for t in e.dropped]
+
+    checks = [
+        ("At least one character: tag emitted", any(t.startswith("character:") for t in all_tags)),
+        ("'teen' always emits standalone, never merged",
+         "teen" in all_tags and not any(t != "teen" and "teen" in t.split(" ") for t in all_tags)),
+        ("'18 year old' groups as one token", "18 year old" in all_tags),
+        ("'25 years old' groups as one token", "25 years old" in all_tags),
+        ("'first timer' survives as a compound", "first timer" in all_tags),
+        ("'massive black boulder' stacks into one tag", "massive black boulder" in all_tags),
+        ("'small dark red cabin' stacks into one tag", "small dark red cabin" in all_tags),
+        ("Truncated fragments dropped, not kept as tags",
+         not any(t in ("sto", "swe", "librar", "deepl") for t in all_tags)
+         and all(frag in all_dropped for frag in ("sto", "swe", "librar", "deepl"))),
+        ("Single-char remnant 'b' dropped", "b" not in all_tags and "b" in all_dropped),
+    ]
+    print("\nRegression checks:")
+    for label, passed in checks:
+        print(f"  [{'OK' if passed else 'FAIL'}] {label}")
+    if not all(passed for _, passed in checks):
+        print("\nOne or more regression checks FAILED - see FIXTURES/expected output above.")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -838,21 +1056,25 @@ DRY_RUN_SAMPLE_SIZE = 25
 
 def _build_plan(metadata: Dict[int, List[str]], cfg: Config) -> Tuple[Dict[int, Tuple[List[str], List[str]]], List[FilePreview]]:
     """Turns raw {file_id: [current tags]} metadata into a write plan (fid -> (tags_to_add,
-    tags_to_delete)) plus one FilePreview per file, for previewing or applying."""
+    tags_to_delete)) plus one FilePreview per file, for previewing or applying. Parses every
+    matched raw tag in the batch as a single parse_filename_tag_batch call, so the corpus-global
+    name-inference pass actually sees the whole batch instead of one file at a time."""
+    pairs: List[Tuple[int, str]] = [
+        (fid, raw_tag)
+        for fid, current_tags in metadata.items()
+        for raw_tag in current_tags
+        if raw_tag.startswith(f"{cfg.source_namespace}:")
+    ]
     plan: Dict[int, Tuple[List[str], List[str]]] = {}
-    previews: List[FilePreview] = []
-    for fid, current_tags in metadata.items():
-        entries: List[ParsedTag] = []
-        for raw_tag in current_tags:
-            if not raw_tag.startswith(f"{cfg.source_namespace}:"):
-                continue
-            parsed = parse_filename_tag(raw_tag, cfg)
-            entries.append(parsed)
+    entries_by_fid: Dict[int, List[ParsedTag]] = {}
+    if pairs:
+        parsed_list = parse_filename_tag_batch([raw_tag for _, raw_tag in pairs], cfg)
+        for (fid, raw_tag), parsed in zip(pairs, parsed_list):
+            entries_by_fid.setdefault(fid, []).append(parsed)
             to_add, to_delete = plan.setdefault(fid, ([], []))
             to_add.extend(t for t in parsed.tags if t not in to_add)
             to_delete.append(raw_tag)
-        if entries:
-            previews.append(FilePreview(label=f"file_id {fid}", entries=entries))
+    previews = [FilePreview(label=f"file_id {fid}", entries=entries) for fid, entries in entries_by_fid.items()]
     return plan, previews
 
 
