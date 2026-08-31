@@ -1486,9 +1486,13 @@ if HAVE_FLASK:
     # Picker (pills + summary graphs) drives TagRank's own headless API as a subprocess (see
     # undertow/tagrank_client.py and tagrank/docs/api.md) for read-only data. Actually judging
     # comparisons is NOT reimplemented in-browser (yet) - a pill click instead launches
-    # TagRank's real PySide6 GUI (`python main.py`, no --serve) in its own window, the same way
-    # launch_tui() opens the console UI in a fresh window, since that GUI's own tag-picker
-    # prompt has no CLI flag to preseed a tag yet.
+    # TagRank's real PySide6 GUI (`python main.py --tag <tag>`) in its own window, the same way
+    # launch_tui() opens the console UI in a fresh window. #tagrank-root shows a loading screen
+    # (tagrank_starting.html) polling tagrank_client.is_gui_ready() - a live Hydrus similarity
+    # search backs the pool, so this can take anywhere from under a second to tens of seconds -
+    # until the real window is up, then swaps back to the picker.
+
+    _TAGRANK_LAUNCH_TIMEOUT_SECONDS = 45
 
     def _tagrank_score_color(score: float, lo: float, hi: float) -> str:
         """Red (lowest-rated) -> green (highest-rated) hue, scaled across whatever tags are
@@ -1531,11 +1535,25 @@ if HAVE_FLASK:
     @app.route("/tagrank/launch", methods=["POST"])
     def tagrank_launch():
         tag = (request.form.get("tag") or "").strip()
-        ok, err = tagrank_client.launch_gui()
+        ok, err = tagrank_client.launch_gui(tag or None)
         if not ok:
-            return render_template("partials/message.html", message=f"Couldn't launch TagRank: {err}", error=True)
-        message = f"Launching TagRank - pick '{tag}' from its search list when prompted." if tag else "Launching TagRank…"
-        return render_template("partials/message.html", message=message, error=False)
+            return render_template("partials/girly/tagrank_inner.html", available=True, error=f"Couldn't launch TagRank: {err}")
+        return render_template("partials/girly/tagrank_starting.html", tag=tag, started=time.time())
+
+    @app.route("/tagrank/launch/poll")
+    def tagrank_launch_poll():
+        tag = request.args.get("tag", "")
+        try:
+            started = float(request.args.get("started", 0))
+        except ValueError:
+            started = 0.0
+        if tagrank_client.is_gui_ready():
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+        if time.time() - started > _TAGRANK_LAUNCH_TIMEOUT_SECONDS:
+            # Couldn't confirm the window came up (no pywin32, or it's just taking unusually
+            # long) - stop polling forever and hand control back rather than spinning silently.
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+        return render_template("partials/girly/tagrank_starting.html", tag=tag, started=started)
 
     # ---------------------------------------------------------------- API keys
 

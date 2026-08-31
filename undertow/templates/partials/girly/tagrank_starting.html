@@ -1,0 +1,9 @@
+<div class="kawaii-card" style="text-align:center;"
+     hx-get="/tagrank/launch/poll?tag={{ tag|urlencode }}&started={{ started }}" hx-target="#tagrank-root" hx-swap="innerHTML"
+     hx-trigger="load delay:700ms">
+  <span class="loading loading-spinner loading-md"></span>
+  <p style="margin-top:0.5rem; color:var(--k-text-dim-text);">
+    Building comparison pool around <strong>{{ tag }}</strong>&hellip;
+  </p>
+  <p class="text-xs" style="margin-top:0.25rem; color:var(--k-text-dim-text);">TagRank's window will open automatically once it's ready.</p>
+</div>

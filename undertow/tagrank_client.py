@@ -18,6 +18,12 @@ import requests
 
 from . import config
 
+try:
+    import win32gui
+    HAVE_WIN32 = True
+except ImportError:
+    HAVE_WIN32 = False
+
 _state: dict = {"proc": None}
 _lock = threading.Lock()
 
@@ -80,25 +86,64 @@ def ensure_server_running() -> tuple[bool, str | None]:
         return False, "TagRank didn't respond within 20s of starting."
 
 
-def launch_gui() -> tuple[bool, str | None]:
-    """Opens TagRank's real PySide6 comparison window (`python main.py`, no --serve) in its own
-    console, same fresh-window pattern as webui.py's launch_tui(). This is the *actual* judging
-    UI for now - the in-browser pill picker only drives the read-only /search-options and
-    /history/graphs endpoints, not a live comparison session, since main.py's own tag-picker
-    prompt has no flag yet to preseed a tag non-interactively."""
+def launch_gui(tag: str | None = None) -> tuple[bool, str | None]:
+    """Opens TagRank's real PySide6 comparison window (`python main.py [--tag <tag>]`) in its
+    own console, same fresh-window pattern as webui.py's launch_tui(). This is the *actual*
+    judging UI - the in-browser pill picker only drives the read-only /search-options and
+    /history/graphs endpoints, not a live comparison session. Passing --tag skips TagRank's own
+    interactive numbered search-picker prompt (a small addition to tagrank/main.py +
+    tagrank/tagrank/app.py made specifically for this) so the window comes up already searching
+    the tag whose pill was clicked, instead of TagRank's generic start screen."""
     main_py = config.find_tagrank_main()
     if main_py is None:
         return False, "TagRank isn't checked out at the configured path."
     python_exe = config.find_tagrank_python() or "python"
+    args = [str(python_exe), str(main_py)]
+    if tag:
+        args += ["--tag", tag]
     try:
         subprocess.Popen(
-            [str(python_exe), str(main_py)],
+            args,
             cwd=str(config.TAGRANK_DIR),
             creationflags=subprocess.CREATE_NEW_CONSOLE,
         )
     except OSError as e:
         return False, str(e)
     return True, None
+
+
+# Set right when Window (tagrank/ui/window.py) is constructed, after pool-building has already
+# finished - so "does a window with this title prefix exist" is a reliable "pool is ready and
+# the comparison window is up" signal, distinct from the console window that appears the
+# instant the subprocess starts (same pid, but Popen's CREATE_NEW_CONSOLE window title is the
+# command line, never this).
+_READY_WINDOW_TITLE_PREFIX = "TagRank - Comparisons"
+
+
+def is_gui_ready() -> bool:
+    """Whether TagRank's comparison window has appeared yet - polled by the webui's loading
+    screen between launch_gui() and the window actually being up, since pool-building (a live
+    Hydrus similarity search) can take anywhere from under a second to tens of seconds."""
+    if not HAVE_WIN32:
+        return True  # can't detect readiness - don't block the UI on a check that can't work
+    found = []
+
+    def _enum(hwnd, _):
+        title = win32gui.GetWindowText(hwnd)
+        if win32gui.IsWindowVisible(hwnd) and title.startswith(_READY_WINDOW_TITLE_PREFIX):
+            found.append(hwnd)
+            return False
+        return True
+
+    try:
+        win32gui.EnumWindows(_enum, None)
+    except Exception:
+        # EnumWindows raises when the callback returns False to stop early (that's how a match
+        # short-circuits the scan) - the match itself already landed in `found` before that, so
+        # this is the expected path on success, not a real failure. See services.py's
+        # show_process_window() for the same catch-and-ignore-then-check-the-list shape.
+        pass
+    return bool(found)
 
 
 def stop_server() -> None:
