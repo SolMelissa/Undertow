@@ -8,9 +8,12 @@ Hydrus via its Client API.
 
 Run it with no arguments and it walks you through a wizard: enter (or reuse a
 saved) Hydrus Client API URL and key, pick a file domain and tag service from
-the live list Hydrus reports, then choose preview / dry-run / apply. The URL,
+the live list Hydrus reports, then it fetches your real tags, shows the full
+IN/OUT/DROPPED preview, and asks for confirmation before writing anything -
+there's no separate preview/dry-run/apply menu to pick from first. The URL,
 key, and your last picks are stored locally so you don't have to retype them
-next time - see `--reconfigure` to start over.
+next time - see `--reconfigure` to start over, or `--self-test` to preview the
+built-in fixture tags offline without connecting to Hydrus.
 
 Only hard dependency: requests. wordfreq is an optional soft dependency used
 for name detection; without it, only the configured known_names list is used.
@@ -500,6 +503,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--reconfigure", action="store_true",
                     help="Ignore saved settings and re-enter the API URL/key and service picks from scratch")
+    p.add_argument("--self-test", action="store_true",
+                    help="Preview the built-in fixture tags offline (no Hydrus connection) and exit")
     return p
 
 
@@ -663,15 +668,7 @@ def wizard_build_config(saved: dict) -> Config:
     return cfg
 
 
-def wizard_pick_mode() -> str:
-    return prompt_choice("What would you like to do?", [
-        ("Preview - run against 10 built-in sample tags, no Hydrus connection needed", "preview"),
-        ("Dry run - fetch real tags from Hydrus, show the plan, write nothing", "dry-run"),
-        ("Apply - fetch real tags and write the cleaned-up tags to Hydrus", "apply"),
-    ])
-
-
-def run_dry_run_or_apply(client: HydrusClient, cfg: Config, services: ServiceSelection, apply: bool) -> int:
+def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: ServiceSelection) -> int:
     same_service = services.source_tag_service_key == services.dest_tag_service_key
 
     print(f"\nSearching {services.file_service_name!r} for {cfg.target_tag_wildcards}...")
@@ -722,11 +719,6 @@ def run_dry_run_or_apply(client: HydrusClient, cfg: Config, services: ServiceSel
     dest_note = (f"in place in {services.source_tag_service_name!r}" if same_service else
                  f"into {services.dest_tag_service_name!r}, deleting the raw tag from "
                  f"{services.source_tag_service_name!r}")
-
-    if not apply:
-        print(f"\nDRY RUN: would rewrite {len(previews)} tag(s) across {files_affected} file(s), "
-              f"{dest_note}. No changes written.")
-        return 0
 
     if not prompt_yes_no(f"\nWrite {len(previews)} cleaned-up tag(s) across {files_affected} file(s) "
                           f"{dest_note} now?", default=False):
@@ -782,23 +774,25 @@ def run_dry_run_or_apply(client: HydrusClient, cfg: Config, services: ServiceSel
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    saved = {} if args.reconfigure else load_local_config()
 
     print("=== Hydrus filename-tag cleanup ===")
-    mode = wizard_pick_mode()
 
-    if mode == "preview":
+    if args.self_test:
         print()
         run_self_test(Config())
         return 0
 
+    saved = {} if args.reconfigure else load_local_config()
     client, _, _ = wizard_connect(saved, args.reconfigure)
     saved = load_local_config()  # picks up the freshly-saved url/key
     services = wizard_pick_services(client, saved)
     saved = load_local_config()
     cfg = wizard_build_config(saved)
 
-    return run_dry_run_or_apply(client, cfg, services, apply=(mode == "apply"))
+    # Always fetch real tags and show the full IN/OUT/DROPPED preview first;
+    # run_dry_run_then_apply asks for confirmation before writing anything, so
+    # there's no separate dry-run-only path to choose up front.
+    return run_dry_run_then_apply(client, cfg, services)
 
 
 if __name__ == "__main__":
