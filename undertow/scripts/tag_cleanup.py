@@ -387,17 +387,27 @@ def compute_corpus_name_stats(per_block: List[Tuple[List[str], List[List[int]]]]
     return unigram, bigram
 
 
-def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: Set[int],
+def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: Set[int], is_last_block: bool,
                         cfg: Config, corpus_bigram_counts: Counter) -> Tuple[Dict[int, str], Set[int]]:
     """Name detection, run FIRST, before any glue-dropping or phrase assembly.
     Finds every name block in a token stream and returns {start_index: composed
     name string} plus the full set of consumed token indices (including any
-    absorbed initial and consumed ","/"&" separator). Detection signals, in
-    priority order: (1) corpus-global recurring-bigram count - the primary
-    signal, catches common names wordfreq can't, without the false-positive
-    risk of counting single common words alone (see compute_corpus_name_stats);
-    (2) known_names allowlist; (3) wordfreq rarity as a supporting signal. A
-    comma/"&" immediately after an already-confirmed name always introduces
+    absorbed initial and consumed ","/"&" separator). None of these signals
+    are required together - each independently confirms a name on its own; a
+    recurring corpus bigram is a strong bonus when present, but its absence
+    proves nothing (most real names, especially foreign/uncommon ones, will
+    never recur often enough to trip it, and shouldn't need to):
+      (1) corpus-global recurring-bigram count, when present - the strongest
+          signal, catches common names wordfreq can't;
+      (2) known_names allowlist;
+      (3) wordfreq rarity: EITHER a real-but-uncommon word (0 < zipf < the
+          configured threshold), OR a word wordfreq doesn't recognize at all
+          (zipf == 0) - the strongest single-word signal for a genuinely
+          foreign/unique name, and the common case for one. The zero-frequency
+          case is excluded specifically at a block's trailing token, since
+          that position is ambiguous with a truncated filename fragment
+          (also zero-frequency) and is truncation's job to resolve instead.
+    A comma/"&" immediately after an already-confirmed name always introduces
     another name block, no re-check needed. A single-letter token immediately
     following a confirmed name is absorbed as an initial (e.g. "anna r")."""
     n = len(tokens)
@@ -414,6 +424,7 @@ def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: S
         preceded_by_sep = i > 0 and categories[i - 1] == "sep" and (i - 1) in consumed
         next_is_content = i + 1 < n and categories[i + 1] == "content"
         tok2 = tokens[i + 1] if next_is_content else None
+        is_last_token_overall = is_last_block and i == n - 1
 
         confirmed = False
         grab_second = False
@@ -430,7 +441,9 @@ def _carve_name_blocks(tokens: List[str], categories: List[str], slot_indices: S
                 grab_second = True
             else:
                 zipf = zipf_frequency(tok, "en")
-                wordfreq_hit = 0.0 < zipf < cfg.wordfreq_min_zipf_for_tag
+                rare_but_real = 0.0 < zipf < cfg.wordfreq_min_zipf_for_tag
+                unrecognized = zipf == 0.0 and not is_last_token_overall
+                wordfreq_hit = rare_but_real or unrecognized
                 confirmed = wordfreq_hit
                 grab_second = wordfreq_hit
 
@@ -611,10 +624,11 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag
         kept_tags: List[str] = []
         name_tags: List[str] = []
         for block_idx, (tokens, categories, slots) in enumerate(zip(blocks_tokens, cats_for_file, slots_for_file)):
-            name_by_start, consumed = _carve_name_blocks(tokens, categories, slots, cfg, corpus_bigram_counts)
+            is_last_block = block_idx == len(blocks_tokens) - 1
+            name_by_start, consumed = _carve_name_blocks(tokens, categories, slots, is_last_block,
+                                                           cfg, corpus_bigram_counts)
             name_tags.extend(name_by_start.values())
             merged_tokens, merged_categories = _collapse_names(tokens, categories, name_by_start, consumed)
-            is_last_block = block_idx == len(blocks_tokens) - 1
             kept, blk_dropped = _process_block(merged_tokens, merged_categories, is_last_block, cfg)
             kept_tags.extend(kept)
             dropped.extend(blk_dropped)
@@ -1029,6 +1043,10 @@ FIXTURES = [
     "dir:106-canyon trip - zuzana d walks along a quiet path under bright trees",
     "dir:109-vineyard tour - chloe lacourt, vanessa staylon pose by a quiet fountain",
     "dir:112-plaza stroll - lolli moon & jennifer clark relax near a bright pool",
+    # A genuinely foreign/unique name wordfreq has never heard of (zipf 0.0)
+    # and that will never recur in this corpus - must still be caught on the
+    # strength of position alone, with zero corpus/known-list support.
+    "dir:115-lake shoot - young zhulinskaya wozniaczek walks by an old dock in soft light",
 ]
 
 
@@ -1089,6 +1107,9 @@ def run_self_test(cfg: Config) -> None:
          "chloe lacourt" in all_tags and "vanessa staylon" in all_tags),
         ("'&'-separated name list splits into two separate plain tags",
          "lolli moon" in all_tags and "jennifer clark" in all_tags),
+        ("Zero-frequency (fully unrecognized) name caught by position alone, "
+         "with no corpus recurrence or known_names support",
+         "zhulinskaya wozniaczek" in all_tags),
     ]
     print("\nRegression checks:")
     for label, passed in checks:
