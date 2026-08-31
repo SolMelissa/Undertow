@@ -2,6 +2,21 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.4.0
+- Added a TagRank tab: a subprocess-driven pill picker, head-to-head tag comparisons, and
+  score graphs, launching straight into the clicked tag's pool with its own loading screen.
+- Added a Scripts tab to run `undertow/scripts/*.py` from the webui, including live progress
+  and support for interactive `input()` prompts in the on-page terminal.
+- Added `tag_cleanup.py`, a filename-to-tag cleanup script for Hydrus: an interactive wizard
+  that pulls services from Hydrus, caches the API key locally, dry-runs a random sample
+  before the full library, batches writes by shared tag set, and (as of Phase 3) detects
+  name blocks first with support for plain-tag names, comma/"&" lists, and initials.
+  Dry-run previews are grouped by file into a local HTML report.
+- Used the shortcut icon as the webui favicon, header logo, and console window icon.
+- Fixed CPU-hog dashboard polling (visibility-gated, throttled GPU spawn/poll rates, cached
+  psutil/config/tag reads, skip no-op table rebuilds) and an unbounded growth leak in the
+  subscription-checks response cache.
+
 ## 1.3.0
 - Fixed the version pill falsely showing "behind" almost permanently: untracked scratch
   files (settings.json, logs, dropped images) were counting as "dirty", and unpushed local
