@@ -80,6 +80,27 @@ def ensure_server_running() -> tuple[bool, str | None]:
         return False, "TagRank didn't respond within 20s of starting."
 
 
+def launch_gui() -> tuple[bool, str | None]:
+    """Opens TagRank's real PySide6 comparison window (`python main.py`, no --serve) in its own
+    console, same fresh-window pattern as webui.py's launch_tui(). This is the *actual* judging
+    UI for now - the in-browser pill picker only drives the read-only /search-options and
+    /history/graphs endpoints, not a live comparison session, since main.py's own tag-picker
+    prompt has no flag yet to preseed a tag non-interactively."""
+    main_py = config.find_tagrank_main()
+    if main_py is None:
+        return False, "TagRank isn't checked out at the configured path."
+    python_exe = config.find_tagrank_python() or "python"
+    try:
+        subprocess.Popen(
+            [str(python_exe), str(main_py)],
+            cwd=str(config.TAGRANK_DIR),
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+    except OSError as e:
+        return False, str(e)
+    return True, None
+
+
 def stop_server() -> None:
     """Prefer POST /shutdown so an active session gets a chance to be ended first (per the API
     doc) - only kill the process outright if that request itself fails to land."""
@@ -187,20 +208,4 @@ def undo(session_id: str) -> tuple[dict | None, str | None]:
 def end_session(session_id: str) -> tuple[dict | None, str | None]:
     """Persists the session's judgments to disk - always call this on every exit path
     (finishing, cancelling, or erroring out of a session), never just abandon a session id."""
-    result = _delete(f"/sessions/{session_id}")
-    _session_tags.pop(session_id, None)
-    return result
-
-
-# session_id -> the tag it was started around, purely for display in tagrank_session.html
-# (the API itself doesn't echo this back). Lost on process restart, same as every other
-# in-memory-only bit of UI state in this app - harmless, it's just a label.
-_session_tags: dict[str, str] = {}
-
-
-def remember_session_tag(session_id: str, tag: str) -> None:
-    _session_tags[session_id] = tag
-
-
-def get_session_tag(session_id: str) -> str:
-    return _session_tags.get(session_id, "?")
+    return _delete(f"/sessions/{session_id}")

@@ -7,9 +7,6 @@
 {% elif error %}
 <div class="kawaii-card" style="color:var(--k-danger-text);">{{ error }}</div>
 
-{% elif session_id %}
-{% include "partials/girly/tagrank_session.html" %}
-
 {% else %}
 {% include "partials/girly/tagrank_picker.html" %}
 {% endif %}

@@ -1,8 +1,0 @@
-<div class="kawaii-card" style="text-align:center;"
-     hx-get="/tagrank/job/{{ job_id }}?tag={{ tag|urlencode }}" hx-target="#tagrank-root" hx-swap="innerHTML"
-     hx-trigger="load delay:700ms">
-  <span class="loading loading-spinner loading-md"></span>
-  <p style="margin-top:0.5rem; color:var(--k-text-dim-text);">
-    Building comparison pool around <strong>{{ tag }}</strong>&hellip;
-  </p>
-</div>

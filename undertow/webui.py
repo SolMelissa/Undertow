@@ -650,11 +650,17 @@ if HAVE_FLASK:
         scripts_runner.start(name)
         return "", 204
 
+    @app.route("/scripts/input/<name>", methods=["POST"])
+    def scripts_input(name):
+        text = request.form.get("text", "")
+        ok = scripts_runner.send_input(name, text)
+        return jsonify({"ok": ok})
+
     @app.route("/scripts/output/<name>")
     def scripts_output(name):
         since = request.args.get("since", type=int)
-        lines, offset, running, returncode = scripts_runner.read_since(name, since)
-        return jsonify({"lines": lines, "offset": offset, "running": running, "returncode": returncode})
+        lines, offset, running, returncode, partial = scripts_runner.read_since(name, since)
+        return jsonify({"lines": lines, "offset": offset, "running": running, "returncode": returncode, "partial": partial})
 
     # ---------------------------------------------------------------- subscriptions: add
 
@@ -1477,16 +1483,21 @@ if HAVE_FLASK:
         return render_template("partials/girly/tag_migration_panel.html", **_tag_migration_ctx(old_tag, new_tag, extra, message, error))
 
     # ---------------------------------------------------------------- TagRank
-    # Drives TagRank's own headless API as a subprocess (see undertow/tagrank_client.py and
-    # tagrank/docs/api.md) rather than reimplementing its comparison logic - Undertow is just
-    # the pill-picker/voting front end. The active TagRank session id lives in an unsigned
-    # cookie, same pattern as the Media tab's search state (_media_sid above); every route here
-    # re-renders #tagrank-root so htmx swaps land wherever the button was clicked from.
+    # Picker (pills + summary graphs) drives TagRank's own headless API as a subprocess (see
+    # undertow/tagrank_client.py and tagrank/docs/api.md) for read-only data. Actually judging
+    # comparisons is NOT reimplemented in-browser (yet) - a pill click instead launches
+    # TagRank's real PySide6 GUI (`python main.py`, no --serve) in its own window, the same way
+    # launch_tui() opens the console UI in a fresh window, since that GUI's own tag-picker
+    # prompt has no CLI flag to preseed a tag yet.
 
-    _TAGRANK_SID_COOKIE = "undertow_tagrank_sid"
-
-    def _tagrank_sid() -> str | None:
-        return request.cookies.get(_TAGRANK_SID_COOKIE)
+    def _tagrank_score_color(score: float, lo: float, hi: float) -> str:
+        """Red (lowest-rated) -> green (highest-rated) hue, scaled across whatever tags are
+        actually on screen (not a fixed absolute TrueSkill range, which would leave every pill
+        the same color on a library where scores cluster tightly)."""
+        if hi <= lo:
+            return "hsl(170, 12%, 55%)"
+        t = max(0.0, min(1.0, (score - lo) / (hi - lo)))
+        return f"hsl({t * 120:.0f}, 65%, 45%)"
 
     def _tagrank_picker_ctx() -> dict:
         if not tagrank_client.is_available():
@@ -1496,90 +1507,35 @@ if HAVE_FLASK:
             return {"available": True, "error": err}
         search_options, so_err = tagrank_client.get_search_options()
         graphs, g_err = tagrank_client.get_graphs()
+
+        if search_options:
+            all_scores = [opt["score"] for group in ("top", "random", "bottom") for opt in search_options.get(group, [])]
+            lo, hi = (min(all_scores), max(all_scores)) if all_scores else (0.0, 0.0)
+            for group in ("top", "random", "bottom"):
+                search_options[group] = [
+                    {**opt, "color": _tagrank_score_color(opt["score"], lo, hi)}
+                    for opt in search_options.get(group, [])
+                ]
+
         return {
             "available": True,
             "error": so_err or g_err,
-            "session_id": None,
             "search_options": search_options,
             "graphs": graphs,
         }
 
-    def _tagrank_pair_ctx(session_id: str) -> dict:
-        pair, err = tagrank_client.next_pair(session_id)
-        ctx = {
-            "available": True, "error": None, "session_id": session_id,
-            "started_tag": tagrank_client.get_session_tag(session_id),
-        }
-        if err:
-            ctx["pair_error"] = err
-        elif pair.get("done"):
-            ctx["done"] = True
-        else:
-            ctx["left"], ctx["right"] = pair["left"], pair["right"]
-        return ctx
-
     @app.route("/partials/tagrank")
     def partial_tagrank():
-        sid = _tagrank_sid()
-        if sid:
-            return render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(sid))
         return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
 
-    @app.route("/tagrank/start", methods=["POST"])
-    def tagrank_start():
+    @app.route("/tagrank/launch", methods=["POST"])
+    def tagrank_launch():
         tag = (request.form.get("tag") or "").strip()
-        if not tag:
-            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
-        ok, err = tagrank_client.ensure_server_running()
+        ok, err = tagrank_client.launch_gui()
         if not ok:
-            return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
-        job, err = tagrank_client.start_session([tag])
-        if err:
-            return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
-        return render_template("partials/girly/tagrank_starting.html", job_id=job["job_id"], tag=tag)
-
-    @app.route("/tagrank/job/<job_id>")
-    def tagrank_job(job_id: str):
-        job, err = tagrank_client.get_job(job_id)
-        if err:
-            return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
-        if job["status"] == "pending":
-            return render_template("partials/girly/tagrank_starting.html", job_id=job_id, tag=request.args.get("tag", ""))
-        if job["status"] == "error":
-            return render_template("partials/girly/tagrank_inner.html", available=True, error=job.get("error") or "TagRank session failed to start.")
-        session_id = job["session_id"]
-        tag = request.args.get("tag", "")
-        tagrank_client.remember_session_tag(session_id, tag)
-        resp = make_response(render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(session_id)))
-        resp.set_cookie(_TAGRANK_SID_COOKIE, session_id, httponly=True, samesite="Lax")
-        return resp
-
-    @app.route("/tagrank/session/vote", methods=["POST"])
-    def tagrank_vote():
-        sid = _tagrank_sid()
-        choice = request.form.get("choice")
-        if sid and choice in ("left", "right"):
-            tagrank_client.submit_result(sid, choice)
-        if not sid:
-            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
-        return render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(sid))
-
-    @app.route("/tagrank/session/undo", methods=["POST"])
-    def tagrank_undo():
-        sid = _tagrank_sid()
-        if sid:
-            tagrank_client.undo(sid)
-            return render_template("partials/girly/tagrank_inner.html", **_tagrank_pair_ctx(sid))
-        return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
-
-    @app.route("/tagrank/session/end", methods=["POST"])
-    def tagrank_end():
-        sid = _tagrank_sid()
-        if sid:
-            tagrank_client.end_session(sid)
-        resp = make_response(render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx()))
-        resp.set_cookie(_TAGRANK_SID_COOKIE, "", expires=0)
-        return resp
+            return render_template("partials/message.html", message=f"Couldn't launch TagRank: {err}", error=True)
+        message = f"Launching TagRank - pick '{tag}' from its search list when prompted." if tag else "Launching TagRank…"
+        return render_template("partials/message.html", message=message, error=False)
 
     # ---------------------------------------------------------------- API keys
 
