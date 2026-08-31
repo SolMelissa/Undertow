@@ -57,7 +57,7 @@
     evt.preventDefault();
     const name = window.scriptRunning;
     const input = document.getElementById('script-input');
-    if (!name || !input.value) return false;
+    if (!name) return false;
     const text = input.value;
     input.value = '';
     window.scriptCompletedText += '> ' + text + '\n';
