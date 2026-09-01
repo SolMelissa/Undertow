@@ -300,12 +300,17 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
     Real scraped performer/alias data is noisy - a scene-descriptor alias like "petite teen"
     puts ordinary descriptive words into the first/last-name sets, which would otherwise
     happily pair up with an unrelated neighbor (e.g. "angelic teen" in real data, even though
-    neither is a real name here) and defeat cfg.always_split/glue-word handling entirely. Any
-    token that's a reserved always_split word, function word, or corpus glue word is never
-    allowed to participate in a match, in either role."""
+    neither is a real name here) and defeat cfg.always_split/glue-word handling entirely. Worse,
+    scraped alias data also puts ordinary demographic/descriptor words (e.g. "brunette",
+    "redhead", "hunk") into the first/last-name sets, which would otherwise tear a
+    should-stand-alone descriptor tag apart by pairing it with an unrelated neighbor. Any token
+    that's a reserved always_split word, function word, corpus glue word, or attribute-lexicon
+    word (colors, sizes, demographic/scene-descriptor adjectives - see Config.attribute_lexicon)
+    is never allowed to participate in a match, in either role."""
     if not gaz or not tokens:
         return [(t, False) for t in tokens]
-    protected = cfg.always_split | cfg.function_words | cfg.corpus_glue_words
+    protected = (cfg.always_split | cfg.function_words | cfg.corpus_glue_words
+                 | cfg.attribute_lexicon)
     n = len(tokens)
     out: List[Tuple[str, bool]] = []
     i = 0
@@ -840,10 +845,24 @@ def render_exploded_plain(exploded: List[Tuple[str, str]]) -> str:
 _console = Console()
 
 
+def _detected_names(entry: ParsedTag) -> List[str]:
+    """Unique gazetteer name matches found in this tag, in first-seen order -
+    the "name" kind entries in `exploded` (excludes single-word non-matches;
+    every "name" entry is already a validated multi-word phrase/pair - see
+    _extract_name_spans)."""
+    seen: Set[str] = set()
+    names: List[str] = []
+    for text, kind in entry.exploded:
+        if kind == "name" and text not in seen:
+            seen.add(text)
+            names.append(text)
+    return names
+
+
 def _render_tag_section(idx: int, total: int, label: str, entry: ParsedTag) -> None:
-    """Prints one tag-centered section: the full original tag, then its
-    exploded view (colored/struck/bold to show what the parser did to it),
-    then the OUT/DROPPED summary lines."""
+    """Prints one tag-centered section: the full original tag, the name(s) the
+    gazetteer detected (if any), then its exploded view (colored/struck/bold to
+    show what the parser did to it), then the OUT/DROPPED summary lines."""
     _console.print(f"===== Tag {idx}/{total} - {label} =====", style="bold")
     if entry.skipped:
         _console.print(f"  TAG: {entry.original}")
@@ -851,6 +870,8 @@ def _render_tag_section(idx: int, total: int, label: str, entry: ParsedTag) -> N
                         style="italic dim")
         _console.print()
         return
+    names = _detected_names(entry)
+    _console.print(f"  NAME(S) DETECTED: {', '.join(names) if names else '(none)'}", style="bold magenta")
     _console.print(f"  TAG: {entry.original}")
     _console.print("  ", render_exploded_rich(entry.exploded), sep="")
     out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
@@ -867,6 +888,8 @@ def _render_tag_section_plain(idx: int, total: int, label: str, entry: ParsedTag
         lines.append("  (skipped - single word or shorter than the min-process-length threshold)")
         lines.append("")
         return lines
+    names = _detected_names(entry)
+    lines.append(f"  NAME(S) DETECTED: {', '.join(names) if names else '(none)'}")
     lines.append(f"  TAG: {entry.original}")
     lines.append(f"  {render_exploded_plain(entry.exploded)}")
     out_str = ", ".join(entry.tags) if entry.tags else "(nothing kept)"
@@ -1030,12 +1053,16 @@ def write_html_report(previews: List[FilePreview], title: str, summary_note: str
     # of exactly what the parser decided about every word in it.
     cards: List[str] = []
     for idx, (label, entry) in enumerate(flat, start=1):
+        names = _detected_names(entry)
+        names_html = (", ".join(html.escape(n) for n in names) if names
+                      else '<span class="expl-skipped">(none)</span>')
         cards.append(f"""
     <section class="file-card">
       <div class="file-card__head">
         <span class="file-card__eyebrow">TAG {idx:02d} / {total_entries} &middot; {html.escape(label)}</span>
         <h2 class="file-card__title">{html.escape(entry.original)}</h2>
       </div>
+      <p class="skipnote">Name(s) detected: {names_html}</p>
       <div class="exploded">{_render_exploded_html(entry.exploded)}</div>
       <div class="file-card__body">
         <div class="tagblock tagblock--keep">
