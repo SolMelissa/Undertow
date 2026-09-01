@@ -1211,9 +1211,14 @@ def prompt_text(label: str, default: Optional[str] = None) -> str:
 
 
 def prompt_secret(label: str, has_saved: bool) -> Optional[str]:
-    """Returns None if the caller should keep whatever secret is already saved."""
+    """Returns None if the caller should keep whatever secret is already saved. Strips
+    non-printable characters (observed once as a stray embedded null byte from a terminal/
+    paste artifact) - an API key with a control character in it still "looks" right when
+    printed/masked but produces a malformed Authorization header that gets rejected by the
+    edge (e.g. a bare Cloudflare 400) before it ever reaches the API's own auth check."""
     hint = " (leave blank to keep the saved key)" if has_saved else ""
     value = getpass.getpass(f"{label}{hint}: ").strip()
+    value = "".join(ch for ch in value if ch.isprintable())
     return value or None
 
 
