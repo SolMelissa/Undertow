@@ -1275,6 +1275,34 @@ def run_self_test(cfg: Config) -> None:
     if not all(passed for _, passed in checks):
         print("\nOne or more regression checks FAILED - see FIXTURES/expected output above.")
 
+    # Offline performer-gazetteer checks: a synthetic gazetteer standing in for a real
+    # ThePornDB/StashDB fetch, so this exercises the name-detection path without a network
+    # call. "faith" and "cruz" are deliberately also plausible ordinary words/surnames to
+    # verify the adjacency requirement, not a real-world name list.
+    name_cfg = Config(performer_gazetteer=build_performer_gazetteer([
+        ("Stacy Cruz", []), ("Grace Hall", ["Faith Hall"]),
+    ]))
+    name_fixtures = [
+        "dir:38-angelic teen stacy cruz gets ass fucked by big cock outdoors",
+        "dir:12-quiet evening faith hall relaxes by the old lake shore",
+        "dir:19-color study the ocean looked deep blue under fading light",
+    ]
+    name_results = parse_filename_tag_batch(name_fixtures, name_cfg)
+    name_checks = [
+        ("Full-name gazetteer phrase 'stacy cruz' survives as one protected tag, "
+         "not dropped/merged", "stacy cruz" in name_results[0].tags),
+        ("Alias 'faith hall' (adjacency pair, order as-is) recognized as a name",
+         "faith hall" in name_results[1].tags),
+        ("Lone ambiguous word 'blue' (no adjacent gazetteer match) is NOT force-classified "
+         "as a name - falls through to ordinary attribute handling",
+         "blue" not in name_results[2].dropped),
+    ]
+    print("\nPerformer-gazetteer regression checks (offline, synthetic gazetteer):")
+    for label, passed in name_checks:
+        print(f"  [{'OK' if passed else 'FAIL'}] {label}")
+    if not all(passed for _, passed in name_checks):
+        print("\nOne or more performer-gazetteer regression checks FAILED.")
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
