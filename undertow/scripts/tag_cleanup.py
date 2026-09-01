@@ -153,9 +153,10 @@ class Config:
         "small", "big", "large", "massive", "tall", "short", "long", "thin", "slim", "thick",
         "wide", "young", "old", "quiet", "rustic", "fresh", "steep", "cool", "warm",
         "soft", "rare", "full", "wet", "dry", "clean", "bright", "dark",
-        # Demographic/scene-descriptor adjectives.
+        # Demographic/scene-descriptor adjectives. Hair-color words are deliberately
+        # excluded here - see always_split below.
         "petite", "ebony", "american", "latina", "asian", "sexy", "hot", "chick",
-        "cougar", "milf", "curvy", "busty", "naughty", "brunette", "redhead",
+        "cougar", "milf", "curvy", "busty", "naughty",
         "amateur", "real", "wild", "kinky", "angelic", "babe", "babes"})
     # Multi-person/group nouns that stay split from a preceding attribute
     # (e.g. "teen couple" -> "teen", "couple") since the demographic word is
@@ -165,7 +166,13 @@ class Config:
     # Tokens that always emit as their own tag: never absorbed into an attribute
     # phrase (leading or trailing), and act as a hard phrase-assembly boundary
     # so e.g. "teen first timer" splits at "teen" instead of gluing across it.
-    always_split: set = field(default_factory=lambda: {"teen"})
+    # Hair-color words live here rather than in attribute_lexicon: unlike an
+    # object descriptor (e.g. "massive black boulder", where stacking onto the
+    # following noun is correct), a hair color describes the performer and
+    # shouldn't drag in whatever unrelated word happens to follow it (e.g.
+    # "redhead deepthroat" merging into one tag).
+    always_split: set = field(default_factory=lambda: {
+        "teen", "brunette", "redhead", "blonde", "ginger"})
     # Explicit two-word compounds where the second word is a "strong" noun that
     # should keep the pair together (e.g. "first timer") rather than falling
     # through to two standalone tags. Kept as an explicit allowlist rather than
