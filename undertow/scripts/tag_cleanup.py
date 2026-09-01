@@ -264,7 +264,8 @@ def looks_truncated_dictionary(tok: str) -> bool:
 # in the sibling script `performer_gazetteer.py` - run it directly to build or
 # refresh the cache. This module only ever reads the cache file it writes.
 
-PERFORMER_GAZETTEER_CACHE_FILE = LOCAL_CONFIG_FILE.parent / "performer-gazetteer.json"
+JSON_OUTPUT_DIR = Path(__file__).resolve().parent / "output" / "json"
+PERFORMER_GAZETTEER_CACHE_FILE = JSON_OUTPUT_DIR / "performer-gazetteer.json"
 
 
 @dataclass
