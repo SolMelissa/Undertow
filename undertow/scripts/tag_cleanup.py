@@ -290,13 +290,22 @@ def load_performer_gazetteer() -> Optional[PerformerGazetteer]:
         return None
 
 
-def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer]) -> List[Tuple[str, bool]]:
+def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
+                         cfg: "Config") -> List[Tuple[str, bool]]:
     """Scans left-to-right for gazetteer matches: longest full-name/alias phrase match first
     (2+ words), else an adjacent first-name+last-name gazetteer pair (either order). A lone
     gazetteer hit on a single token is never enough by itself. Falls through untouched with
-    no gazetteer loaded."""
+    no gazetteer loaded.
+
+    Real scraped performer/alias data is noisy - a scene-descriptor alias like "petite teen"
+    puts ordinary descriptive words into the first/last-name sets, which would otherwise
+    happily pair up with an unrelated neighbor (e.g. "angelic teen" in real data, even though
+    neither is a real name here) and defeat cfg.always_split/glue-word handling entirely. Any
+    token that's a reserved always_split word, function word, or corpus glue word is never
+    allowed to participate in a match, in either role."""
     if not gaz or not tokens:
         return [(t, False) for t in tokens]
+    protected = cfg.always_split | cfg.function_words | cfg.corpus_glue_words
     n = len(tokens)
     out: List[Tuple[str, bool]] = []
     i = 0
@@ -304,7 +313,10 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer]) ->
         matched = False
         max_span = min(gaz.max_phrase_len, n - i)
         for span in range(max_span, 1, -1):
-            phrase = " ".join(tokens[i:i + span])
+            span_tokens = tokens[i:i + span]
+            if any(t in protected for t in span_tokens):
+                continue
+            phrase = " ".join(span_tokens)
             if phrase in gaz.full_name_phrases:
                 out.append((phrase, True))
                 i += span
@@ -312,7 +324,7 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer]) ->
                 break
         if matched:
             continue
-        if (i + 1 < n and
+        if (i + 1 < n and tokens[i] not in protected and tokens[i + 1] not in protected and
                 ((tokens[i] in gaz.first_names and tokens[i + 1] in gaz.last_names) or
                  (tokens[i] in gaz.last_names and tokens[i + 1] in gaz.first_names))):
             out.append((f"{tokens[i]} {tokens[i + 1]}", True))
@@ -577,7 +589,7 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config) -> List[ParsedTag
             is_last_block = block_idx == len(blocks_tokens) - 1
             if block_idx > 0:
                 exploded.append((cfg.primary_delimiter.strip(), "structure"))
-            units = _extract_name_spans(tokens, cfg.performer_gazetteer)
+            units = _extract_name_spans(tokens, cfg.performer_gazetteer, cfg)
             unit_tokens = [u for u, _ in units]
             categories = ["name" if is_name else _classify_token(u, cfg) for u, is_name in units]
             kept, blk_dropped, blk_trace = _process_block(unit_tokens, categories, is_last_block, cfg)
