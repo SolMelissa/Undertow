@@ -19,12 +19,14 @@ built-in fixture tags offline without connecting to Hydrus.
 
 Hard dependencies: requests and wordfreq. wordfreq drives truncated-token
 detection (dictionary-membership on the trailing token of a block). Name
-detection is optional and gazetteer-based, built from ThePornDB/StashDB
-performer lists (see the "Performer-name gazetteer" section below) - a bare
-statistical/capitalization-based approach was tried earlier and dropped as
-too heavy and unreliable for lowercase filename text with no case signal.
-With no gazetteer configured, names pass through the same content/attribute
-pipeline as any other word, same as before this feature existed.
+detection is optional and gazetteer-based - run the sibling script
+`performer_gazetteer.py` to build a local performer-name cache from
+ThePornDB/StashDB (see that script for details); this file only ever reads
+the cache it produces. A bare statistical/capitalization-based approach was
+tried earlier and dropped as too heavy and unreliable for lowercase filename
+text with no case signal. With no gazetteer cached, names pass through the
+same content/attribute pipeline as any other word, same as before this
+feature existed.
 """
 
 from __future__ import annotations
@@ -243,24 +245,24 @@ def looks_truncated_dictionary(tok: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Performer-name gazetteer (ThePornDB / StashDB)
+# Performer-name gazetteer (read-only here; built by performer_gazetteer.py)
 # ---------------------------------------------------------------------------
-# Entirely optional/additive: with no API keys configured and no cache on disk,
-# cfg.performer_gazetteer stays None and parsing behaves exactly as it did
-# before this existed. When present, it fixes two problems the plain
-# attribute/content classifier can't: (1) a performer surname/given-name that
-# is also an ordinary English word (e.g. a common color or virtue used as a
-# stage name) was getting silently absorbed into an attribute-adjective merge
-# or dropped by the wordfreq truncation check, since neither has any concept
-# of "this is a name". A lone gazetteer hit on a single token is deliberately
-# NOT enough to accept it as a name by itself - that's exactly what causes
-# false positives on common-word names. Only a full multi-word name/alias
-# phrase match, or two ADJACENT tokens that gazetteer-match as a first+last
-# name pair, are accepted; everything else falls through to the normal
-# attribute/content classifier untouched.
-
-TPDB_BASE_URL = "https://api.theporndb.net"
-STASHDB_GRAPHQL_URL = "https://stashdb.org/graphql"
+# Entirely optional/additive: with no cache on disk, cfg.performer_gazetteer
+# stays None and parsing behaves exactly as it did before this existed. When
+# present, it fixes two problems the plain attribute/content classifier can't:
+# a performer surname/given-name that is also an ordinary English word (e.g. a
+# common color or virtue used as a stage name) was getting silently absorbed
+# into an attribute-adjective merge or dropped by the wordfreq truncation
+# check, since neither has any concept of "this is a name". A lone gazetteer
+# hit on a single token is deliberately NOT enough to accept it as a name by
+# itself - that's exactly what causes false positives on common-word names.
+# Only a full multi-word name/alias phrase match, or two ADJACENT tokens that
+# gazetteer-match as a first+last name pair, are accepted; everything else
+# falls through to the normal attribute/content classifier untouched.
+#
+# Fetching and building the gazetteer (from ThePornDB/StashDB) lives entirely
+# in the sibling script `performer_gazetteer.py` - run it directly to build or
+# refresh the cache. This module only ever reads the cache file it writes.
 
 PERFORMER_GAZETTEER_CACHE_FILE = LOCAL_CONFIG_FILE.parent / "performer-gazetteer.json"
 
@@ -271,49 +273,6 @@ class PerformerGazetteer:
     first_names: Set[str]
     last_names: Set[str]
     max_phrase_len: int = 2
-
-
-def _normalize_name_phrase(name: str) -> List[str]:
-    text = split_camel_case(name)
-    text = normalize_token(text)
-    return [t for t in text.split(" ") if t]
-
-
-def build_performer_gazetteer(raw_entries: List[Tuple[str, List[str]]]) -> PerformerGazetteer:
-    """raw_entries is a list of (name, aliases) pairs pulled from one or more sources. Only
-    multi-word names/aliases contribute - a single-word stage name can't corroborate itself,
-    so it would just become a silent single-token accept-list, the exact failure mode being
-    avoided here."""
-    full_phrases: Set[str] = set()
-    first_names: Set[str] = set()
-    last_names: Set[str] = set()
-    max_len = 2
-    for name, aliases in raw_entries:
-        for candidate in [name, *aliases]:
-            if not candidate:
-                continue
-            tokens = _normalize_name_phrase(candidate)
-            if len(tokens) < 2:
-                continue
-            full_phrases.add(" ".join(tokens))
-            first_names.add(tokens[0])
-            last_names.add(tokens[-1])
-            max_len = max(max_len, len(tokens))
-    return PerformerGazetteer(full_name_phrases=full_phrases, first_names=first_names,
-                               last_names=last_names, max_phrase_len=max_len)
-
-
-def save_performer_gazetteer(gaz: PerformerGazetteer) -> None:
-    payload = {
-        "generated": datetime.datetime.now().isoformat(timespec="seconds"),
-        "full_name_phrases": sorted(gaz.full_name_phrases),
-        "first_names": sorted(gaz.first_names),
-        "last_names": sorted(gaz.last_names),
-        "max_phrase_len": gaz.max_phrase_len,
-    }
-    PERFORMER_GAZETTEER_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(PERFORMER_GAZETTEER_CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(payload, f)
 
 
 def load_performer_gazetteer() -> Optional[PerformerGazetteer]:
@@ -328,89 +287,6 @@ def load_performer_gazetteer() -> Optional[PerformerGazetteer]:
         )
     except (OSError, ValueError, KeyError):
         return None
-
-
-def fetch_theporndb_performer_names(api_key: str, on_progress=None) -> List[Tuple[str, List[str]]]:
-    """Paginates ThePornDB's REST /performers listing. Field names for aliases vary slightly
-    across their documented plugin integrations, so this checks a couple of plausible keys
-    rather than assuming one - first real run is the way to confirm the exact shape."""
-    session = requests.Session()
-    session.headers["Authorization"] = f"Bearer {api_key}"
-    session.headers["Accept"] = "application/json"
-    session.headers["User-Agent"] = "Undertow-tag-cleanup/1.0"
-
-    results: List[Tuple[str, List[str]]] = []
-    page = 1
-    while True:
-        resp = session.get(f"{TPDB_BASE_URL}/performers", params={"page": page}, timeout=30)
-        if resp.status_code == 429:
-            time.sleep(5)
-            continue
-        resp.raise_for_status()
-        payload = resp.json()
-        data = payload.get("data", [])
-        if not data:
-            break
-        for p in data:
-            name = p.get("name") or ""
-            aliases = p.get("aliases")
-            if aliases is None:
-                extras = p.get("extras") or {}
-                aliases = extras.get("aliases", [])
-            if isinstance(aliases, str):
-                aliases = [aliases]
-            results.append((name, list(aliases or [])))
-        if on_progress:
-            on_progress(len(results))
-        meta = payload.get("meta") or {}
-        last_page = meta.get("last_page")
-        if last_page and page >= last_page:
-            break
-        if last_page is None and len(data) == 0:
-            break
-        page += 1
-        time.sleep(0.2)
-    return results
-
-
-def fetch_stashdb_performer_names(api_key: str, on_progress=None) -> List[Tuple[str, List[str]]]:
-    """Paginates StashDB's GraphQL queryPerformers (stash-box schema)."""
-    session = requests.Session()
-    session.headers["ApiKey"] = api_key
-    session.headers["Content-Type"] = "application/json"
-    query = """
-    query QueryPerformers($page: Int!, $per_page: Int!) {
-      queryPerformers(input: {page: $page, per_page: $per_page}) {
-        count
-        performers { name aliases }
-      }
-    }
-    """
-
-    results: List[Tuple[str, List[str]]] = []
-    page = 1
-    per_page = 100
-    while True:
-        resp = session.post(STASHDB_GRAPHQL_URL, json={
-            "query": query, "variables": {"page": page, "per_page": per_page},
-        }, timeout=30)
-        resp.raise_for_status()
-        payload = resp.json()
-        if payload.get("errors"):
-            raise RuntimeError(f"StashDB GraphQL error: {payload['errors']}")
-        block = (payload.get("data") or {}).get("queryPerformers") or {}
-        performers = block.get("performers", [])
-        if not performers:
-            break
-        for p in performers:
-            results.append((p.get("name") or "", list(p.get("aliases") or [])))
-        if on_progress:
-            on_progress(len(results))
-        if len(performers) < per_page:
-            break
-        page += 1
-        time.sleep(0.1)
-    return results
 
 
 def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer]) -> List[Tuple[str, bool]]:
@@ -1279,9 +1155,12 @@ def run_self_test(cfg: Config) -> None:
     # ThePornDB/StashDB fetch, so this exercises the name-detection path without a network
     # call. "faith" and "cruz" are deliberately also plausible ordinary words/surnames to
     # verify the adjacency requirement, not a real-world name list.
-    name_cfg = Config(performer_gazetteer=build_performer_gazetteer([
-        ("Stacy Cruz", []), ("Grace Hall", ["Faith Hall"]),
-    ]))
+    name_cfg = Config(performer_gazetteer=PerformerGazetteer(
+        full_name_phrases={"stacy cruz", "grace hall", "faith hall"},
+        first_names={"stacy", "grace", "faith"},
+        last_names={"cruz", "hall"},
+        max_phrase_len=2,
+    ))
     name_fixtures = [
         "dir:38-angelic teen stacy cruz gets ass fucked by big cock outdoors",
         "dir:12-quiet evening faith hall relaxes by the old lake shore",
@@ -1313,9 +1192,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
                     help="Ignore saved settings and re-enter the API URL/key and service picks from scratch")
     p.add_argument("--self-test", action="store_true",
                     help="Preview the built-in fixture tags offline (no Hydrus connection) and exit")
-    p.add_argument("--refresh-performers", action="store_true",
-                    help="Rebuild the performer-name gazetteer from ThePornDB/StashDB even if a "
-                         "cached one exists")
     return p
 
 
@@ -1481,66 +1357,17 @@ def wizard_build_config(saved: dict) -> Config:
     return cfg
 
 
-def wizard_ensure_performer_gazetteer(saved: dict, force_refresh: bool) -> Optional[PerformerGazetteer]:
-    """Optional name-detection enhancement (see the "Performer-name gazetteer" section above).
-    With a cache already on disk this is silent and free; with no cache and no keys entered
-    it returns None and parsing proceeds exactly as before this feature existed."""
-    if not force_refresh:
-        cached = load_performer_gazetteer()
-        if cached:
-            print(f"Using cached performer gazetteer ({len(cached.full_name_phrases):,} name(s)/"
-                  f"alias(es) - pass --refresh-performers to rebuild it).")
-            return cached
-        if not prompt_yes_no(
-                "\nBuild a performer-name gazetteer from ThePornDB/StashDB for better name "
-                "detection? (Requires API key(s); skip to parse without name detection, same as "
-                "before this feature existed)", default=False):
-            return None
-
-    tpdb_key = saved.get("theporndb_api_key")
-    if prompt_yes_no("Fetch performers from ThePornDB?", default=bool(tpdb_key)):
-        entered = prompt_secret("ThePornDB API key", has_saved=bool(tpdb_key))
-        tpdb_key = entered or tpdb_key
-        if tpdb_key:
-            save_local_config({"theporndb_api_key": tpdb_key})
+def load_performer_gazetteer_for_run() -> Optional[PerformerGazetteer]:
+    """Silently uses whatever performer_gazetteer.py has cached, if anything. Building/
+    refreshing that cache is entirely performer_gazetteer.py's job - this never fetches or
+    prompts for API keys itself."""
+    gaz = load_performer_gazetteer()
+    if gaz:
+        print(f"Using performer gazetteer ({len(gaz.full_name_phrases):,} name(s)/alias(es)) "
+              f"for name detection - run performer_gazetteer.py to refresh it.")
     else:
-        tpdb_key = None
-
-    stashdb_key = saved.get("stashdb_api_key")
-    if prompt_yes_no("Fetch performers from StashDB?", default=bool(stashdb_key)):
-        entered = prompt_secret("StashDB API key", has_saved=bool(stashdb_key))
-        stashdb_key = entered or stashdb_key
-        if stashdb_key:
-            save_local_config({"stashdb_api_key": stashdb_key})
-    else:
-        stashdb_key = None
-
-    if not tpdb_key and not stashdb_key:
-        print("No API key provided - continuing without performer-name detection.")
-        return load_performer_gazetteer()
-
-    raw_entries: List[Tuple[str, List[str]]] = []
-    if tpdb_key:
-        print("Fetching performers from ThePornDB (this can take a while on first run)...")
-        try:
-            raw_entries.extend(fetch_theporndb_performer_names(tpdb_key))
-        except (requests.RequestException, RuntimeError, ValueError) as exc:
-            print(f"  ThePornDB fetch failed: {exc}", file=sys.stderr)
-    if stashdb_key:
-        print("Fetching performers from StashDB...")
-        try:
-            raw_entries.extend(fetch_stashdb_performer_names(stashdb_key))
-        except (requests.RequestException, RuntimeError, ValueError) as exc:
-            print(f"  StashDB fetch failed: {exc}", file=sys.stderr)
-
-    if not raw_entries:
-        print("No performer data retrieved - continuing without performer-name detection.")
-        return load_performer_gazetteer()
-
-    gaz = build_performer_gazetteer(raw_entries)
-    save_performer_gazetteer(gaz)
-    print(f"Built performer gazetteer: {len(gaz.full_name_phrases):,} full name(s)/alias(es), "
-          f"{len(gaz.first_names):,} first-name token(s), {len(gaz.last_names):,} last-name token(s).")
+        print("No performer gazetteer cached - parsing without name detection. Run "
+              "performer_gazetteer.py first to enable it.")
     return gaz
 
 
@@ -1731,8 +1558,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     services = wizard_pick_services(client, saved)
     saved = load_local_config()
     cfg = wizard_build_config(saved)
-    saved = load_local_config()
-    cfg.performer_gazetteer = wizard_ensure_performer_gazetteer(saved, args.refresh_performers)
+    cfg.performer_gazetteer = load_performer_gazetteer_for_run()
 
     # run_dry_run_then_apply previews a small random sample first and asks for
     # confirmation before ever touching the full library, so there's no separate
