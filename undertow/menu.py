@@ -67,7 +67,8 @@ def main() -> None:
     services.set_console_window_icon()
 
     print("Checking Hydrus pipeline services...")
-    services.start_required_services()
+    for line in services.start_required_services():
+        print(line)
 
     print("Making sure every subscription is grouped for parallel checking...")
     updated, total, restarted, error = subscriptions.ensure_all_subscriptions_parallel()

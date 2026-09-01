@@ -390,44 +390,53 @@ def stop_everything() -> None:
     dismount_veracrypt_drive()
 
 
-def start_required_services() -> None:
+def start_required_services() -> list[str]:
+    """Returns the status lines describing what it did/found, rather than printing them
+    directly - this is called both from the pre-TUI console startup (menu.py, which prints
+    the result itself) and from inside the running Textual TUI / Flask web dashboard
+    (Diagnostics' Restart button, webui.py), where a raw stdout write from a background
+    thread would corrupt Textual's alt-screen buffer the same way watchdog.py's print()
+    calls used to (see watchdog.py's _check_once)."""
+    lines: list[str] = []
     ensure_veracrypt_drive_mounted()
 
     status = get_service_status()
 
     if not status.hydrus_running:
         if config.HYDRUS_EXE.exists():
-            print("  starting Hydrus (minimized)...")
+            lines.append("  starting Hydrus (minimized)...")
             _start_gui_minimized([str(config.HYDRUS_EXE)])
             time.sleep(12)
         else:
-            print(f"  Hydrus not found at {config.HYDRUS_EXE} - has setup been run?")
+            lines.append(f"  Hydrus not found at {config.HYDRUS_EXE} - has setup been run?")
     else:
-        print("  Hydrus already running.")
+        lines.append("  Hydrus already running.")
 
     if not status.daemon_running:
         if config.HYDOWNLOADER_CONFIG_FILE.exists():
             killed = kill_orphaned_gallery_dl_processes()
             if killed:
-                print(f"  cleared {killed} orphaned gallery-dl process(es) from a previous crash...")
-            print("  starting hydownloader daemon...")
+                lines.append(f"  cleared {killed} orphaned gallery-dl process(es) from a previous crash...")
+            lines.append("  starting hydownloader daemon...")
             start_daemon()
             time.sleep(5)
         else:
-            print("  hydownloader not set up yet - run Setup-HydrusPipeline.ps1 first.")
+            lines.append("  hydownloader not set up yet - run Setup-HydrusPipeline.ps1 first.")
     else:
-        print("  hydownloader daemon already running.")
+        lines.append("  hydownloader daemon already running.")
 
     if not status.systray_running:
         systray_exe = config.find_systray_exe()
         if systray_exe and systray_exe.exists() and config.HYDOWNLOADER_CONFIG_FILE.exists():
-            print("  starting hydownloader systray (minimized)...")
+            lines.append("  starting hydownloader systray (minimized)...")
             start_systray()
             time.sleep(3)
         else:
-            print("  hydownloader-systray not found - run Setup-HydrusPipeline.ps1 first.")
+            lines.append("  hydownloader-systray not found - run Setup-HydrusPipeline.ps1 first.")
     else:
-        print("  hydownloader systray already running.")
+        lines.append("  hydownloader systray already running.")
+
+    return lines
 
 
 def restart_hydrus_service(timeout: float = 15.0) -> str | None:
