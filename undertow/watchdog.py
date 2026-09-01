@@ -122,10 +122,12 @@ class Watchdog:
             pass
 
         if actions:
-            ts = datetime.now().strftime("%H:%M:%S")
-            print()
-            for a in actions:
-                print(f"[watchdog {ts}] {a}")
+            # No print() here - this thread runs alongside the Textual TUI, which owns the
+            # terminal's alt-screen buffer. A raw stdout write from a background thread
+            # corrupts Textual's screen state and drags the whole terminal (not just the app)
+            # into laggy, garbled redraws. WATCHDOG_STATUS_FILE/WATCHDOG_HISTORY_FILE (written
+            # below/by _append_history) and the toast below are the visible surfaces instead.
+            #
             # One batched toast per cycle (not one per action) - see alerts.notify's own
             # docstring for why a cycle where several things break at once shouldn't spam a
             # burst of separate balloons.
