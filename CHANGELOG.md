@@ -2,6 +2,11 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.6.2
+- Repo cleanup: untracked the leftover `Undertow.exe - Shortcut.lnk` and added `*.lnk` to
+  `.gitignore` (shortcuts are user-machine-specific, not app assets), and moved the guide
+  docs into `legacy/` as "Hydrus Pipeline Guide - version 1.4.0" (docx + html).
+
 ## 1.6.1
 - Slowed every dashboard auto-poll (previously 2s/8s/10s depending on panel - status, queue
   graph, sparkline, sector/fleet/hoststats/topprocs/netstat/netconn, subscriptions table,
