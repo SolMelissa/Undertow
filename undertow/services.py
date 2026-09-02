@@ -16,7 +16,7 @@ from pathlib import Path
 
 import psutil
 
-from . import config, hydrus_client
+from . import config, hydrus_client, tagrank_client
 from .api_client import get_daemon_api_info, get_status_info, shutdown as api_shutdown
 
 try:
@@ -435,6 +435,15 @@ def start_required_services() -> list[str]:
             lines.append("  hydownloader-systray not found - run Setup-HydrusPipeline.ps1 first.")
     else:
         lines.append("  hydownloader systray already running.")
+
+    # Kick off TagRank's headless API in the background so it's already warm by the time
+    # someone opens the TagRank tab, instead of the tab itself eating the ~15-75s cold-start
+    # cost (see tagrank_client.STARTUP_DEADLINE_SECONDS). Non-blocking and a no-op if it's
+    # already running or starting - safe to call on every launch/restart.
+    if tagrank_client.is_available():
+        err = tagrank_client.start_server_async()
+        if err:
+            lines.append(f"  TagRank: {err}")
 
     return lines
 

@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.6.0
+- TagRank's headless API now starts in the background as part of `start_required_services()`
+  (Undertow launch, and every Diagnostics/status "restart services" click) instead of only
+  being spawned the first time the TagRank tab is opened - it's had time to warm up before
+  anyone actually clicks the tab, instead of eating its ~15-75s cold-start cost right there.
+  Non-blocking and a no-op if already running/starting.
+
 ## 1.5.1
 - Consolidated the TagRank pill-list filters: replaced the three separate per-group filter
   boxes (shipped moments earlier in 1.5.0) with one shared filter bar applying to Top/Random/
