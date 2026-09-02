@@ -1,0 +1,116 @@
+<div id="girly-explore-panel">
+  <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
+    Look up one tag's siblings (alternate spellings that all display as one "ideal" tag) and
+    parents/children (tagging with a child auto-implies its parent), then see the same
+    relationships as a family tree. Hydrus's Client API is read-only for these - to actually
+    create or edit a sibling/parent, use Hydrus's own tag sibling/parent manager.
+  </p>
+
+  <form hx-get="/partials/tag-explore" hx-target="#girly-explore-panel" hx-swap="outerHTML"
+        style="display:flex; gap:0.6rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+    <input type="text" name="tag" value="{{ searched_tag }}" placeholder="tag to explore&hellip;" required
+           class="kawaii-input" style="flex:1; min-width:12rem;">
+    <select name="depth" class="kawaii-select">
+      {% for d in (1, 2, 3, 4) %}
+      <option value="{{ d }}" {{ 'selected' if map_depth == d else '' }}>{{ d }} level{{ 's' if d != 1 else '' }} deep</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="kawaii-btn kawaii-btn-primary">Explore</button>
+  </form>
+
+  {% if message %}
+  <div class="kawaii-card" style="color:var(--k-danger-text);">{{ message }}</div>
+  {% elif not searched_tag %}
+  <div class="kawaii-empty">Enter a tag above to see its siblings, parents, children, and family tree.</div>
+  {% else %}
+
+  {% if ideal_tag and ideal_tag != searched_tag %}
+  <div style="margin-bottom:0.75rem;">Displays as: <strong style="color:var(--k-accent-text);">{{ ideal_tag }}</strong></div>
+  {% endif %}
+
+  <div class="kawaii-card" style="margin-bottom:0.9rem;">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(11rem, 1fr)); gap:0.9rem;">
+      <div>
+        <p class="kawaii-section-title" style="font-size:0.85rem; margin-bottom:0.35rem;">Siblings</p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+          {% for s in siblings %}<span class="kawaii-pill">{{ s }}</span>
+          {% else %}<span class="text-xs" style="color:var(--k-text-dim-text);">none</span>{% endfor %}
+        </div>
+      </div>
+      <div>
+        <p class="kawaii-section-title" style="font-size:0.85rem; margin-bottom:0.35rem;">Parents</p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+          {% for p in parents %}<span class="kawaii-pill">{{ p }}</span>
+          {% else %}<span class="text-xs" style="color:var(--k-text-dim-text);">none</span>{% endfor %}
+        </div>
+      </div>
+      <div>
+        <p class="kawaii-section-title" style="font-size:0.85rem; margin-bottom:0.35rem;">Children</p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+          {% for c in children %}<span class="kawaii-pill">{{ c }}</span>
+          {% else %}<span class="text-xs" style="color:var(--k-text-dim-text);">none</span>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.6rem;">
+    <button type="button" class="kawaii-pill" style="cursor:pointer;" title="Bulk-add or remove a tag across every file matching this tag"
+            @click="tagSub = 'bulk'; bulkMode = 'edit'"
+            hx-get="/partials/bulk-tagging" hx-vals='{"predicate": "{{ searched_tag }}"}' hx-target="#girly-bulk-panel" hx-swap="innerHTML">
+      &#127991;&#65039; Bulk-tag files matching {{ searched_tag }}
+    </button>
+    <button type="button" class="kawaii-pill" style="cursor:pointer;" title="Rename/merge this tag into another across every file that has it"
+            @click="tagSub = 'bulk'; bulkMode = 'migrate'"
+            hx-get="/partials/tag-migration" hx-vals='{"old_tag": "{{ searched_tag }}"}' hx-target="#girly-migration-panel" hx-swap="innerHTML">
+      &#8644; Migrate {{ searched_tag }} to&hellip;
+    </button>
+  </div>
+
+  <div class="kawaii-card" style="overflow-x:auto;">
+    {% if map_message %}
+    <div style="color:var(--k-danger-text);">{{ map_message }}</div>
+    {% elif map_layout %}
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--k-text-dim-text); margin-bottom:0.5rem;">
+      <span>&#8592; ancestors (parents)</span>
+      <span>siblings shown under each tag</span>
+      <span>descendants (children) &#8594;</span>
+    </div>
+    <div style="position:relative; width:{{ map_layout.width }}px; height:{{ map_layout.height }}px; margin:0 auto; max-width:100%;">
+      <svg width="{{ map_layout.width }}" height="{{ map_layout.height }}" style="position:absolute; top:0; left:0; overflow:visible; pointer-events:none;">
+        {% for e in map_layout.edges %}
+        <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" style="stroke:var(--k-border); stroke-width:1.5px;" />
+        {% endfor %}
+      </svg>
+      {% for n in map_layout.nodes %}
+      <div style="position:absolute; left:{{ n.x }}px; top:{{ n.y }}px; transform:translate(-50%,-50%); text-align:center; z-index:1;">
+        <button type="button"
+                class="kawaii-pill {{ 'kawaii-btn-primary' if n.id == 0 else '' }}"
+                style="white-space:nowrap; {{ 'font-weight:700;' if n.id == 0 else '' }}"
+                title="{{ 'searched tag' if n.id == 0 else 'click to re-center the map on this tag' }}"
+                hx-get="/partials/tag-explore" hx-vals='{"tag": "{{ n.tag }}", "depth": "{{ map_depth }}"}'
+                hx-target="#girly-explore-panel" hx-swap="outerHTML">
+          {{ n.tag }}
+        </button>
+        {% if n.siblings %}
+        <div style="font-size:0.6rem; color:var(--k-text-dim-text); margin-top:0.15rem; max-width:9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+             title="siblings: {{ n.siblings|join(', ') }}">
+          &#8646; {{ n.siblings[:2]|join(', ') }}{% if n.siblings|length > 2 %} +{{ n.siblings|length - 2 }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% if map_layout.truncated %}
+    <div class="text-xs" style="color:var(--k-text-dim-text); text-align:center; margin-top:0.5rem;">
+      +{{ map_layout.truncated }} more connected tag(s) not shown - narrow the depth or explore from a more specific tag.
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="text-xs" style="color:var(--k-text-dim-text);">No family tree data for this tag.</div>
+    {% endif %}
+  </div>
+
+  <div class="kawaii-gallery-slot kawaii-gallery-tall kawaii-hide-sm" style="display:block; margin-top:1.25rem;" hx-get="/images/anime/slot/tall" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
+  {% endif %}
+</div>

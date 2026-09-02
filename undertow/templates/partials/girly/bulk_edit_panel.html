@@ -1,0 +1,20 @@
+<div>
+  <div class="kawaii-tabs" style="border-bottom:none; margin-bottom:0.75rem; gap:0.4rem;">
+    <button type="button" class="kawaii-tab-btn" style="padding:0.4rem 0.8rem; font-size:0.82rem;"
+            :class="{ active: bulkMode === 'edit' }" @click="bulkMode = 'edit'">&#127991;&#65039; Add / Remove</button>
+    <button type="button" class="kawaii-tab-btn" style="padding:0.4rem 0.8rem; font-size:0.82rem;"
+            :class="{ active: bulkMode === 'migrate' }" @click="bulkMode = 'migrate'">&#8644; Rename / Merge</button>
+  </div>
+
+  <div x-show="bulkMode === 'edit'">
+    <div id="girly-bulk-panel">
+      {% include "partials/girly/bulk_tagging_panel.html" %}
+    </div>
+  </div>
+
+  <div x-show="bulkMode === 'migrate'" x-cloak>
+    <div id="girly-migration-panel">
+      {% include "partials/girly/tag_migration_panel.html" %}
+    </div>
+  </div>
+</div>

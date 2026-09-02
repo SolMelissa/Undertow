@@ -1,0 +1,40 @@
+<div id="girly-namespaces-panel">
+  <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
+    Browse every tag under one namespace (the part before the colon, e.g. <code>character</code> for
+    <code>character:asuka langley</code>), sorted by how many files use each - useful for spotting
+    near-duplicate or misspelled tags worth migrating. Tag rename/recolor isn't a thing the Hydrus
+    Client API exposes yet, so this is a read-only browser; click a tag to jump to Explore.
+  </p>
+
+  <form hx-get="/partials/tag-namespaces" hx-target="#girly-namespaces-panel" hx-swap="outerHTML"
+        style="display:flex; gap:0.6rem; margin-bottom:0.75rem;">
+    <input type="text" name="namespace" value="{{ ns_query }}" placeholder="namespace, e.g. character&hellip;" required
+           class="kawaii-input" style="flex:1;">
+    <button type="submit" class="kawaii-btn kawaii-btn-primary">Browse</button>
+  </form>
+
+  {% if ns_error %}
+  <div class="kawaii-card" style="color:var(--k-danger-text);">{{ ns_error }}</div>
+  {% elif not ns_query %}
+  <div class="kawaii-empty">Enter a namespace above to list its tags by file count.</div>
+  {% elif not ns_tags %}
+  <div class="kawaii-empty">No tags found under <strong>{{ ns_query }}:</strong>.</div>
+  {% else %}
+  <div class="kawaii-card">
+    <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+      {% for tag, count in ns_tags %}
+      <button type="button" class="kawaii-pill" style="cursor:pointer;" title="{{ count }} file(s) - click to explore this tag's relationships"
+              @click="tagSub = 'explore'"
+              hx-get="/partials/tag-explore" hx-vals='{"tag": "{{ tag }}"}' hx-target="#girly-explore-panel" hx-swap="outerHTML">
+        {{ tag }} <span class="kawaii-sub-tag">{{ count }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% if ns_truncated %}
+    <div class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.6rem;">
+      Showing the top {{ ns_tags|length }} tags - narrow the namespace or search Hydrus directly for the full list.
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

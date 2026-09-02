@@ -1361,44 +1361,48 @@ if HAVE_FLASK:
     # see hydrus_client.get_siblings_and_parents's docstring), so this is lookup-only. Editing
     # still has to happen in Hydrus's own client for now.
 
-    def _tag_relationships_ctx(searched_tag: str = "") -> dict:
+    def _tag_explore_ctx(searched_tag: str = "", depth: int = 2) -> dict:
+        """Siblings/parents/children plus the family-tree map for one tag, merged into a single
+        context so the Explore sub-tab only needs one search box instead of two."""
         ctx = {
             "searched_tag": searched_tag, "ideal_tag": "", "siblings": [], "parents": [], "children": [], "message": None,
-            "map_family": None, "map_layout": None, "map_message": None, "map_depth": 2,
+            "map_family": None, "map_layout": None, "map_message": None, "map_depth": depth,
         }
         if not searched_tag:
-            ctx.update(_bulk_tagging_ctx())
-            ctx.update(_tag_migration_ctx())
             return ctx
         relationships, err = media.get_tag_relationships(searched_tag)
         if err:
             ctx["message"] = err
+            return ctx
+        ctx.update(relationships)
+        family, ferr = media.get_tag_family_map(searched_tag, depth)
+        if ferr:
+            ctx["map_message"] = ferr
         else:
-            ctx.update(relationships)
+            ctx["map_family"] = family
+            ctx["map_layout"] = media.layout_tag_family_radial(family)
+        return ctx
+
+    def _tag_relations_tab_ctx(searched_tag: str = "") -> dict:
+        ctx = _tag_explore_ctx(searched_tag)
         ctx.update(_bulk_tagging_ctx())
         ctx.update(_tag_migration_ctx())
+        ctx.update(_tag_namespaces_ctx())
         return ctx
 
     @app.route("/partials/tag-relations")
     def partial_tag_relations():
-        return render_template("partials/girly/tag_relations_tab.html", **_tag_relationships_ctx(request.args.get("tag", "").strip()))
+        return render_template("partials/girly/tag_relations_tab.html", **_tag_relations_tab_ctx(request.args.get("tag", "").strip()))
 
-    @app.route("/partials/tag-map")
-    def partial_tag_map():
+    @app.route("/partials/tag-explore")
+    def partial_tag_explore():
         tag = (request.args.get("tag") or "").strip()
         try:
             depth = int(request.args.get("depth", 2))
         except ValueError:
             depth = 2
         depth = max(1, min(depth, 4))
-        ctx = {"map_family": None, "map_layout": None, "map_message": None, "map_depth": depth}
-        if tag:
-            family, err = media.get_tag_family_map(tag, depth)
-            ctx["map_message"] = err
-            if not err:
-                ctx["map_family"] = family
-                ctx["map_layout"] = media.layout_tag_family_radial(family)
-        return render_template("partials/girly/tag_map.html", **ctx)
+        return render_template("partials/girly/tag_explore_panel.html", **_tag_explore_ctx(tag, depth))
 
     # ------------------------------------------------------------ bulk tagging / tag migration
     # Both are plain add_tags/delete_tags calls across a batch of files matched by a search -
@@ -1488,6 +1492,25 @@ if HAVE_FLASK:
         else:
             message, error = f"Migrated {old_tag!r} to {new_tag!r} on {count} file(s).", False
         return render_template("partials/girly/tag_migration_panel.html", **_tag_migration_ctx(old_tag, new_tag, extra, message, error))
+
+    _NAMESPACE_BROWSE_LIMIT = 150
+
+    def _tag_namespaces_ctx(namespace: str = "") -> dict:
+        ctx = {"ns_query": namespace, "ns_tags": [], "ns_error": None, "ns_truncated": False}
+        if not namespace:
+            return ctx
+        tags, err = media.get_suggested_tags([], f"{namespace}:*", limit=_NAMESPACE_BROWSE_LIMIT)
+        if err:
+            ctx["ns_error"] = err
+        else:
+            ns_prefix = f"{namespace}:"
+            ctx["ns_tags"] = [(t, c) for t, c in tags if t.startswith(ns_prefix)]
+            ctx["ns_truncated"] = len(tags) >= _NAMESPACE_BROWSE_LIMIT
+        return ctx
+
+    @app.route("/partials/tag-namespaces")
+    def partial_tag_namespaces():
+        return render_template("partials/girly/tag_namespaces_panel.html", **_tag_namespaces_ctx(request.args.get("namespace", "").strip()))
 
     # ---------------------------------------------------------------- TagRank
     # Picker (pills + summary graphs) drives TagRank's own headless API as a subprocess (see
@@ -1639,7 +1662,8 @@ if HAVE_FLASK:
     @app.route("/tagrank/launch", methods=["POST"])
     def tagrank_launch():
         tag = (request.form.get("tag") or "").strip()
-        ok, err = tagrank_client.launch_gui(tag or None)
+        use_similarity = (request.form.get("use_similarity") or "").strip() == "1"
+        ok, err = tagrank_client.launch_gui(tag or None, use_similarity=use_similarity)
         if not ok:
             return render_template("partials/girly/tagrank_inner.html", available=True, error=f"Couldn't launch TagRank: {err}")
         return render_template("partials/girly/tagrank_starting.html", tag=tag, started=time.time())
@@ -1662,6 +1686,96 @@ if HAVE_FLASK:
             tag=tag, started=started, polling=True,
             console_log=tagrank_client.read_launch_log(),
         )
+
+    # ---------------------------------------------------------------- TagRank in-tab comparer
+    # Judging now happens inside this tab's own #tagrank-comparer panel, driven by TagRank's
+    # session API (start/next-pair/result/undo/end - see tagrank_client.py + tagrank/docs/api.md)
+    # instead of launching TagRank's separate PySide6 window. Images are fetched through
+    # Undertow's own /media/file/<id> Hydrus proxy (already used by the Media tab) since the
+    # session API only hands back file_id/hash, not bytes; tags come from Undertow's own Hydrus
+    # API key via hydrus_client.get_file_metadata, independent of TagRank's process. Only the
+    # comparer panel swaps between states - the filter bar and tag pills above it never move,
+    # per the "never navigate away from filter/tags/comparer" requirement.
+
+    _TAGRANK_COMPARE_START_TIMEOUT_SECONDS = 45
+
+    def _tagrank_compare_side_ctx(side: dict | None) -> dict | None:
+        """One side of a pair as {file_id, hash, tags} for the comparer template, or None."""
+        if not side:
+            return None
+        file_id = side.get("file_id")
+        meta_resp = hydrus_client.get_file_metadata([file_id]) if file_id is not None else None
+        tags: list[str] = []
+        if meta_resp is not None and meta_resp.success:
+            entries = (meta_resp.data or {}).get("metadata") or []
+            if entries:
+                tags = sorted(media.flatten_tags(entries[0]))
+        return {"file_id": file_id, "hash": side.get("hash"), "tags": tags}
+
+    def _tagrank_compare_pair_ctx(session_id: str) -> dict:
+        pair, err = tagrank_client.next_pair(session_id)
+        if err:
+            return {"session_id": session_id, "error": err}
+        if not pair or pair.get("done"):
+            tagrank_client.end_session(session_id)
+            return {"session_id": None, "done": True}
+        return {
+            "session_id": session_id,
+            "left": _tagrank_compare_side_ctx(pair.get("left")),
+            "right": _tagrank_compare_side_ctx(pair.get("right")),
+        }
+
+    @app.route("/tagrank/compare/start", methods=["POST"])
+    def tagrank_compare_start():
+        tag = (request.form.get("tag") or "").strip()
+        job, err = tagrank_client.start_session([tag] if tag else [])
+        if err or not job:
+            return render_template("partials/girly/tagrank_comparer.html", error=f"Couldn't start comparing: {err}")
+        return render_template("partials/girly/tagrank_comparer_starting.html", tag=tag, job_id=job.get("job_id"), started=time.time())
+
+    @app.route("/tagrank/compare/start-poll")
+    def tagrank_compare_start_poll():
+        tag = request.args.get("tag", "")
+        job_id = request.args.get("job_id", "")
+        try:
+            started = float(request.args.get("started", 0))
+        except ValueError:
+            started = 0.0
+        job, err = tagrank_client.get_job(job_id)
+        if err:
+            return render_template("partials/girly/tagrank_comparer.html", error=f"Couldn't start comparing: {err}")
+        status = (job or {}).get("status")
+        if status == "ready":
+            return render_template("partials/girly/tagrank_comparer.html", **_tagrank_compare_pair_ctx(job["session_id"]))
+        if status == "error":
+            return render_template("partials/girly/tagrank_comparer.html", error=(job or {}).get("error") or "TagRank couldn't build a pool for that tag.")
+        if time.time() - started > _TAGRANK_COMPARE_START_TIMEOUT_SECONDS:
+            return render_template("partials/girly/tagrank_comparer.html", error="Building the comparison pool took too long - try again.")
+        return render_template("partials/girly/tagrank_comparer_starting.html", tag=tag, job_id=job_id, started=started, polling=True)
+
+    @app.route("/tagrank/compare/result", methods=["POST"])
+    def tagrank_compare_result():
+        session_id = (request.form.get("session_id") or "").strip()
+        choice = (request.form.get("choice") or "").strip()
+        _res, err = tagrank_client.submit_result(session_id, choice)
+        if err:
+            return render_template("partials/girly/tagrank_comparer.html", error=f"Couldn't submit that result: {err}")
+        return render_template("partials/girly/tagrank_comparer.html", **_tagrank_compare_pair_ctx(session_id))
+
+    @app.route("/tagrank/compare/undo", methods=["POST"])
+    def tagrank_compare_undo():
+        session_id = (request.form.get("session_id") or "").strip()
+        _res, err = tagrank_client.undo(session_id)
+        if err:
+            return render_template("partials/girly/tagrank_comparer.html", error=f"Couldn't undo: {err}")
+        return render_template("partials/girly/tagrank_comparer.html", **_tagrank_compare_pair_ctx(session_id))
+
+    @app.route("/tagrank/compare/end", methods=["POST"])
+    def tagrank_compare_end():
+        session_id = (request.form.get("session_id") or "").strip()
+        if session_id:
+            tagrank_client.end_session(session_id)
+        return render_template("partials/girly/tagrank_comparer.html")
 
     # ---------------------------------------------------------------- API keys
 

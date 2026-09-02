@@ -2,6 +2,20 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.11.0
+- Tag Relations tab redesign - it had grown into 5 sub-tabs (2 of them unbuilt stubs) with
+  duplicate search boxes and no clear story for what to use it for, so it's now 3:
+  - **Explore** merges the old "Siblings & Parents" lookup and "Tag Map" into one search: type
+    a tag once and see its siblings/parents/children plus the family-tree map together, instead
+    of two separate tabs each wanting their own tag typed in.
+  - **Bulk Edit** merges "Bulk Tagging" and "Tag Migration" into one panel with an inner
+    Add/Remove vs. Rename/Merge toggle, since both are the same "batch-edit files matching a
+    search" operation under different presentation.
+  - **Namespaces** replaces the unbuilt stub with a real read-only browser: pick a namespace
+    (e.g. `character`) and see every tag under it ranked by file count, for spotting
+    near-duplicate/misspelled tags worth migrating - click any tag to jump straight into
+    Explore for it.
+
 ## 1.10.2
 - Added a Refresh button to the TagRank tab's "not checked out" and error states, so a downed
   or not-yet-started TagRank service can be retried without switching tabs away and back.
