@@ -1,5 +1,8 @@
+<span class="kawaii-pill info version-pill-spinner" style="font-size:0.72rem; padding:0.2rem 0.65rem;">
+  <span class="tagrank-spinner" style="width:0.7rem; height:0.7rem;"></span>checking&hellip;
+</span>
 {% if not checked %}
-<span class="kawaii-pill {{ 'ok' if version_info.status == 'current' else ('warn' if version_info.status == 'stale' else 'info') }}"
+<span class="kawaii-pill version-pill-content {{ 'ok' if version_info.status == 'current' else ('warn' if version_info.status == 'stale' else 'info') }}"
       style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
       title="{% if version_info.status == 'current' %}Running the latest pushed commit{% elif version_info.status == 'stale' %}Running code that differs from origin/master{% else %}Version freshness couldn't be determined{% endif %} &middot; click to check for updates"
       hx-post="/version/check" hx-target="#version-pill-wrapper" hx-swap="innerHTML">
@@ -7,19 +10,19 @@
   v{{ version_info.version }} &middot; {{ version_info.commit }}{% if version_info.dirty %}+{% endif %}
 </span>
 {% elif error %}
-<span class="kawaii-pill warn" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
+<span class="kawaii-pill version-pill-content warn" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
       title="{{ error }} &middot; click to retry"
       hx-post="/version/check" hx-target="#version-pill-wrapper" hx-swap="innerHTML">
   <span class="dot"></span>couldn't check &middot; retry
 </span>
 {% elif update_available %}
-<span class="kawaii-pill info" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
+<span class="kawaii-pill version-pill-content bad" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
       title="Click to pull the update and reload"
       hx-post="/version/update" hx-target="#version-pill-wrapper" hx-swap="innerHTML">
   <span class="dot"></span>&#11014; update available &middot; click to update
 </span>
 {% else %}
-<span class="kawaii-pill ok" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
+<span class="kawaii-pill version-pill-content ok" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
       title="Running the latest pushed commit &middot; click to check again"
       hx-post="/version/check" hx-target="#version-pill-wrapper" hx-swap="innerHTML">
   <span class="dot"></span>v{{ version_info.version }} &middot; up to date

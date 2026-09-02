@@ -2,6 +2,11 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.10.1
+- Fixed the version pill's update check: it now shows a spinning reload icon while checking,
+  and the "update available" state turns red (it was showing the same blue as the default
+  state, so a real update never looked different from anything else).
+
 ## 1.10.0
 - TagRank tab filter bar rework:
   - The DB Search button now shows a spinner and "Searching..." status while a search is in

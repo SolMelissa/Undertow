@@ -327,6 +327,10 @@
 .kawaii-bar-fill.warn { background: linear-gradient(90deg, var(--k-accent-3), var(--k-danger)); }
 
 /* pills (status, service up/down) */
+.version-pill-spinner { display: none; }
+#version-pill-wrapper.htmx-request .version-pill-spinner { display: inline-flex; align-items: center; gap: 0.35rem; }
+#version-pill-wrapper.htmx-request .version-pill-content { display: none; }
+
 .kawaii-pill {
   display: inline-flex;
   align-items: center;
