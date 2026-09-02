@@ -1,10 +1,15 @@
 @echo off
 REM Publishes the launcher/ .NET project (Program.cs, WebView2 app frame) into a single
-REM self-contained Undertow.exe at the project root, via the dotnet SDK. Re-run this
-REM any time launcher/Program.cs or launcher/launcher.csproj changes. The resulting
-REM Undertow.exe is a real .exe, so unlike run.bat it can be pinned to the Start menu
-REM AND the taskbar, and shows the dashboard in its own window (see launcher/Program.cs)
-REM instead of a browser tab.
+REM Undertow.exe at the project root, via the dotnet SDK. Re-run this any time
+REM launcher/Program.cs or launcher/launcher.csproj changes. The resulting Undertow.exe
+REM is a real .exe, so unlike run.bat it can be pinned to the Start menu AND the taskbar,
+REM and shows the dashboard in its own window (see launcher/Program.cs) instead of a
+REM browser tab.
+REM
+REM Framework-dependent, not self-contained (see launcher.csproj) - this machine always has
+REM the matching .NET runtime installed, so there's no reason to bundle a private copy of it
+REM into a ~160MB exe. If you ever build this for a machine without .NET 8 installed, add
+REM --self-contained true back (and IncludeNativeLibrariesForSelfExtract=true) on this line.
 setlocal
 cd /d "%~dp0"
 
@@ -14,7 +19,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-dotnet publish launcher\launcher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o "%~dp0publish_tmp"
+dotnet publish launcher\launcher.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o "%~dp0publish_tmp"
 if errorlevel 1 (
     echo Build failed.
     exit /b 1

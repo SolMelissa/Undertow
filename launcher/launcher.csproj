@@ -8,10 +8,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Undertow</AssemblyName>
     <RootNamespace>UndertowLauncher</RootNamespace>
-    <SelfContained>true</SelfContained>
+    <SelfContained>false</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <InvariantGlobalization>true</InvariantGlobalization>
     <ApplicationIcon>undertow.ico</ApplicationIcon>
     <Product>Undertow</Product>

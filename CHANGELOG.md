@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.8.2
+- `build_launcher.bat`/`launcher.csproj`: switched `Undertow.exe` from a self-contained .NET
+  publish to framework-dependent (`SelfContained=false`) - shrinks the built exe from ~163MB
+  to under 1MB with no functional change, since this machine always has the matching .NET
+  runtime installed anyway. Deleted the stale 163MB self-contained build from disk (it was
+  never git-tracked either way).
+
 ## 1.8.1
 - Fixed the version pill's "couldn't check · retry" error: `git fetch`'s 3s timeout was too
   tight for a real network round-trip and was intermittently getting clipped, reported as
