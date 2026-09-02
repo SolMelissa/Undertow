@@ -2,6 +2,14 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.8.1
+- Fixed the version pill's "couldn't check · retry" error: `git fetch`'s 3s timeout was too
+  tight for a real network round-trip and was intermittently getting clipped, reported as
+  "couldn't reach origin" even when the fetch would have succeeded given another second or two.
+- The version pill now checks for updates on page load and every 60s (previously only on
+  click), and clicking an "update available" pill now actually runs `git pull --ff-only` and
+  reloads the page - it used to just reload without pulling anything.
+
 ## 1.8.0
 - Overhauled the TagRank tab's tag-picker filter bar: two connected search modes, Live
   (instant, client-side, only over already-fetched tags) and DB Search (round-trips to

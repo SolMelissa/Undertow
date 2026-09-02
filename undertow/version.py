@@ -25,14 +25,14 @@ _CHANGELOG_FILE = _REPO_ROOT / "CHANGELOG.md"
 _cache: Optional[dict] = None
 
 
-def _git(*args: str) -> Optional[str]:
+def _git(*args: str, timeout: float = 3) -> Optional[str]:
     try:
         result = subprocess.run(
             ["git", *args],
             cwd=_REPO_ROOT,
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=timeout,
             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
         )
     except Exception:
@@ -101,7 +101,10 @@ def check_for_update() -> dict:
     "unknown" values so the caller can reuse the same button copy either way. "update_available"
     is only true when origin/master is genuinely ahead of (or diverged from) HEAD - unpushed
     local commits (HEAD ahead of origin/master) are never reported as an update being available."""
-    fetch_ok = _git("fetch", "--quiet", "origin", "master") is not None
+    # git fetch is a network round-trip, unlike the other (local, near-instant) git calls in this
+    # module - a 3s timeout was clipping legitimate fetches (observed taking ~2.4s on a normal
+    # connection) and surfacing as a bogus "couldn't reach origin" error on the dashboard pill.
+    fetch_ok = _git("fetch", "--quiet", "origin", "master", timeout=15) is not None
     head = _git("rev-parse", "HEAD")
     remote = _git("rev-parse", "origin/master")
 
@@ -117,6 +120,20 @@ def check_for_update() -> dict:
         "status": "stale" if update_available else "current",
         "error": None,
     }
+
+
+def apply_update() -> dict:
+    """Runs the actual update - `git pull --ff-only origin master` - invoked when the user clicks
+    an "update available" pill. Fast-forward only, same as run.bat's launch-time pull, so it never
+    clobbers local changes; a diverged/conflicting history fails cleanly and reports an error
+    instead of doing anything destructive. Clears the cached get_version_info() result on success
+    so the next page render reflects the new HEAD."""
+    global _cache
+    output = _git("pull", "--ff-only", "origin", "master", timeout=15)
+    if output is None:
+        return {"success": False, "error": "update failed - couldn't fast-forward (check for local changes or run `git pull` manually)"}
+    _cache = None
+    return {"success": True, "error": None}
 
 
 # ------------------------------------------------------------------------------- changelog
