@@ -1585,13 +1585,12 @@ if HAVE_FLASK:
 
     @app.route("/tagrank/services", methods=["POST"])
     def tagrank_services():
-        changes = {}
         file_service_key = (request.form.get("file_service_key") or "").strip()
-        tag_service_key = (request.form.get("tag_service_key") or "").strip()
         badge_tag_service_key = (request.form.get("badge_tag_service_key") or "").strip()
-        changes["pool.file_service_key"] = file_service_key
-        changes["hydrus.tag_service_key"] = tag_service_key
-        changes["hydrus.badge_tag_service_key"] = badge_tag_service_key
+        changes = {
+            "pool.file_service_key": file_service_key,
+            "hydrus.badge_tag_service_key": badge_tag_service_key,
+        }
         _settings, err = tagrank_client.patch_settings(changes)
         ctx = _tagrank_picker_ctx()
         if err:

@@ -1,7 +1,8 @@
 <p class="kawaii-section-title" style="margin-top:1.5rem;">&#9881; Services</p>
 <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.5rem;">
-  Which Hydrus file/tag services TagRank searches and writes to. Leave a dropdown on "(default)"
-  to fall back to Hydrus's default file domain / merging every tag service together.
+  Which Hydrus file service TagRank searches, and which tag service its own badges
+  (TagRankSort:N sort tags + MMR-derived tags) get written to. Leave a dropdown on "(default)"
+  to fall back to Hydrus's default file domain / "my tags".
 </p>
 {% set hydrus_settings = settings.hydrus if settings else {} %}
 {% set pool_settings = settings.pool if settings else {} %}
@@ -17,18 +18,9 @@
     </select>
   </label>
   <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">
-    Tag service (which tags to read/write)
-    <select name="tag_service_key" class="kawaii-select">
-      <option value="">(default - merge all)</option>
-      {% for svc in tag_services %}
-      <option value="{{ svc.key }}" {{ "selected" if hydrus_settings.get("tag_service_key") == svc.key }}>{{ svc.name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">
     Badge tag service (TagRankSort:N + MMR tags)
     <select name="badge_tag_service_key" class="kawaii-select">
-      <option value="">(default - use tag service above)</option>
+      <option value="">(default - "my tags")</option>
       {% for svc in tag_services %}
       <option value="{{ svc.key }}" {{ "selected" if hydrus_settings.get("badge_tag_service_key") == svc.key }}>{{ svc.name }}</option>
       {% endfor %}

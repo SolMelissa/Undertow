@@ -259,9 +259,11 @@ def _unwrap(resp: requests.Response) -> tuple[dict | None, str | None]:
 
 def get_search_options() -> tuple[dict | None, str | None]:
     """{"top": [...], "random": [...], "bottom": [...]} of {index, tag, score, file_count}.
-    Computes a live per-tag Hydrus file count for every candidate tag server-side, so this can
-    take several seconds on a large tag set - well past the default 10s wrapper timeout."""
-    return _get("/search-options", timeout=45)
+    Computes a live per-tag Hydrus file count for every candidate tag server-side - on a large
+    library with a large CANDIDATE_SEED_COUNT this is a lot more than "several seconds"
+    (confirmed live: 45s wasn't enough and produced a read-timeout error in the TagRank tab),
+    so this gets real headroom rather than a number tuned for a small library."""
+    return _get("/search-options", timeout=180)
 
 
 def get_tags() -> tuple[list | None, str | None]:
