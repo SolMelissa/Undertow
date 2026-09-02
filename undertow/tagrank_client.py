@@ -130,13 +130,19 @@ def ensure_server_running() -> tuple[bool, str | None]:
         return False, f"TagRank didn't respond within {STARTUP_DEADLINE_SECONDS}s of starting."
 
 
-def launch_gui(tag: str | None = None) -> tuple[bool, str | None]:
-    """Opens TagRank's real PySide6 comparison window (`python main.py [--tag <tag>]`). This is
-    the *actual* judging UI - the in-browser pill picker only drives the read-only
-    /search-options and /history/graphs endpoints, not a live comparison session. Passing --tag
-    skips TagRank's own interactive numbered search-picker prompt (a small addition to
-    tagrank/main.py + tagrank/tagrank/app.py made specifically for this) so the window comes up
-    already searching the tag whose pill was clicked, instead of TagRank's generic start screen.
+def launch_gui(tag: str | None = None, use_similarity: bool = False) -> tuple[bool, str | None]:
+    """Opens TagRank's real PySide6 comparison window (`python main.py [--tag <tag>]
+    [--no-similarity]`). This is the *actual* judging UI - the in-browser pill picker only
+    drives the read-only /search-options and /history/graphs endpoints, not a live comparison
+    session. Passing --tag skips TagRank's own interactive numbered search-picker prompt (a
+    small addition to tagrank/main.py + tagrank/tagrank/app.py made specifically for this) so
+    the window comes up already searching the tag whose pill was clicked, instead of TagRank's
+    generic start screen.
+
+    use_similarity defaults to False (--no-similarity) because TagRank's visual-similarity pool
+    expansion (a Hydrus distance-search per seed hash) is the slow part of a launch - the
+    filter bar's Similarity toggle lets the user opt back into it when they specifically want
+    visually-similar neighbors in the pool rather than a plain tag search.
 
     Runs hidden (CREATE_NO_WINDOW) with stdout/stderr captured to
     config.TAGRANK_LAUNCH_STDOUT_LOG/STDERR_LOG rather than the previous CREATE_NEW_CONSOLE,
@@ -150,6 +156,8 @@ def launch_gui(tag: str | None = None) -> tuple[bool, str | None]:
     args = [str(python_exe), str(main_py)]
     if tag:
         args += ["--tag", tag]
+    if not use_similarity:
+        args.append("--no-similarity")
     try:
         config.TAGRANK_LAUNCH_STDOUT_LOG.parent.mkdir(parents=True, exist_ok=True)
         out = open(config.TAGRANK_LAUNCH_STDOUT_LOG, "w", encoding="utf-8")
@@ -319,8 +327,11 @@ def get_graphs() -> tuple[list | None, str | None]:
     return _get("/history/graphs", timeout=30)
 
 
-def start_session(query: list[str], pool_size: int | None = None) -> tuple[dict | None, str | None]:
-    body: dict = {"query": query}
+def start_session(query: list[str], pool_size: int | None = None, use_similarity: bool = False) -> tuple[dict | None, str | None]:
+    """use_similarity defaults to False - TagRank's visual-similarity pool expansion (a Hydrus
+    distance-search per seed hash) is the slow part of starting a session, so Undertow's filter
+    bar's Similarity toggle (off by default) lets the user opt back into it."""
+    body: dict = {"query": query, "use_similarity": use_similarity}
     if pool_size is not None:
         body["pool_size"] = pool_size
     return _post("/sessions", json_body=body)
