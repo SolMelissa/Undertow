@@ -35,8 +35,13 @@ def is_available() -> bool:
 
 
 def is_server_running() -> bool:
+    """Probes /health, not a data route - GET /tags does real work scaled to the rated-tag
+    history (measured 1.0-1.7s live on this library), so it was racing this check's old 1.5s
+    timeout and intermittently reading a live server as down, which made Undertow spawn a
+    second subprocess on top of the first (doomed to fail its own port bind) - the exact
+    "TagRank didn't respond" failure this was supposed to detect, not avoid."""
     try:
-        requests.get(f"{config.TAGRANK_API_URL}/tags", timeout=1.5)
+        requests.get(f"{config.TAGRANK_API_URL}/health", timeout=5)
         return True
     except requests.RequestException:
         return False

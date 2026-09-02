@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.4.1
+- Fixed the TagRank tab intermittently reporting a live server as down: its liveness check
+  probed `GET /tags` (real work scaled to rated-tag history, measured 1.0-1.7s on a real
+  library) against a 1.5s timeout, so a live server would occasionally read as not-running and
+  Undertow would spawn a second subprocess on top of it - which failed its own port bind and
+  surfaced as "TagRank didn't respond". Now probes `/health` with a 5s timeout instead.
+
 ## 1.4.0
 - Added a TagRank tab: a subprocess-driven pill picker, head-to-head tag comparisons, and
   score graphs, launching straight into the clicked tag's pool with its own loading screen.
