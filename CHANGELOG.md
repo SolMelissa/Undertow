@@ -2,6 +2,11 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.5.1
+- Consolidated the TagRank pill-list filters: replaced the three separate per-group filter
+  boxes (shipped moments earlier in 1.5.0) with one shared filter bar applying to Top/Random/
+  Bottom at once, per feedback that per-section filters weren't warranted.
+
 ## 1.5.0
 - TagRank's comparison window no longer flashes a separate, untitled console on launch
   (`CREATE_NEW_CONSOLE` -> `CREATE_NO_WINDOW`); its stdout/stderr is captured to
