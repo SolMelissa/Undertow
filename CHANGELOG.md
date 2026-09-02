@@ -7,8 +7,8 @@ All notable changes to Undertow are tracked here, one section per version. Newes
   (`CREATE_NEW_CONSOLE` -> `CREATE_NO_WINDOW`); its stdout/stderr is captured to
   `hydownloader-data/logs/tagrank-launch-*.log` instead and shown inline on the webui's "Building
   comparison pool..." loading screen.
-- Added a filter box above each of TagRank's Top rated / Random / Bottom rated pill lists to
-  narrow them by tag substring client-side.
+- Added a single filter bar above TagRank's Top rated / Random / Bottom rated pill lists
+  (tag substring, min files, min/max score) that applies to all three groups at once.
 
 ## 1.4.1
 - Fixed the TagRank tab intermittently reporting a live server as down: its liveness check
