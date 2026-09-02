@@ -12,6 +12,7 @@ __pycache__/
 # Build output / packaged binaries
 *.exe
 *.exe.WebView2/
+/WebView2Loader.dll
 *.lnk
 launcher/bin/
 launcher/obj/

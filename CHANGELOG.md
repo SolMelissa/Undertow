@@ -2,6 +2,14 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.8.3
+- Fixed `Undertow.exe` failing to launch with "Couldn't start the WebView2 runtime: Unable to
+  load DLL 'WebView2Loader.dll'" (0x8007007E), a regression from 1.8.2's framework-dependent
+  switch: `dotnet publish` with `PublishSingleFile` doesn't bundle native dependencies into the
+  exe when not self-contained, so `WebView2Loader.dll` was left as a loose file in the publish
+  output - and `build_launcher.bat` was deleting that whole temp folder instead of keeping the
+  dll. It now copies `WebView2Loader.dll` next to `Undertow.exe` at the repo root.
+
 ## 1.8.2
 - `build_launcher.bat`/`launcher.csproj`: switched `Undertow.exe` from a self-contained .NET
   publish to framework-dependent (`SelfContained=false`) - shrinks the built exe from ~163MB

@@ -27,6 +27,10 @@ if errorlevel 1 (
 
 if exist "%~dp0HydrusPipeline.exe" del /f /q "%~dp0HydrusPipeline.exe"
 move /y "%~dp0publish_tmp\Undertow.exe" "%~dp0Undertow.exe" >nul
+REM WebView2Loader.dll is a loose native dependency that framework-dependent
+REM PublishSingleFile does NOT bundle into the exe - it must sit next to
+REM Undertow.exe at runtime or the app fails with 0x8007007E on launch.
+move /y "%~dp0publish_tmp\WebView2Loader.dll" "%~dp0WebView2Loader.dll" >nul
 rmdir /s /q "%~dp0publish_tmp"
 
 echo Built Undertow.exe
