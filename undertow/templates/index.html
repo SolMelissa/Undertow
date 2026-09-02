@@ -6,10 +6,7 @@
 <title>Undertow v{{ version_info.version }} ({{ version_info.commit }}){% if version_info.status != 'current' %} - outdated{% endif %}</title>
 <link rel="icon" href="{{ url_for('static', filename='img/undertow.ico') }}">
 <script>
-// Girly (kawaii) is the only mode under active development - hacker/terminal mode is
-// deprecated (still present in the DOM as #hacker-view, but no longer reachable from the UI).
-// See the fuller applyPipelineTheme() pair at the bottom of this file, which this initial
-// value stays in sync with.
+// Girly (kawaii) is the only theme.
 (function () {
   document.documentElement.setAttribute('data-theme', 'kawaii');
   if (localStorage.getItem('pipeline-kawaii-dark') === '1') document.documentElement.setAttribute('data-kawaii-mode', 'dark');
@@ -41,44 +38,12 @@
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--term-dim); }
   ::-webkit-scrollbar-track { background: #010302; }
-  #log-box div:last-child { color: #eafff0; }
   .htmx-indicator { opacity: 0; transition: opacity 150ms ease-in; }
   .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
 
-  #matrix-rain { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.5; }
   .app-layer { position: relative; z-index: 1; }
 
   .vt { font-family: 'VT323', monospace; letter-spacing: 0.03em; }
-
-  .hud-panel {
-    position: relative;
-    background: #030805;
-    border: 1px solid var(--term-dim);
-    box-shadow: 0 0 0 1px #010302, inset 0 0 12px rgba(57,255,136,0.05);
-  }
-  .hud-titlebar {
-    display: flex; align-items: center; gap: 6px;
-    padding: 2px 8px;
-    background: #04140a;
-    border-bottom: 1px solid var(--term-dim);
-    font-size: 10.5px; letter-spacing: 0.08em; color: var(--term-green);
-    white-space: nowrap; overflow: hidden;
-  }
-  .hud-titlebar::before { content: "["; color: #ff9d3c; }
-  .hud-titlebar::after { content: "]"; color: #ff9d3c; }
-  .hud-titlebar .rule { flex: 1; border-bottom: 1px dashed var(--term-dim); height: 0; margin-left: 6px; }
-
-  .pulse-dot { width: 6px; height: 6px; display: inline-block; background: currentColor;
-    box-shadow: 0 0 6px currentColor; animation: pulse 1.4s steps(2) infinite; }
-  @keyframes pulse { 50% { opacity: 0.2; } }
-
-  .radar-spin { width: 10px; height: 10px; border-radius: 50%;
-    background: conic-gradient(from 0deg, transparent 0deg, #ff9d3c 60deg, transparent 90deg);
-    animation: spin 0.9s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .cursor-blink { display: inline-block; width: 0.6em; background: var(--term-green); animation: blink 1s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
 
   .glitch { position: relative; }
   .glitch::before, .glitch::after {
@@ -90,90 +55,12 @@
   @keyframes glitch1 { 0% { clip-path: inset(10% 0 80% 0); transform: translate(-1px); } 20% { clip-path: inset(60% 0 5% 0); transform: translate(1px); } 40% { clip-path: inset(20% 0 60% 0); transform: translate(-1px); } 60% { clip-path: inset(80% 0 2% 0); transform: translate(1px); } 100% { clip-path: inset(40% 0 40% 0); transform: translate(0); } }
   @keyframes glitch2 { 0% { clip-path: inset(70% 0 5% 0); transform: translate(1px); } 30% { clip-path: inset(10% 0 75% 0); transform: translate(-1px); } 60% { clip-path: inset(45% 0 40% 0); transform: translate(1px); } 100% { clip-path: inset(20% 0 60% 0); transform: translate(0); } }
 
-  .scanlines { position: fixed; inset: 0; z-index: 2; pointer-events: none;
-    background: repeating-linear-gradient(to bottom, rgba(57,255,136,0.035) 0px, rgba(57,255,136,0.035) 1px, transparent 1px, transparent 2px);
-    mix-blend-mode: overlay; opacity: 0.6; }
-  .crt-vignette { position: fixed; inset: 0; z-index: 2; pointer-events: none;
-    box-shadow: inset 0 0 160px rgba(0,0,0,0.75); }
-
-  .bracket-btn {
-    font-family: inherit; font-size: 11px; letter-spacing: 0.05em;
-    background: #030805; border: 1px solid var(--term-dim); color: var(--term-green);
-    padding: 4px 10px; border-radius: 0;
-  }
-  .bracket-btn:hover { background: var(--term-green); color: #010302; }
-  .bracket-btn::before { content: "[ "; } .bracket-btn::after { content: " ]"; }
-  .bracket-btn-danger { border-color: #6b1c2a; color: #ff4f6d; }
-  .bracket-btn-danger:hover { background: #ff4f6d; color: #010302; }
-
   .tag-ok { color: var(--term-green); }
   .tag-fail { color: #ff4f6d; }
-  .glow-title { text-shadow: 0 0 8px rgba(57,255,136,0.6), 0 0 18px rgba(57,255,136,0.25); }
-
-  .status-wall { background: #030805; border-bottom: 1px solid var(--term-dim); }
-
-  /* Cockpit layout: LEFT and RIGHT are FIXED-width (same width as each other, skinny) - they
-     hold gadgets/instruments, not the actual data, so they never need to grow. MAIN (the real
-     subscriptions/log data) is the only flexible track and gets whatever's left via minmax(0,1fr)
-     - the minmax(0, ...) matters because a plain "1fr" grid track still respects its content's
-     min-content width by default, which can force the track wider than the available space and
-     break the whole layout; minmax(0,1fr) explicitly allows it to shrink below that.
-
-     Three stages:
-       - wide:   left(fixed) | main(flexible) | right(fixed) - all three side by side
-       - medium: left(fixed) | main(flexible), with RIGHT dropped to its own full-width row
-                 below both (not merged into LEFT's column - it gets the whole width to itself)
-       - narrow: everything stacks full-width, MAIN first (the actual functional cockpit),
-                 then LEFT, then RIGHT */
-  .cockpit-grid {
-    display: grid; gap: 0.75rem;
-    grid-template-columns: 1fr;
-    grid-template-areas: "main" "left" "right";
-    align-items: start;
-  }
-  .cockpit-left { grid-area: left; }
-  .cockpit-main { grid-area: main; min-width: 0; }
-  .cockpit-right { grid-area: right; }
-
-  @media (min-width: 768px) {
-    .cockpit-grid {
-      grid-template-columns: 260px minmax(0, 1fr);
-      grid-template-areas: "left main" "right right";
-    }
-  }
-  @media (min-width: 1280px) {
-    .cockpit-grid {
-      grid-template-columns: 260px minmax(0, 1fr) 260px;
-      grid-template-areas: "left main right";
-    }
-  }
-
-  table.term-table th, table.term-table td { font-size: 11px; padding: 2px 6px; }
-
-  /* --- decorative chaos widgets - heights/motion driven by JS below, not CSS keyframes,
-     so SIGNAL and SCOPE move like real instruments instead of one repeating loop --- */
-  .eq { display: flex; align-items: flex-end; gap: 2px; height: 44px; }
-  .eq span { flex: 1; background: linear-gradient(to top, #39ff88, #39d3ff); }
-
-  #hexdump { font-size: 10px; line-height: 1.5; color: #2a8a55; white-space: pre; }
-  #hexdump .addr { color: #1c6b3e; }
-  #hexdump .ascii { color: #39ff88; }
-
-  #radar-canvas { width: 100%; aspect-ratio: 1 / 1; display: block; }
 </style>
 </head>
 <body class="min-h-screen">
-<canvas id="matrix-rain"></canvas>
-<div class="scanlines"></div>
-<div class="crt-vignette"></div>
-
 <div class="app-layer">
-  <div id="term-banner" class="px-4 py-1 text-[10px] text-[var(--term-dim)] border-b border-[#0d2416] bg-[#010805] whitespace-nowrap overflow-x-auto">
-    root@undertow:~# tail -f /var/log/undertow.webui &nbsp;·&nbsp;
-    [ OK ] bound 127.0.0.1:8765 &nbsp;·&nbsp; [ OK ] htmx/alpine runtime attached &nbsp;·&nbsp;
-    [ OK ] daemon api client ready<span class="cursor-blink">&nbsp;</span>
-  </div>
-
   <div class="navbar bg-[#030805] border-b border-[var(--term-dim)] px-4 py-1.5 min-h-0 flex-wrap gap-y-1.5">
     <div class="flex items-center gap-3 flex-wrap">
       <img src="{{ url_for('static', filename='img/undertow.ico') }}" alt="" width="24" height="24" class="kawaii-hide" style="image-rendering:auto;">
@@ -210,187 +97,22 @@
     </button>
   </div>
 
-  <!-- #hacker-view / #girly-view: #hacker-view is DEPRECATED - girly is the only mode reachable
-       from the UI now (no more theme-toggle button; data-theme is hardcoded to "kawaii" above),
-       but the markup stays in the DOM for now since static/kawaii/css/kawaii.css's view switch
-       still hides it purely via CSS. Don't build new features here. -->
-  <div id="hacker-view" style="display:none">
-
-  <!-- STATUS WALL: dedicated dense status band - real service/worker status on the left,
-       decorative signal-noise readouts on the right so this reads as a proper NOC status wall
-       rather than a couple of badges tucked in a corner. -->
-  <div class="status-wall">
-    <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-1.5 text-[11px]">
-      <div id="status-badges" class="flex flex-wrap gap-3"
-           hx-get="/partials/status" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML">
-        loading...
-      </div>
-      <div id="noise-readouts" class="flex flex-wrap gap-4 text-[#1c6b3e]"></div>
-    </div>
-  </div>
-
-  <div class="flex flex-wrap items-center gap-1.5 px-4 py-2 bg-[#020604] border-b border-[#0d2416]">
-    <button class="bracket-btn" hx-get="/subscriptions/add-modal" hx-target="#modal-content" hx-swap="innerHTML">SUBSCRIBE</button>
-    <button class="bracket-btn" hx-get="/downloads/add-modal" hx-target="#modal-content" hx-swap="innerHTML">ONE-OFF</button>
-    <a class="bracket-btn" href="/subscriptions/export">EXPORT</a>
-    <button class="bracket-btn" hx-get="/subscriptions/import-modal" hx-target="#modal-content" hx-swap="innerHTML">IMPORT</button>
-    <button class="bracket-btn" hx-get="/diagnostics" hx-target="#modal-content" hx-swap="innerHTML">DIAG</button>
-    <button class="bracket-btn" hx-get="/api-keys" hx-target="#modal-content" hx-swap="innerHTML">KEYS</button>
-    <button class="bracket-btn" hx-get="/settings" hx-target="#modal-content" hx-swap="innerHTML">SETTINGS</button>
-    <button class="bracket-btn" hx-post="/focus/hydrus" hx-target="#toast-stack" hx-swap="beforeend">HYDRUS^</button>
-    <button class="bracket-btn" hx-post="/focus/systray" hx-target="#toast-stack" hx-swap="beforeend">TRAY^</button>
-    <button class="bracket-btn" onclick="htmx.trigger(document.body, 'refreshSubs')">SYNC</button>
-    <button class="bracket-btn" hx-post="/launch-tui" hx-target="#toast-stack" hx-swap="beforeend">CONSOLE UI</button>
-    <span class="flex-1"></span>
-    <button class="bracket-btn bracket-btn-danger" hx-get="/shutdown-confirm" hx-target="#modal-content" hx-swap="innerHTML">SHUTDOWN</button>
-    <span class="htmx-indicator loading loading-spinner loading-xs text-[var(--term-green)] self-center"></span>
-  </div>
-
-  <div id="toast-stack" class="fixed top-14 right-3 z-50 flex flex-col gap-1 w-80 max-w-[90vw]"></div>
-  <div id="resource-banner"></div>
-
-  <div class="cockpit-grid p-3">
-
-    <!-- LEFT: graphical/chaos sidebar - fixed width, see .cockpit-left. Also treated as one
-         kawaii-group (see CONNECTIONS/etc above) - the SIGNAL/SCOPE/MEM hacker-only gadgets in
-         here are hidden entirely in kawaii mode, so grouping the rest costs nothing extra. -->
-    <div class="cockpit-left flex flex-col gap-3 kawaii-group">
-      <div id="queue-graph" class="kawaii-group-first" hx-get="/partials/queue-graph" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
-
-      <div class="hud-panel">
-        <div class="hud-titlebar">SIGNAL<div class="rule"></div></div>
-        <div id="signal-eq" class="eq p-2">
-          <span></span><span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span>
-        </div>
-      </div>
-
-      <div class="hud-panel">
-        <div class="hud-titlebar">SCOPE :: contacts<div class="rule"></div></div>
-        <div class="p-2">
-          <canvas id="radar-canvas"></canvas>
-        </div>
-      </div>
-
-      <div class="hud-panel">
-        <div class="hud-titlebar">MEM :: 0x7FFE0000<div class="rule"></div></div>
-        <div id="hexdump" class="p-2 h-32 overflow-hidden"></div>
-      </div>
-
-      <div id="sector-panel" hx-get="/partials/sector" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML"></div>
-
-      <div id="sparkline-panel" hx-get="/partials/sparkline" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
-    </div>
-
-    <!-- RIGHT: fleet/process/sector/host/network instruments. The kawaii-group/kawaii-group-*
-         classes are no-ops in the terminal theme (each child keeps its own independent
-         .hud-panel card there) - in kawaii mode they visually fuse each cluster of related,
-         independently-polled htmx fragments into one card instead of a stack of small ones;
-         see the "kawaii panel grouping" rules in static/kawaii/css/kawaii.css. -->
-    <div class="cockpit-right flex flex-col gap-3">
-      <div class="kawaii-group">
-        <div id="fleet-panel" class="kawaii-group-first" hx-get="/partials/fleet" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML"></div>
-        <div id="hydrus-panel" hx-get="/partials/hydrus" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
-        <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
-        <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
-      </div>
-
-      <div class="kawaii-group">
-        <div id="netstat" class="kawaii-group-first" hx-get="/partials/netstat" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML"></div>
-
-        <div class="hud-panel">
-          <div class="hud-titlebar">CONNECTIONS<div class="rule"></div></div>
-          <!-- Same stable-scroll-container fix as the subscriptions table: this wrapper lives
-               in the static shell so htmx only ever replaces the rows inside it, never the
-               scrollable element itself - scrollTop survives every poll instead of resetting. -->
-          <div class="h-40 overflow-y-auto p-2 text-[10.5px]">
-            <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 60s" hx-swap="innerHTML">
-              loading...
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MAIN: the actual functional cockpit -->
-    <div class="cockpit-main flex flex-col gap-3" x-data="{ filter: '', selected: [], _lastTagQuery: '' }"
-         @subs-selection-cleared.window="selected = []"
-         x-effect="
-           const q = filter.toLowerCase().startsWith('tag:') ? filter.slice(4).trim() : '';
-           if (q !== _lastTagQuery) { _lastTagQuery = q; window.subsTableState.tag = q; window.subsTableState.page = 1; htmx.trigger(document.body, 'subsTableNav'); }
-         ">
-
-      <div class="flex items-center gap-2">
-        <form hx-post="/subscriptions/quick-add" hx-target="#quick-add-result" hx-swap="innerHTML"
-              hx-on::after-request="if(event.detail.successful) this.reset()"
-              class="flex flex-1 gap-2">
-          <span class="text-[var(--term-green)] self-center">$</span>
-          <input type="text" name="url" required placeholder="subscribe --url=&lt;paste url&gt; --interval=12-24h"
-                 class="input input-sm input-bordered flex-1 bg-[#020604] border-[var(--term-dim)] text-[var(--term-green)] rounded-none focus:border-[var(--term-green)] font-mono">
-          <input type="hidden" name="hours" value="">
-          <button type="submit" class="bracket-btn">EXEC</button>
-        </form>
-        <input type="text" x-model.debounce.150ms="filter" placeholder="grep... (or tag:foo)"
-               title="Plain text searches only the subscriptions currently on-screen (this page) - not the whole list. Prefix with tag: (e.g. tag:favorites) to search by tag across every page instead."
-               class="input input-sm input-bordered w-40 bg-[#020604] border-[#ff9d3c66] text-[var(--term-green)] rounded-none font-mono">
-      </div>
-      <div id="quick-add-result" class="text-xs -mt-2"></div>
-
-      <div class="flex items-center gap-1.5 px-2 py-1 bg-[#04140a] border border-[var(--term-dim)]"
-           x-show="selected.length > 0" x-cloak>
-        <span class="text-[10px] text-[#8aa0a8]" x-text="selected.length + ' selected'"></span>
-        <span class="flex-1"></span>
-        <button class="bracket-btn" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
-                :hx-vals="JSON.stringify({action: 'resume', ids: selected.join(',')})" hx-trigger="click">RESUME</button>
-        <button class="bracket-btn" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
-                :hx-vals="JSON.stringify({action: 'pause', ids: selected.join(',')})" hx-trigger="click">PAUSE</button>
-        <button class="bracket-btn" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
-                :hx-vals="JSON.stringify({action: 'force-check', ids: selected.join(',')})" hx-trigger="click">FORCE-CHECK</button>
-        <button class="bracket-btn bracket-btn-danger" hx-get="/subscriptions/bulk/confirm" hx-target="#modal-content" hx-swap="innerHTML"
-                :hx-vals="JSON.stringify({action: 'delete', ids: selected.join(',')})" hx-trigger="click">DELETE</button>
-        <button class="bracket-btn" @click="selected = []">CLEAR</button>
-      </div>
-
-      <div class="hud-panel">
-        <div class="hud-titlebar">SUBSCRIPTIONS<div class="rule"></div></div>
-        <!-- This scroll container is the STABLE element - it lives here in the static shell,
-             never torn down by htmx. Only #subs-panel's *children* get replaced every poll, so
-             this ancestor's scrollTop survives every refresh instead of snapping to 0. -->
-        <div class="overflow-y-auto max-h-[26rem]">
-          <div id="subs-panel"
-               hx-get="/partials/subscriptions" hx-trigger="load, every 60s, refreshSubs from:body, subsTableNav from:body"
-               hx-vals="js:{...window.subsTableState}" hx-swap="innerHTML">
-            loading subscriptions...
-          </div>
-        </div>
-      </div>
-      <div hx-get="/partials/new-files" hx-trigger="load, every 60s" hx-swap="none"></div>
-
-      <div class="hud-panel">
-        <div class="hud-titlebar">ACTIVITY LOG<div class="rule"></div></div>
-        <div id="log-box" class="h-64 overflow-y-auto text-[11px] leading-snug whitespace-pre-wrap break-words font-mono text-[#8fffb8] p-2">
-          loading log...
-        </div>
-      </div>
-    </div>
-  </div>
-  </div><!-- /#hacker-view -->
-
   <!-- ============================================================================ #girly-view
-       A completely independent layout - its own hero, stat-card grid, labelled chart,
-       friendly subscriptions list and activity feed - built from templates/partials/girly/*.html
-       (rendered by the same Flask routes as the hacker view; see _themed_template() in
-       webui.py) rather than a recolored copy of the cockpit-grid/hud-panel markup above. -->
+       The dashboard's one and only layout - hero, stat-card grid, labelled chart, friendly
+       subscriptions list and activity feed - built from templates/partials/girly/*.html. -->
   <div id="girly-view" x-data="{ girlyTab: 'home' }"
        x-effect="window.girlyTab = girlyTab; if (girlyTab === 'metrics') { htmx.trigger(document.body, 'metricsTabOpen'); if (window.refreshLog) refreshLog(); }">
 
     <div class="kawaii-blob-bg"><span></span><span></span><span></span></div>
 
     <!-- Live toast stack for the girly view's own actions (service restart / drive mount
-         results, etc) - separate from #toast-stack, which lives inside the hidden/deprecated
-         #hacker-view and is never actually visible. -->
+         results, etc). -->
     <div id="girly-toast-stack" style="position:fixed; top:4.5rem; right:1rem; z-index:60; display:flex; flex-direction:column; gap:0.5rem; width:20rem; max-width:90vw;"></div>
+
+    <!-- Target for hoststats.html's disk/RAM threshold-breach banner, delivered via an
+         out-of-band swap (see partials/girly/hoststats.html) - needs to exist somewhere in the
+         DOM up front for that oob swap to land. -->
+    <div id="resource-banner"></div>
 
     <div class="kawaii-btn-row">
       <button class="kawaii-btn" hx-get="/downloads/add-modal" hx-target="#modal-content" hx-swap="innerHTML">One-off Download</button>
@@ -399,7 +121,6 @@
       <button class="kawaii-btn" hx-get="/api-keys" hx-target="#modal-content" hx-swap="innerHTML">Keys</button>
       <button class="kawaii-btn" hx-get="/settings" hx-target="#modal-content" hx-swap="innerHTML">Settings</button>
       <button class="kawaii-btn" onclick="htmx.trigger(document.body, 'refreshSubs')">Sync Now</button>
-      <button class="kawaii-btn" hx-post="/launch-tui" hx-target="#toast-stack" hx-swap="beforeend">Console UI</button>
       <button class="kawaii-btn kawaii-btn-danger" hx-get="/shutdown-confirm" hx-target="#modal-content" hx-swap="innerHTML">Shutdown</button>
     </div>
 
@@ -409,9 +130,8 @@
 
     <!-- Two-tab layout: Home keeps the girly view calm and subscription-focused (the thing you
          actually came here to look at); System Metrics is where all the host/queue/network
-         instrumentation lives, opt-in via a click instead of always-on clutter like the hacker
-         cockpit's side rails. Both tab panels' htmx polling keeps running while hidden (same
-         #hacker-view/#girly-view pattern above), so switching tabs is instant with no re-fetch. -->
+         instrumentation lives, opt-in via a click instead of always-on clutter. Both tab panels'
+         htmx polling keeps running while hidden, so switching tabs is instant with no re-fetch. -->
     <div class="kawaii-tabs">
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'home' }" @click="girlyTab = 'home'">&#127968; Home</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'media' }" @click="girlyTab = 'media'">&#128444; Media</button>
@@ -558,21 +278,7 @@
 </div>
 
 <script>
-// Girly (kawaii, see static/kawaii/css/kawaii.css) is the only mode reachable from the UI -
-// hacker/terminal mode is deprecated, so there's no toggle anymore. This still funnels through
-// applyPipelineTheme() rather than being inlined so _themed_template() in webui.py keeps
-// working unchanged.
-function applyPipelineTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  // Theme signal for themed partial routes (see _themed_template() in webui.py): htmx re-reads
-  // an ancestor's hx-headers attribute fresh on every request, so setting it once here on
-  // <body> makes every existing hx-get/hx-post in the page carry the current theme, with zero
-  // per-element plumbing changes needed.
-  document.body.setAttribute('hx-headers', JSON.stringify({ 'X-Pipeline-Theme': theme }));
-}
-applyPipelineTheme('kawaii');
-
-// Girly-mode-only light/dark toggle, independent of the hacker/kawaii theme switch above.
+// Girly-mode light/dark toggle.
 // Persisted separately so "girly mode" and "dark palette within girly mode" are orthogonal
 // choices; see the matching data-kawaii-mode dark overrides in static/kawaii/css/kawaii.css.
 function applyKawaiiDark(dark) {
@@ -715,49 +421,29 @@ async function refreshLog() {
     const r = await fetch(url);
     const d = await r.json();
     logOffset = d.offset;
-    const box = document.getElementById('log-box');
-    if (box.dataset.loaded !== '1') { box.textContent = ''; box.dataset.loaded = '1'; }
     const gbox = document.getElementById('girly-log-box');
-    if (gbox && gbox.dataset.loaded !== '1') { gbox.textContent = ''; gbox.dataset.loaded = '1'; }
+    if (!gbox) return;
+    if (gbox.dataset.loaded !== '1') { gbox.textContent = ''; gbox.dataset.loaded = '1'; }
     if (d.lines && d.lines.length) {
-      const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 10;
-      const gAtBottom = gbox ? (gbox.scrollTop + gbox.clientHeight >= gbox.scrollHeight - 10) : false;
+      const gAtBottom = gbox.scrollTop + gbox.clientHeight >= gbox.scrollHeight - 10;
       for (const line of d.lines) {
-        const div = document.createElement('div');
-        div.textContent = '> ' + line;
-        div.className = logLineClass(line);
-        box.appendChild(div);
-        if (gbox) {
-          const row = document.createElement('div');
-          row.className = 'kawaii-log-line';
-          const dot = document.createElement('span');
-          dot.className = 'kawaii-log-dot ' + girlyLogDotClass(line);
-          const text = document.createElement('span');
-          text.className = 'kawaii-log-text';
-          text.textContent = line;
-          row.appendChild(dot);
-          row.appendChild(text);
-          gbox.appendChild(row);
-        }
+        const row = document.createElement('div');
+        row.className = 'kawaii-log-line';
+        const dot = document.createElement('span');
+        dot.className = 'kawaii-log-dot ' + girlyLogDotClass(line);
+        const text = document.createElement('span');
+        text.className = 'kawaii-log-text';
+        text.textContent = line;
+        row.appendChild(dot);
+        row.appendChild(text);
+        gbox.appendChild(row);
       }
-      while (box.childNodes.length > 500) box.removeChild(box.firstChild);
-      if (atBottom) box.scrollTop = box.scrollHeight;
-      if (gbox) {
-        while (gbox.childNodes.length > 500) gbox.removeChild(gbox.firstChild);
-        if (gAtBottom) gbox.scrollTop = gbox.scrollHeight;
-      }
+      while (gbox.childNodes.length > 500) gbox.removeChild(gbox.firstChild);
+      if (gAtBottom) gbox.scrollTop = gbox.scrollHeight;
     }
   } catch (e) {
     // transient failure - leave whatever's already shown, next poll will catch up
   }
-}
-function logLineClass(line) {
-  const l = line.toLowerCase();
-  if (/error|traceback|failed|exception/.test(l)) return 'text-[#ff4f6d]';
-  if (/warning/.test(l)) return 'text-[#ffd166]';
-  if (/new file|downloading|downloaded/.test(l)) return 'text-[#39ff88]';
-  if (/checking subscription|starting/.test(l)) return 'text-[#39d3ff]';
-  return 'text-[#5a8a6c]';
 }
 function girlyLogDotClass(line) {
   const l = line.toLowerCase();
@@ -770,183 +456,10 @@ function girlyLogDotClass(line) {
 refreshLog();
 setInterval(refreshLog, 1500);
 
-// Matrix-style falling code rain - decorative HUD chrome behind the app content.
-(function matrixRain() {
-  const canvas = document.getElementById('matrix-rain');
-  const ctx = canvas.getContext('2d');
-  const glyphs = 'アイウエオカキクケコサシスセソ01アイウエオ<>/\\{}[]#$%&';
-  let cols, drops, fontSize = 15;
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    cols = Math.floor(canvas.width / fontSize);
-    drops = Array.from({ length: cols }, () => Math.random() * -50);
-  }
-  function draw() {
-    ctx.fillStyle = 'rgba(1, 3, 2, 0.15)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = fontSize + 'px monospace';
-    for (let i = 0; i < cols; i++) {
-      const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
-      const y = drops[i] * fontSize;
-      ctx.fillStyle = y < fontSize * 2 ? '#c8ffe0' : 'rgba(57,255,136,0.55)';
-      ctx.fillText(ch, i * fontSize, y);
-      if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
-      drops[i]++;
-    }
-    if (!document.hidden) requestAnimationFrame(draw);
-    else setTimeout(() => requestAnimationFrame(draw), 500);
-  }
-  window.addEventListener('resize', resize);
-  resize();
-  requestAnimationFrame(draw);
-})();
-
-// Decorative signal-noise readouts in the status wall - purely cosmetic jitter, not real
-// telemetry (the real service/worker status lives in #status-badges next to this).
-(function noiseReadouts() {
-  const el = document.getElementById('noise-readouts');
-  function tick() {
-    if (document.hidden) return;
-    const entropy = (0.6 + Math.random() * 0.35).toFixed(3);
-    const noiseFloor = -(60 + Math.random() * 20).toFixed(1);
-    const latency = (8 + Math.random() * 30).toFixed(1);
-    const jitter = (Math.random() * 4).toFixed(2);
-    el.innerHTML =
-      `<span>ENTROPY <span class="text-[#39ff88]">${entropy}</span></span>` +
-      `<span>NOISE_FLOOR <span class="text-[#39d3ff]">${noiseFloor}dB</span></span>` +
-      `<span>LATENCY <span class="text-[#ffd166]">${latency}ms</span></span>` +
-      `<span>JITTER <span class="text-[#ff9d3c]">${jitter}</span></span>`;
-  }
-  tick();
-  setInterval(tick, 1200);
-})();
-
-// Fake scrolling hex dump - classic terminal-hacker chrome, addresses/bytes are randomized,
-// not real memory (there's nothing to actually dump here - it's set dressing).
-(function hexdump() {
-  const box = document.getElementById('hexdump');
-  let addr = 0x7ffe0000;
-  function randHex(n) { return Array.from({ length: n }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')); }
-  function toAscii(bytes) {
-    return bytes.map(h => { const v = parseInt(h, 16); return (v >= 32 && v < 127) ? String.fromCharCode(v) : '.'; }).join('');
-  }
-  function tick() {
-    if (document.hidden) return;
-    const bytes = randHex(16);
-    const line = document.createElement('div');
-    line.innerHTML = `<span class="addr">0x${addr.toString(16).toUpperCase().padStart(8, '0')}</span>  ${bytes.join(' ')}  <span class="ascii">|${toAscii(bytes)}|</span>`;
-    box.appendChild(line);
-    addr += 16;
-    while (box.childNodes.length > 9) box.removeChild(box.firstChild);
-  }
-  tick();
-  setInterval(tick, 350);
-})();
-
-// SIGNAL - a scrolling strip chart, not independent per-bar noise: one new random value
-// enters at the left on each tick, and the whole history shifts right, same idea as an
-// oscilloscope/seismograph trace rather than N unrelated signals jittering side by side.
-(function signalMeter() {
-  const bars = Array.from(document.querySelectorAll('#signal-eq span'));
-  let buffer = bars.map(() => 0.15);
-  bars.forEach((bar) => { bar.style.transition = 'height 140ms linear'; });
-  function tick() {
-    if (document.hidden) return;
-    buffer.pop();
-    buffer.unshift(Math.random());
-    bars.forEach((bar, i) => { bar.style.height = (8 + buffer[i] * 90).toFixed(0) + '%'; });
-  }
-  tick();
-  setInterval(tick, 150);
-})();
-
-// SCOPE - exactly 3 contacts (not one-per-subscription; a busy install could mean dozens of
-// blips, which reads as clutter, not signal), each drifting slowly along its own inbound arc
-// (angle and radius both creeping over time, not a straight radial line) and reddening/
-// glowing as it nears the center - a "closing target" look rather than a fixed dot that just
-// fades on a timer. A blip that reaches the center respawns at the outer edge on a fresh
-// random arc. The rotating sweep is still there as background atmosphere but no longer drives
-// blip brightness - that's the contact's own distance-to-center now.
-(function radarScope() {
-  const canvas = document.getElementById('radar-canvas');
-  const ctx = canvas.getContext('2d');
-  let sweepAngle = 0;
-
-  function makeBlip() {
-    return {
-      angle: Math.random() * Math.PI * 2,
-      angularSpeed: (Math.random() - 0.5) * 0.010,
-      radius: 0.88 + Math.random() * 0.1,
-      radialSpeed: 0.0009 + Math.random() * 0.0012,
-    };
-  }
-  const blips = [makeBlip(), makeBlip(), makeBlip()];
-
-  function resize() {
-    const size = Math.round(canvas.getBoundingClientRect().width);
-    canvas.width = size;
-    canvas.height = size;
-  }
-
-  function draw() {
-    const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2, R = Math.max(0, w / 2 - 3);
-    ctx.shadowBlur = 0;
-    ctx.clearRect(0, 0, w, h);
-
-    ctx.strokeStyle = 'rgba(28,107,62,0.7)';
-    ctx.lineWidth = 1;
-    [0.34, 0.67, 1.0].forEach((f) => { ctx.beginPath(); ctx.arc(cx, cy, R * f, 0, Math.PI * 2); ctx.stroke(); });
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
-    ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
-    ctx.stroke();
-
-    sweepAngle = (sweepAngle + 0.02) % (Math.PI * 2);
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, R, sweepAngle - 0.45, sweepAngle);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(57,255,136,0.10)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(57,255,136,0.6)';
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + R * Math.cos(sweepAngle), cy + R * Math.sin(sweepAngle));
-    ctx.stroke();
-
-    for (const b of blips) {
-      b.angle += b.angularSpeed;
-      b.radius -= b.radialSpeed;
-      if (b.radius <= 0.04) Object.assign(b, makeBlip());
-
-      const closeness = 1 - b.radius; // 0 = far out, 1 = at the center
-      const bx = cx + R * b.radius * Math.cos(b.angle);
-      const by = cy + R * b.radius * Math.sin(b.angle);
-      const green = Math.round(157 * (1 - closeness) + 30 * closeness);
-      const blue = Math.round(60 * (1 - closeness) + 30 * closeness);
-      const size = 2.5 + 3 * closeness;
-
-      ctx.shadowBlur = 3 + 16 * closeness;
-      ctx.shadowColor = `rgba(255,${green},${blue},0.9)`;
-      ctx.fillStyle = `rgba(255,${green},${blue},${(0.5 + 0.5 * closeness).toFixed(2)})`;
-      ctx.beginPath();
-      ctx.arc(bx, by, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-    if (!document.hidden) requestAnimationFrame(draw);
-    else setTimeout(() => requestAnimationFrame(draw), 500);
-  }
-  window.addEventListener('resize', resize);
-  resize();
-  requestAnimationFrame(draw);
-})();
-
-// Sparkle cursor trail - girly-view-only chrome, mirrors the matrix-rain/radar-scope decorative
-// pattern above. Spawns a tiny heart/star/sparkle glyph at the pointer every ~55ms (not every
-// mousemove - would spam the DOM), which then floats up and fades via a pure-CSS animation and
-// removes itself on animationend. Skips entirely when the tab is hidden or reduced-motion is on.
+// Sparkle cursor trail - decorative chrome. Spawns a tiny heart/star/sparkle glyph at the
+// pointer every ~55ms (not every mousemove - would spam the DOM), which then floats up and
+// fades via a pure-CSS animation and removes itself on animationend. Skips entirely when the
+// tab is hidden or reduced-motion is on.
 (function sparkleTrail() {
   const glyphs = ['✨', '💖', '💗', '🎀', '💎', '❤️'];
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

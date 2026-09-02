@@ -5,8 +5,9 @@ and `Create-DesktopShortcut.ps1` with a Python package (`undertow/`), without Po
 JSON-serialization and error-detail footguns that kept biting the subscription-add flow.
 
 The interface itself has since moved past a straight 1:1 port: instead of a numbered
-print()/input() menu, daily use is a full-screen [Textual](https://textual.textualize.io)
-console UI - see "Daily use" below.
+print()/input() menu, daily use is the web dashboard - see "Daily use" below. (An earlier
+iteration used a full-screen Textual console UI; that's since been removed - see "Daily use"
+for what replaced it.)
 
 **Not replaced:** `Setup-HydrusPipeline.ps1` (first-time install/provisioning - installs
 Hydrus, clones hydownloader, sets up the Python venv for the *daemon* itself, etc.) stays as
@@ -51,59 +52,21 @@ system Python otherwise.
 
 **This changed from the TUI-first design described further down in this doc's history:**
 once services are checked/started, `menu.main()` now launches the **web dashboard**
-(`undertow/webui.py`, http://127.0.0.1:8765) as the primary interface and hides its own
-console window - there's nothing left to interact with in the console day to day. The
+(`undertow/webui.py`, http://127.0.0.1:8765) as the primary and only interface and hides its
+own console window - there's nothing left to interact with in the console day to day. The
 dashboard has a **Shutdown** button (stops the daemon/systray if idle, then exits the process)
 since there's no window left to close or Ctrl+C once it's hidden.
 
-The Textual "cockpit" TUI described below is still fully implemented and still the automatic
-fallback if `flask` isn't installed - and it's one click away from the dashboard's **Console
-UI** button, which opens it in a fresh console window (running `python -m
-undertow.tui`) without re-running the startup sequence, since services are already up
-by the time the dashboard exists. Both interfaces call the exact same backend functions, so
-using one doesn't desync the other.
+The Textual "cockpit" TUI this doc originally described, and the dashboard's old
+hacker/terminal theme, have both since been removed outright as unneeded overhead - girly/
+kawaii is the dashboard's only look, and there's no TUI fallback left if `flask` isn't
+installed (`menu.main()` just reports the missing dependency and exits). See
+[`README.md`](README.md) rather than this doc for what's current in the dashboard - the
+subscription table/actions/diagnostics/API-key setup, host RAM/disk/GPU stats, a daemon API
+call-traffic widget, and per-process network connections.
 
-When the TUI is what's on screen (fallback, or launched via **Console UI**): a status strip
-(Hydrus/daemon/systray badges + what the daemon is doing right now), a command deck banner
-listing every key, a subscriptions table you can subscribe/unsubscribe from directly (no
-dialog round-trip for the common case), a colorized live tail of hydownloader's own log, and a
-column of instrument panels (fleet counts, a per-site sector scan, an activity sparkline).
-
-There's a quick-subscribe bar right above the subscriptions table - paste a URL, hit Enter,
-it's added at the 24h default interval with no dialog. Pressing `p`/`x` with a row selected
-instantly pauses/resumes or deletes it (delete confirms first) - `enter` still opens the full
-pause/resume/delete dialog if you want it.
-
-Keybindings (also shown in the footer/command deck, and searchable via `ctrl+p`'s command
-palette):
-
-| Key | Does |
-| --- | --- |
-| `a` | Subscribe to a URL / gallery / artist (comma-separate for several at once) |
-| `u` | Queue a one-off URL download (not recurring) |
-| (quick-add bar) | Paste a URL directly into the subscriptions panel + Enter |
-| `enter` | Open pause/resume/delete for the selected subscription row |
-| `p` | Pause/resume the selected subscription instantly, no dialog |
-| `f` | Force-check the selected subscription instantly |
-| `x` | Delete the selected subscription instantly (confirms first) |
-| `/` | Filter the subscriptions table live as you type |
-| `escape` | Clear filter / close whatever dialog is open |
-| `h` | Bring Hydrus to the front |
-| `y` | Bring the systray to the front |
-| `w` | Open the web dashboard in your browser |
-| `c` | Run diagnostics (service status, daemon API reachability, gallery-dl on PATH, watchdog) |
-| `k` | Configure API keys (suspends the TUI, runs the same Reddit-OAuth/Hydrus-key flow as before) |
-| `r` | Refresh immediately |
-| `?` | Keybinding help |
-| `q` | Quit - shuts down anything idle, leaves anything busy running (same as before) |
-
-The web dashboard now has considerably more than the TUI ever exposed directly in a browser -
-the same subscription table/actions/diagnostics/API-key setup, plus host RAM/disk/GPU
-stats, a daemon API call-traffic widget, and per-process network connections - see the
-dashboard's own UI or [`README.md`](README.md) rather than this doc for what's current there.
-
-Needs `rich`, `flask`, and `textual` (all in requirements.txt). If you set up your `.venv`
-before these were added, re-run `.venv\Scripts\pip install -r requirements.txt`.
+Needs `rich` and `flask` (both in requirements.txt). If you set up your `.venv` before these
+were added, re-run `.venv\Scripts\pip install -r requirements.txt`.
 
 ### Download speed / throttling
 
@@ -122,7 +85,7 @@ a site you haven't threaded yet won't actually get checked until the daemon rest
 The app tells you right away when this applies ("new site - needs a restart") instead of
 letting it fail silently.
 
-Press `m` for Throttle Control to handle both cases:
+The dashboard's **Diag**nostics modal has a Throttle Control section to handle both cases:
 
 - **Cap existing subs too** - retroactively applies the 100/100 limits to every subscription
   already in hydownloader (from before that was the default). Takes effect on each one's next
@@ -135,9 +98,9 @@ Press `m` for Throttle Control to handle both cases:
 
 ## If something's off
 
-- `python -m undertow.stop_services` - stops just the daemon + systray (leaves Hydrus
-  running), for when `hydownloader-config.json` changed and the running daemon needs to pick
-  up fresh values. Same as the old Stop-HydrusPipelineServices.ps1.
-- The old `.ps1` scripts are untouched and still work if you need to fall back - nothing was
-  deleted.
+Use the dashboard's **Shutdown** button and relaunch if `hydownloader-config.json` changed and
+the running daemon needs to pick up fresh values. The old `.ps1` daily-use scripts, the
+one-off `stop_services.py` fallback, and the console TUI have all been removed as fully
+superseded by the web dashboard - only `Setup-HydrusPipeline.ps1` (first-time provisioning)
+remains.
 

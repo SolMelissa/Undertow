@@ -2,6 +2,24 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.7.0
+- Removed the console TUI (`undertow/tui/`) and its `python -m undertow.tui` fallback in
+  `menu.py` for when Flask isn't installed - both were unneeded overhead. Dropped the
+  `textual` dependency.
+- Removed the dashboard's old hacker/terminal theme (`#hacker-view`, matrix-rain/CRT chrome,
+  the terminal cockpit CSS/JS) and the "Console UI" button - girly/kawaii is now the
+  dashboard's only theme and only interface.
+- Fixed a real bug found while removing the old theme: the disk/RAM threshold-breach banner
+  (`#resource-banner`) was nested inside the hidden hacker-view div, so it never actually
+  rendered in kawaii mode - moved it into the girly view where it now shows up correctly.
+- Deleted the legacy `.ps1` daily-use scripts (`Launch-HydrusPipeline.ps1`,
+  `Stop-HydrusPipelineServices.ps1`, `Configure-ApiKeys.ps1`, `Create-DesktopShortcut.ps1`,
+  `Move-PipelineToICloud.ps1`) and the orphaned `undertow/stop_services.py`, all fully
+  superseded by the Python port. `Setup-HydrusPipeline.ps1` is unaffected (still active).
+- Repo cleanup: untracked the leftover `Undertow.exe - Shortcut.lnk` and added `*.lnk` to
+  `.gitignore`, and moved the guide docs into `legacy/` as "Hydrus Pipeline Guide - version
+  1.4.0" (docx + html).
+
 ## 1.6.2
 - Repo cleanup: untracked the leftover `Undertow.exe - Shortcut.lnk` and added `*.lnk` to
   `.gitignore` (shortcuts are user-machine-specific, not app assets), and moved the guide

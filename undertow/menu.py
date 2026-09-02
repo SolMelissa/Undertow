@@ -5,11 +5,6 @@ running (starting only whatever isn't already up), starts the background watchdo
 off to the web dashboard (undertow/webui.py) as the primary interface - the console
 window is hidden once it's up, since there's nothing left to interact with there day to day.
 
-The Textual TUI (undertow/tui/) is still fully functional - it's the automatic fallback
-if Flask isn't installed, and otherwise stays one click away via the web dashboard's own
-"Console UI" button (which launches it in a fresh, visible console window without re-running
-any of the startup steps below - see undertow/tui/__main__.py).
-
 Does NOT reinstall anything - for first-time setup, use Setup-HydrusPipeline.ps1 (still
 PowerShell; it's a one-time provisioning script, not part of daily use, so it wasn't
 in scope for this port).
@@ -102,16 +97,8 @@ def main() -> None:
     open_browser = os.environ.get("UNDERTOW_NO_BROWSER") != "1"
     port = webui.run_webui(open_browser=open_browser)
     if port is None:
-        print("  'flask' isn't installed (pip install -r requirements.txt) - falling back to the console UI.")
-        from .tui.app import PipelineApp
-
-        try:
-            PipelineApp().run()
-        finally:
-            # Covers every exit path out of the TUI (quit action, an unhandled exception
-            # inside Textual, ...) in addition to the atexit/console-ctrl handlers above,
-            # which also catch the window's X button closing the process out from under it.
-            _shutdown_once()
+        print("  'flask' isn't installed (pip install -r requirements.txt) - can't start the dashboard.")
+        _shutdown_once()
         return
 
     print(f"  web dashboard running at http://127.0.0.1:{port} - this console window will now hide.")

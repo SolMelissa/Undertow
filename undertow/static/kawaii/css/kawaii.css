@@ -1,23 +1,10 @@
 /*
-  Kawaii theme - "girly mode" is now the default and only mode under active development, NOT a
-  recolor of the terminal/CRT cockpit. index.html contains two complete, separate sections in
-  the DOM:
-
-    #hacker-view  - DEPRECATED. The original terminal cockpit (cockpit-grid / hud-panel /
-                    hud-titlebar). No longer reachable from the UI (there's no toggle button
-                    anymore - data-theme is hardcoded to "kawaii"); kept in the DOM only because
-                    ripping it out isn't done yet. Don't build new features here.
-    #girly-view   - its own layout: a hero header, a stat-card grid, a labelled SVG chart, a
-                    friendly subscriptions list and activity feed, built from its own markup and
-                    its own component classes (.kawaii-card, .kawaii-stat, .kawaii-pill, etc),
-                    fed by templates/partials/girly/*.html (rendered server-side by the same
-                    Flask routes - see _themed_template() in webui.py) rather than by reskinning
-                    templates/partials/*.html's markup.
-
-  data-theme="kawaii" is now always set on <html> (see index.html), so #girly-view is always the
-  one visible. #hacker-view still polls in the background even though it's hidden - harmless for
-  a local single-user dashboard, and avoids touching its polling wiring while it's still being
-  phased out.
+  Kawaii theme - "girly mode" is the dashboard's only look (the original terminal/CRT cockpit
+  and its console-TUI fallback have both been removed). #girly-view in index.html is its own
+  layout: a hero header, a stat-card grid, a labelled SVG chart, a friendly subscriptions list
+  and activity feed, built from its own markup and its own component classes (.kawaii-card,
+  .kawaii-stat, .kawaii-pill, etc), fed by templates/partials/girly/*.html (rendered
+  server-side - see _themed_template() in webui.py).
 
   Token system (same palette as before):
     --k-bg          #fff5f9  page background
@@ -105,26 +92,7 @@
   font-size: 15px !important;
 }
 
-/* --------------------------------------------------------------- top-level view switch
-   Both #hacker-view and #girly-view are always in the DOM (see index.html); only one is
-   ever shown. #hacker-view gets ZERO other rules in this file - it stays pixel-identical to
-   the terminal theme when it's the one visible. */
-#girly-view { display: none; }
-[data-theme="kawaii"] #hacker-view { display: none !important; }
-[data-theme="kawaii"] #girly-view { display: block; }
-
-/* Decorative CRT/matrix-rain chrome lives outside #hacker-view (it's full-viewport background
-   dressing painted behind the whole page), so it needs its own hide rule here rather than
-   riding along with the #hacker-view switch above. #term-banner is likewise outside the view
-   split (it sits above the navbar, shared chrome-wise) but is unambiguously terminal-flavored. */
-[data-theme="kawaii"] #matrix-rain,
-[data-theme="kawaii"] .scanlines,
-[data-theme="kawaii"] .crt-vignette,
-[data-theme="kawaii"] #term-banner {
-  display: none !important;
-}
-
-/* Chrome shared by both themes (navbar) still gets a light touch so it doesn't look out of
+/* Chrome shared with the modal infrastructure (navbar) still gets a light touch so it doesn't look out of
    place sitting above the girly view. */
 [data-theme="kawaii"] .navbar {
   background: var(--k-panel) !important;

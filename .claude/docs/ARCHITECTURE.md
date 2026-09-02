@@ -8,35 +8,31 @@ keeps only the short version of this table so it stays cheap to load every turn.
 
 Daily-use logic used to be PowerShell (`Launch-HydrusPipeline.ps1` and friends). It was ported
 to the `undertow/` Python package to fix JSON-serialization and error-handling issues
-that kept recurring in PS1. **The `.ps1` scripts for daily use are legacy** — untouched,
-kept only as a fallback, not where active work happens. See `PYTHON_PORT_SETUP.md` for the
-full history/rationale.
-
-| Old (legacy, don't edit for feature work) | New (active) |
-|---|---|
-| `Launch-HydrusPipeline.ps1` | `undertow/menu.py` (startup wiring) + `undertow/webui.py` (primary interface, a web dashboard) |
-| `Configure-ApiKeys.ps1` | `undertow/api_keys.py` |
-| `Stop-HydrusPipelineServices.ps1` | `undertow/stop_services.py` |
-| `Create-DesktopShortcut.ps1` | `undertow/shortcut.py` |
+that kept recurring in PS1. The `.ps1` daily-use scripts and their one-off Python fallback
+twins (`stop_services.py`) were fully superseded by the port and have since been deleted
+outright rather than kept as legacy fallback — see `undertow/menu.py` (startup wiring) +
+`undertow/webui.py` (primary interface) for what replaced them, and
+`undertow/api_keys.py`/`undertow/shortcut.py` for API-key setup and Desktop shortcut creation.
+See `PYTHON_PORT_SETUP.md` for the full history/rationale.
 
 **Exception: `Setup-HydrusPipeline.ps1` is still the active, correct tool.** It's a run-once
 first-time install/provisioning script (installs Hydrus, clones hydownloader, creates the
 venv for the daemon itself) and was intentionally left out of the Python port. Don't try to
 port it or route setup questions to the Python package.
 
+The Textual console UI (`undertow/tui/`) and the dashboard's old hacker/terminal theme were
+both removed as unneeded overhead — girly/kawaii is now the dashboard's only theme, and
+`webui.py`'s dashboard is the only interface. `menu.py` no longer has a TUI fallback if
+`flask` isn't installed; it just reports the missing dependency and exits.
+
 ## Module-by-module
 
 - `menu.py` — startup wiring: starts services/watchdog, then launches the web dashboard and
-  hides this process's own console window (falls back to the TUI if `flask` isn't installed)
-- `webui.py` — Flask dashboard at `http://127.0.0.1:8765`, the **primary daily-use
+  hides this process's own console window
+- `webui.py` — Flask dashboard at `http://127.0.0.1:8765`, the **primary and only daily-use
   interface** (subscriptions, diagnostics, API keys, host/GPU/network stats, a Shutdown
-  button, and a "Console UI" button that launches the TUI fallback in a new window). Reuses
-  the same backend calls the TUI does — no duplicated logic. `templates/` holds its Jinja2
-  templates (htmx + Alpine.js + Tailwind/daisyUI from CDNs, no build step).
-- `tui/app.py`, `tui/modals.py` — the Textual console UI. Still fully functional as the
-  fallback interface (automatic if `flask` is missing, or on-demand via the dashboard's
-  "Console UI" button, which runs `tui/__main__.py` directly and skips the startup sequence
-  since services are already up by then)
+  button). `templates/` holds its Jinja2 templates (htmx + Alpine.js + Tailwind/daisyUI from
+  CDNs, no build step).
 - `services.py` — start/stop/status/health-check for Hydrus, the hydownloader daemon,
   systray; host RAM/disk stats and GPU stats (via `nvidia-smi`, best-effort); hiding/
   showing this process's own console window

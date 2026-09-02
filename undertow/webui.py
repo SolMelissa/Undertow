@@ -1,13 +1,9 @@
 """
-Local web dashboard - a Flask + htmx + Alpine.js app serving the same "cockpit" controls as
-the Textual TUI (subscribe/pause/resume/delete/force-check, diagnostics, API key setup),
-backed by the exact same api_client/services/subscriptions/api_keys/logtail functions the TUI
-uses (no daemon logic duplicated here - only the presentation differs). This is now the
-primary interface - menu.main() launches this and hides its own console window once it's up,
-falling back to the console TUI only if Flask isn't installed. The TUI is still one click away
-via the "Console UI" button (see launch_tui() below), which opens it in a fresh console window
-without re-running the startup sequence, since services are already running by the time this
-dashboard exists at all. Reachable directly at http://127.0.0.1:8765.
+Local web dashboard - a Flask + htmx + Alpine.js app serving the "cockpit" controls
+(subscribe/pause/resume/delete/force-check, diagnostics, API key setup), backed by the
+api_client/services/subscriptions/api_keys/logtail functions. This is the primary and only
+interface - menu.main() launches this and hides its own console window once it's up.
+Reachable directly at http://127.0.0.1:8765.
 
 Styling is Tailwind + daisyUI loaded from a CDN, interactivity is htmx (server-rendered HTML
 fragments swapped into the page - polling for live data, hx-post for actions) plus a small
@@ -416,23 +412,10 @@ def _build_dual_line(pairs: list[tuple[int, int]]) -> dict | None:
     }
 
 
-def _girly_theme() -> bool:
-    """Theme signal for partial routes that render differently per-theme. The girly layout in
-    index.html sets `document.body`'s hx-headers to {"X-Pipeline-Theme": "kawaii"} whenever the
-    user switches themes (see applyPipelineTheme() in index.html) - htmx re-reads an ancestor's
-    hx-headers attribute fresh on every request, so every existing hx-get/hx-post in the page
-    automatically carries the current theme with zero per-element plumbing. Terminal mode never
-    sets this header (or clears it back to "night"), so its polling is completely unaffected."""
-    return (request.headers.get("X-Pipeline-Theme") or "") == "kawaii"
-
-
 def _themed_template(name: str) -> str:
-    """`name` like "fleet.html" -> "partials/girly/fleet.html" in kawaii mode, else
-    "partials/name" - the one place that picks which of the two independent partial sets (see
-    templates/partials/ vs templates/partials/girly/) a themed route renders from."""
-    if _girly_theme():
-        return f"partials/girly/{name}"
-    return f"partials/{name}"
+    """`name` like "fleet.html" -> "partials/girly/fleet.html" - girly is the only dashboard
+    theme, so this just resolves into templates/partials/girly/."""
+    return f"partials/girly/{name}"
 
 
 if HAVE_FLASK:
@@ -1748,25 +1731,7 @@ if HAVE_FLASK:
             message = "Drive mounted." if ok else "Failed to mount the drive - check VeraCrypt for a password prompt."
         return render_template("partials/message.html", message=message, error=not ok), 200, headers
 
-    # ---------------------------------------------------------------- console UI fallback / shutdown
-
-    @app.route("/launch-tui", methods=["POST"])
-    def launch_tui():
-        """Opens the classic console TUI in a fresh, visible console window - the fallback/
-        menu option this dashboard's docstring promises. Runs `python -m undertow.tui`
-        (see tui/__main__.py) rather than menu.main(), since services/watchdog are already
-        running under this process - the TUI just needs to connect to them, not start them
-        again. cwd is pinned to the project root so `-m undertow.tui` resolves
-        regardless of whatever directory this request happened to be handled from."""
-        try:
-            subprocess.Popen(
-                [sys.executable, "-m", "undertow.tui"],
-                cwd=str(_PROJECT_ROOT),
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
-            )
-            return render_template("partials/message.html", message="Launching the console UI in a new window...", error=False)
-        except OSError as e:
-            return render_template("partials/message.html", message=f"Couldn't launch the console UI: {e}", error=True)
+    # ---------------------------------------------------------------- shutdown
 
     @app.route("/shutdown-confirm")
     def shutdown_confirm():

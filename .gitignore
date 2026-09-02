@@ -27,14 +27,3 @@ undertow/scripts/output/
 # pictures, not app assets) - only the README explaining the folder is.
 undertow/static/images/anime/*
 !undertow/static/images/anime/README.md
-
-# Deprecated hacker/terminal-mode dashboard partials - girly mode is now the default and only
-# mode under active development. These are the non-girly counterparts _themed_template() in
-# webui.py used to pick between (see undertow/templates/partials/girly/ for the ones
-# still in use); the #hacker-view UI that rendered them is no longer reachable from index.html.
-undertow/templates/partials/fleet.html
-undertow/templates/partials/hoststats.html
-undertow/templates/partials/netstat.html
-undertow/templates/partials/queue_graph.html
-undertow/templates/partials/status.html
-undertow/templates/partials/subs_table.html
