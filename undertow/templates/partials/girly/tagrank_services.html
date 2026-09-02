@@ -1,0 +1,46 @@
+<p class="kawaii-section-title" style="margin-top:1.5rem;">&#9881; Services</p>
+<p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.5rem;">
+  Which Hydrus file/tag services TagRank searches and writes to. Leave a dropdown on "(default)"
+  to fall back to Hydrus's default file domain / merging every tag service together.
+</p>
+{% set hydrus_settings = settings.hydrus if settings else {} %}
+{% set pool_settings = settings.pool if settings else {} %}
+<form hx-post="/tagrank/services" hx-target="#tagrank-root" hx-swap="innerHTML"
+      class="kawaii-card" style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end;">
+  <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">
+    File service (which files to search)
+    <select name="file_service_key" class="kawaii-select">
+      <option value="">(default - "my files")</option>
+      {% for svc in file_services %}
+      <option value="{{ svc.key }}" {{ "selected" if pool_settings.get("file_service_key") == svc.key }}>{{ svc.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">
+    Tag service (which tags to read/write)
+    <select name="tag_service_key" class="kawaii-select">
+      <option value="">(default - merge all)</option>
+      {% for svc in tag_services %}
+      <option value="{{ svc.key }}" {{ "selected" if hydrus_settings.get("tag_service_key") == svc.key }}>{{ svc.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">
+    Badge tag service (TagRankSort:N + MMR tags)
+    <select name="badge_tag_service_key" class="kawaii-select">
+      <option value="">(default - use tag service above)</option>
+      {% for svc in tag_services %}
+      <option value="{{ svc.key }}" {{ "selected" if hydrus_settings.get("badge_tag_service_key") == svc.key }}>{{ svc.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="kawaii-btn">Save</button>
+</form>
+{% if settings_error %}
+<p class="text-xs" style="color:var(--k-danger-text); margin-top:0.4rem;">Couldn't load current settings: {{ settings_error }}</p>
+{% endif %}
+{% if not file_services and not tag_services %}
+<p class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.4rem;">
+  No Hydrus services found - check the API Keys panel's Hydrus Client API key.
+</p>
+{% endif %}

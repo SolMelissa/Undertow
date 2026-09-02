@@ -1,0 +1,11 @@
+<div class="kawaii-card" style="text-align:center;"
+     hx-get="/tagrank/server-poll?started={{ started }}" hx-target="#tagrank-root" hx-swap="innerHTML"
+     hx-trigger="load delay:1000ms">
+  <span class="loading loading-spinner loading-md"></span>
+  <p style="margin-top:0.5rem; color:var(--k-text-dim-text);">
+    Starting TagRank's API&hellip;
+  </p>
+  <p class="text-xs" style="margin-top:0.25rem; color:var(--k-text-dim-text);">
+    First response can take a while if it has a lot of rating history to load.
+  </p>
+</div>

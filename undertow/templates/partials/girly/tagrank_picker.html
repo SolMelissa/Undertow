@@ -20,6 +20,8 @@
 </div>
 {% endmacro %}
 
+{% include "partials/girly/tagrank_services.html" %}
+
 {{ pill_group("&#11014; Top rated", search_options.top if search_options else []) }}
 {{ pill_group("&#127922; Random", search_options.random if search_options else []) }}
 {{ pill_group("&#11015; Bottom rated", search_options.bottom if search_options else []) }}

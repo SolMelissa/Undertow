@@ -1494,6 +1494,29 @@ if HAVE_FLASK:
 
     _TAGRANK_LAUNCH_TIMEOUT_SECONDS = 45
 
+    # Hydrus service `type` codes (from hydrus_api.ServiceType / confirmed against a live
+    # /get_services response) worth offering in the TagRank Services panel's dropdowns.
+    _TAGRANK_TAG_SERVICE_TYPES = {0, 5}  # TAG_REPOSITORY, TAG_DOMAIN (local tag services)
+    _TAGRANK_FILE_SERVICE_TYPES = {2, 15, 21}  # FILE_DOMAIN, ALL_LOCAL_FILES, ALL_MY_FILES
+
+    def _tagrank_service_options() -> tuple[list[dict], list[dict]]:
+        """(tag_services, file_services) as [{"key", "name"}, ...] for the Services panel's
+        dropdowns - sourced from Undertow's own Hydrus API key (hydrus_client.py), not
+        TagRank's subprocess, so this works even before/without TagRank running."""
+        resp = hydrus_client.get_services()
+        if not resp.success:
+            return [], []
+        services_map = (resp.data or {}).get("services", {})
+        tag_services, file_services = [], []
+        for key, svc in services_map.items():
+            name = svc.get("name", key)
+            svc_type = svc.get("type")
+            if svc_type in _TAGRANK_TAG_SERVICE_TYPES:
+                tag_services.append({"key": key, "name": name})
+            if svc_type in _TAGRANK_FILE_SERVICE_TYPES:
+                file_services.append({"key": key, "name": name})
+        return tag_services, file_services
+
     def _tagrank_score_color(score: float, lo: float, hi: float) -> str:
         """Red (lowest-rated) -> green (highest-rated) hue, scaled across whatever tags are
         actually on screen (not a fixed absolute TrueSkill range, which would leave every pill
@@ -1504,13 +1527,12 @@ if HAVE_FLASK:
         return f"hsl({t * 120:.0f}, 65%, 45%)"
 
     def _tagrank_picker_ctx() -> dict:
-        if not tagrank_client.is_available():
-            return {"available": False}
-        ok, err = tagrank_client.ensure_server_running()
-        if not ok:
-            return {"available": True, "error": err}
+        """Assumes the server is already answering - callers must check/wait for that first
+        (see partial_tagrank/tagrank_server_poll below), so this never blocks on startup."""
         search_options, so_err = tagrank_client.get_search_options()
         graphs, g_err = tagrank_client.get_graphs()
+        settings, settings_err = tagrank_client.get_settings()
+        tag_services, file_services = _tagrank_service_options()
 
         if search_options:
             all_scores = [opt["score"] for group in ("top", "random", "bottom") for opt in search_options.get(group, [])]
@@ -1526,11 +1548,55 @@ if HAVE_FLASK:
             "error": so_err or g_err,
             "search_options": search_options,
             "graphs": graphs,
+            "settings": settings,
+            "settings_error": settings_err,
+            "tag_services": tag_services,
+            "file_services": file_services,
         }
 
     @app.route("/partials/tagrank")
     def partial_tagrank():
-        return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+        if not tagrank_client.is_available():
+            return render_template("partials/girly/tagrank_inner.html", available=False)
+        if tagrank_client.is_server_running():
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+        # Don't block this request on startup (can take well over a minute) - kick off the
+        # subprocess and hand control to a poll loop instead, same pattern as the GUI-launch
+        # loading screen below.
+        err = tagrank_client.start_server_async()
+        if err:
+            return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
+        return render_template("partials/girly/tagrank_server_starting.html", started=time.time())
+
+    @app.route("/tagrank/server-poll")
+    def tagrank_server_poll():
+        try:
+            started = float(request.args.get("started", 0))
+        except ValueError:
+            started = 0.0
+        if tagrank_client.is_server_running():
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+        if not tagrank_client.is_server_starting() or time.time() - started > tagrank_client.STARTUP_DEADLINE_SECONDS:
+            return render_template(
+                "partials/girly/tagrank_inner.html", available=True,
+                error="TagRank's API didn't come up in time - check that it's checked out and its venv is set up.",
+            )
+        return render_template("partials/girly/tagrank_server_starting.html", started=started, polling=True)
+
+    @app.route("/tagrank/services", methods=["POST"])
+    def tagrank_services():
+        changes = {}
+        file_service_key = (request.form.get("file_service_key") or "").strip()
+        tag_service_key = (request.form.get("tag_service_key") or "").strip()
+        badge_tag_service_key = (request.form.get("badge_tag_service_key") or "").strip()
+        changes["pool.file_service_key"] = file_service_key
+        changes["hydrus.tag_service_key"] = tag_service_key
+        changes["hydrus.badge_tag_service_key"] = badge_tag_service_key
+        _settings, err = tagrank_client.patch_settings(changes)
+        ctx = _tagrank_picker_ctx()
+        if err:
+            ctx["error"] = f"Couldn't save service settings: {err}"
+        return render_template("partials/girly/tagrank_inner.html", **ctx)
 
     @app.route("/tagrank/launch", methods=["POST"])
     def tagrank_launch():

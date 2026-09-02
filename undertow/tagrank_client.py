@@ -42,10 +42,67 @@ def is_server_running() -> bool:
         return False
 
 
+def _start_process() -> tuple[subprocess.Popen | None, str | None]:
+    """Spawns the TagRank API subprocess if one isn't already starting/running under our own
+    tracking, and returns it (or the existing one) without waiting for it to answer. Caller
+    must hold _lock."""
+    proc = _state.get("proc")
+    if proc is not None and proc.poll() is None:
+        return proc, None  # already starting from a previous call
+
+    main_py = config.find_tagrank_main()
+    if main_py is None:
+        return None, "TagRank isn't checked out at the configured path."
+    python_exe = config.find_tagrank_python() or "python"
+    try:
+        proc = subprocess.Popen(
+            [str(python_exe), str(main_py), "--serve", "--port", str(config.TAGRANK_PORT)],
+            cwd=str(config.TAGRANK_DIR),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except OSError as e:
+        return None, f"Couldn't launch TagRank: {e}"
+    _state["proc"] = proc
+    return proc, None
+
+
+# Measured live: a modest rating history alone can take ~15-20s just to answer its first
+# request, and startup time only grows with more history to load - so this needs real
+# headroom, not just enough for the happy path. The original 20s deadline here was flush
+# against *normal* startup, not just slow ones - that's what surfaced to the user as
+# "Did not respond within 20 seconds" on every tab open.
+STARTUP_DEADLINE_SECONDS = 75
+
+
+def start_server_async() -> str | None:
+    """Kicks off the subprocess (if one isn't already starting/running) without blocking for
+    it to answer - used by the web UI so a tab open can show a polling "starting..." screen
+    instead of freezing the request thread for up to STARTUP_DEADLINE_SECONDS. Returns an
+    error string only if the subprocess itself failed to spawn."""
+    if is_server_running():
+        return None
+    with _lock:
+        if is_server_running():
+            return None
+        _proc, err = _start_process()
+        return err
+
+
+def is_server_starting() -> bool:
+    """True if we've spawned a subprocess that hasn't answered yet and hasn't exited - lets
+    the web UI's poll loop distinguish "still booting" from "never started / crashed"."""
+    proc = _state.get("proc")
+    return proc is not None and proc.poll() is None and not is_server_running()
+
+
 def ensure_server_running() -> tuple[bool, str | None]:
-    """Starts the TagRank API subprocess if it isn't already answering. Safe to call on every
-    tab open - a live server short-circuits via is_server_running() with no extra process
-    spawned."""
+    """Starts the TagRank API subprocess if it isn't already answering, and blocks (up to
+    STARTUP_DEADLINE_SECONDS) until it does. Safe to call on every tab open - a live server
+    short-circuits via is_server_running() with no extra process spawned. Prefer
+    start_server_async() + is_server_running() polling for anything driven by a web request,
+    so a slow startup doesn't tie up the request thread."""
     if is_server_running():
         return True, None
 
@@ -53,37 +110,19 @@ def ensure_server_running() -> tuple[bool, str | None]:
         if is_server_running():
             return True, None
 
-        proc = _state.get("proc")
-        if proc is not None and proc.poll() is None:
-            # Already starting from a previous call - just wait for it below.
-            pass
-        else:
-            main_py = config.find_tagrank_main()
-            if main_py is None:
-                return False, "TagRank isn't checked out at the configured path."
-            python_exe = config.find_tagrank_python() or "python"
-            try:
-                proc = subprocess.Popen(
-                    [str(python_exe), str(main_py), "--serve", "--port", str(config.TAGRANK_PORT)],
-                    cwd=str(config.TAGRANK_DIR),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
-                )
-            except OSError as e:
-                return False, f"Couldn't launch TagRank: {e}"
-            _state["proc"] = proc
+        proc, err = _start_process()
+        if proc is None:
+            return False, err
 
-        # Poll for the server to come up rather than assuming a fixed sleep - startup time
-        # varies with how much rating history it has to load.
-        deadline = time.monotonic() + 20
+        # Poll for the server to come up rather than assuming a fixed sleep.
+        deadline = time.monotonic() + STARTUP_DEADLINE_SECONDS
         while time.monotonic() < deadline:
             if is_server_running():
                 return True, None
             if proc.poll() is not None:
                 return False, "TagRank process exited before its API came up."
             time.sleep(0.3)
-        return False, "TagRank didn't respond within 20s of starting."
+        return False, f"TagRank didn't respond within {STARTUP_DEADLINE_SECONDS}s of starting."
 
 
 def launch_gui(tag: str | None = None) -> tuple[bool, str | None]:
@@ -198,6 +237,14 @@ def _delete(path: str, **kwargs) -> tuple[dict | None, str | None]:
     return _unwrap(resp)
 
 
+def _patch(path: str, json_body: dict | None = None, **kwargs) -> tuple[dict | None, str | None]:
+    try:
+        resp = requests.patch(f"{config.TAGRANK_API_URL}{path}", json=json_body, timeout=kwargs.pop("timeout", 10), **kwargs)
+    except requests.RequestException as e:
+        return None, str(e)
+    return _unwrap(resp)
+
+
 def _unwrap(resp: requests.Response) -> tuple[dict | None, str | None]:
     if resp.status_code >= 400:
         try:
@@ -248,6 +295,20 @@ def submit_result(session_id: str, choice: str) -> tuple[dict | None, str | None
 
 def undo(session_id: str) -> tuple[dict | None, str | None]:
     return _post(f"/sessions/{session_id}/undo")
+
+
+def get_settings() -> tuple[dict | None, str | None]:
+    """{"hydrus": {"tag_service_key", "badge_tag_service_key"}, "pool": {..., "file_service_key"},
+    ...} - only hydrus.tag_service_key/badge_tag_service_key are exposed from the hydrus
+    section (see tagrank/server.py); the real secrets (api_key, rating/mmr service keys) never
+    leave TagRank's own process."""
+    return _get("/settings")
+
+
+def patch_settings(changes: dict) -> tuple[dict | None, str | None]:
+    """changes is {"section.field": value, ...}, e.g. {"pool.file_service_key": "...",
+    "hydrus.tag_service_key": "...", "hydrus.badge_tag_service_key": "..."}."""
+    return _patch("/settings", {"changes": changes})
 
 
 def end_session(session_id: str) -> tuple[dict | None, str | None]:
