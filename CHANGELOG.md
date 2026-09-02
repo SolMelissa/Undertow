@@ -2,6 +2,17 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.6.1
+- Slowed every dashboard auto-poll (previously 2s/8s/10s depending on panel - status, queue
+  graph, sparkline, sector/fleet/hoststats/topprocs/netstat/netconn, subscriptions table,
+  new-files check) to 60s in both classic and girly-mode UIs. Verified live that this dashboard
+  polling was a real, sustained CPU cost (Undertow's own process was pinned 50-65% CPU, driven
+  by the 2s subscriptions/queue-graph polls hitting the hydownloader daemon synchronously on
+  every tick) - a real system-wide slowdown, not a false alarm. Action-triggered refreshes
+  (add/pause/delete a subscription, switch to the Metrics tab, etc.) still fire immediately via
+  their existing `refreshSubs`/`subsTableNav`/`metricsTabOpen` events - only the idle timer
+  polling was slowed.
+
 ## 1.6.0
 - TagRank's headless API now starts in the background as part of `start_required_services()`
   (Undertow launch, and every Diagnostics/status "restart services" click) instead of only

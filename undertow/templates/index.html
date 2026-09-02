@@ -194,11 +194,11 @@
     </div>
 
     <div id="girly-status-badges-nav" class="kawaii-only flex flex-wrap gap-2 items-center" style="font-size:0.78rem;"
-         hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+         hx-get="/partials/status" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML">
       loading&hellip;
     </div>
     <div id="status-badges" class="kawaii-hide flex flex-wrap gap-3"
-         hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+         hx-get="/partials/status" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML">
       loading...
     </div>
 
@@ -222,7 +222,7 @@
   <div class="status-wall">
     <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-1.5 text-[11px]">
       <div id="status-badges" class="flex flex-wrap gap-3"
-           hx-get="/partials/status" hx-trigger="load, every 2s, refreshSubs from:body" hx-swap="innerHTML">
+           hx-get="/partials/status" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML">
         loading...
       </div>
       <div id="noise-readouts" class="flex flex-wrap gap-4 text-[#1c6b3e]"></div>
@@ -255,7 +255,7 @@
          kawaii-group (see CONNECTIONS/etc above) - the SIGNAL/SCOPE/MEM hacker-only gadgets in
          here are hidden entirely in kawaii mode, so grouping the rest costs nothing extra. -->
     <div class="cockpit-left flex flex-col gap-3 kawaii-group">
-      <div id="queue-graph" class="kawaii-group-first" hx-get="/partials/queue-graph" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+      <div id="queue-graph" class="kawaii-group-first" hx-get="/partials/queue-graph" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
 
       <div class="hud-panel">
         <div class="hud-titlebar">SIGNAL<div class="rule"></div></div>
@@ -278,9 +278,9 @@
         <div id="hexdump" class="p-2 h-32 overflow-hidden"></div>
       </div>
 
-      <div id="sector-panel" hx-get="/partials/sector" hx-trigger="load, every 8s, refreshSubs from:body" hx-swap="innerHTML"></div>
+      <div id="sector-panel" hx-get="/partials/sector" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML"></div>
 
-      <div id="sparkline-panel" hx-get="/partials/sparkline" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+      <div id="sparkline-panel" hx-get="/partials/sparkline" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
     </div>
 
     <!-- RIGHT: fleet/process/sector/host/network instruments. The kawaii-group/kawaii-group-*
@@ -290,14 +290,14 @@
          see the "kawaii panel grouping" rules in static/kawaii/css/kawaii.css. -->
     <div class="cockpit-right flex flex-col gap-3">
       <div class="kawaii-group">
-        <div id="fleet-panel" class="kawaii-group-first" hx-get="/partials/fleet" hx-trigger="load, every 8s, refreshSubs from:body" hx-swap="innerHTML"></div>
-        <div id="hydrus-panel" hx-get="/partials/hydrus" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
-        <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 8s" hx-swap="innerHTML"></div>
-        <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 8s" hx-swap="innerHTML"></div>
+        <div id="fleet-panel" class="kawaii-group-first" hx-get="/partials/fleet" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML"></div>
+        <div id="hydrus-panel" hx-get="/partials/hydrus" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
+        <div id="hoststats" hx-get="/partials/hoststats" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
+        <div id="topprocs" hx-get="/partials/topprocs" hx-trigger="load, every 60s" hx-swap="innerHTML"></div>
       </div>
 
       <div class="kawaii-group">
-        <div id="netstat" class="kawaii-group-first" hx-get="/partials/netstat" hx-trigger="load, every 8s, refreshSubs from:body" hx-swap="innerHTML"></div>
+        <div id="netstat" class="kawaii-group-first" hx-get="/partials/netstat" hx-trigger="load, every 60s, refreshSubs from:body" hx-swap="innerHTML"></div>
 
         <div class="hud-panel">
           <div class="hud-titlebar">CONNECTIONS<div class="rule"></div></div>
@@ -305,7 +305,7 @@
                in the static shell so htmx only ever replaces the rows inside it, never the
                scrollable element itself - scrollTop survives every poll instead of resetting. -->
           <div class="h-40 overflow-y-auto p-2 text-[10.5px]">
-            <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 8s" hx-swap="innerHTML">
+            <div id="netconn" class="flex flex-col gap-0.5" hx-get="/partials/netconn" hx-trigger="load, every 60s" hx-swap="innerHTML">
               loading...
             </div>
           </div>
@@ -359,13 +359,13 @@
              this ancestor's scrollTop survives every refresh instead of snapping to 0. -->
         <div class="overflow-y-auto max-h-[26rem]">
           <div id="subs-panel"
-               hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
+               hx-get="/partials/subscriptions" hx-trigger="load, every 60s, refreshSubs from:body, subsTableNav from:body"
                hx-vals="js:{...window.subsTableState}" hx-swap="innerHTML">
             loading subscriptions...
           </div>
         </div>
       </div>
-      <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
+      <div hx-get="/partials/new-files" hx-trigger="load, every 60s" hx-swap="none"></div>
 
       <div class="hud-panel">
         <div class="hud-titlebar">ACTIVITY LOG<div class="rule"></div></div>
@@ -455,11 +455,11 @@
                class="kawaii-input" style="flex:1; min-width:12rem;">
       </div>
       <div id="girly-subs-panel"
-           hx-get="/partials/subscriptions" hx-trigger="load, every 2s, refreshSubs from:body, subsTableNav from:body"
+           hx-get="/partials/subscriptions" hx-trigger="load, every 60s, refreshSubs from:body, subsTableNav from:body"
            hx-vals="js:{...window.subsTableState, ...window.subsGroupState}" hx-swap="innerHTML">
         loading subscriptions&hellip;
       </div>
-      <div hx-get="/partials/new-files" hx-trigger="load, every 10s" hx-swap="none"></div>
+      <div hx-get="/partials/new-files" hx-trigger="load, every 60s" hx-swap="none"></div>
 
       <div class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 2rem auto 0;" hx-get="/images/anime/slot/lg" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
     </div><!-- /girlyTab === 'home' -->
@@ -472,7 +472,7 @@
     <div x-show="girlyTab === 'metrics'" x-cloak>
       <p class="kawaii-section-title">&#129505; Health &amp; Actions</p>
       <div id="girly-status-panel"
-           hx-get="/partials/status-panel" hx-trigger="load [window.girlyTab === 'metrics'], every 10s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML">
+           hx-get="/partials/status-panel" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML">
         loading&hellip;
       </div>
 
@@ -480,34 +480,34 @@
 
       <p class="kawaii-section-title">&#128200; Overview</p>
       <div id="girly-fleet-panel" class="kawaii-stat-grid"
-           hx-get="/partials/fleet" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
+           hx-get="/partials/fleet" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
 
       <p class="kawaii-section-title">System</p>
       <div class="kawaii-stat-grid">
-        <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
-        <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
-        <div id="girly-hydrus-panel" style="display:contents;" hx-get="/partials/hydrus" hx-trigger="load [window.girlyTab === 'metrics'], every 10s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+        <div id="girly-hoststats" style="display:contents;" hx-get="/partials/hoststats" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+        <div id="girly-netstat" style="display:contents;" hx-get="/partials/netstat" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
+        <div id="girly-hydrus-panel" style="display:contents;" hx-get="/partials/hydrus" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
       </div>
 
       <div class="kawaii-gallery-slot kawaii-gallery-lg" style="display:block; margin: 1.5rem auto;" hx-get="/images/anime/slot/lg" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#128202; Queue &amp; Throughput</p>
-      <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load [window.girlyTab === 'metrics'], every 2s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+      <div id="girly-queue-graph" hx-get="/partials/queue-graph" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
       <div class="kawaii-stat-grid" style="margin-top:1rem;">
-        <div id="girly-sparkline" style="display:contents;" hx-get="/partials/sparkline" hx-trigger="load [window.girlyTab === 'metrics'], every 2s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
-        <div id="girly-sector" style="display:contents;" hx-get="/partials/sector" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
+        <div id="girly-sparkline" style="display:contents;" hx-get="/partials/sparkline" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+        <div id="girly-sector" style="display:contents;" hx-get="/partials/sector" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body, refreshSubs from:body [window.girlyTab === 'metrics']" hx-swap="innerHTML"></div>
       </div>
 
       <div class="kawaii-divider">&#127807;</div>
       <div class="kawaii-gallery-slot kawaii-gallery-wide" style="display:block;" hx-get="/images/anime/slot/wide" hx-trigger="load" hx-swap="innerHTML">&hellip;</div>
 
       <p class="kawaii-section-title">&#9889; Top Processes</p>
-      <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
+      <div id="girly-topprocs" hx-get="/partials/topprocs" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML"></div>
 
       <p class="kawaii-section-title">&#127760; Network Connections</p>
       <div style="display:flex; gap:1.25rem; align-items:flex-start;">
         <div class="kawaii-card" style="flex:1; min-width:0;">
-          <div id="girly-netconn" style="max-height:14rem; overflow-y:auto;" hx-get="/partials/netconn" hx-trigger="load [window.girlyTab === 'metrics'], every 8s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML">
+          <div id="girly-netconn" style="max-height:14rem; overflow-y:auto;" hx-get="/partials/netconn" hx-trigger="load [window.girlyTab === 'metrics'], every 60s [window.girlyTab === 'metrics'], metricsTabOpen from:body" hx-swap="innerHTML">
             loading&hellip;
           </div>
         </div>
@@ -588,7 +588,7 @@ function toggleKawaiiDark() {
 applyKawaiiDark(localStorage.getItem('pipeline-kawaii-dark') === '1');
 
 // Sort/page state for the subscriptions table - a plain JS object (not Alpine) so htmx's
-// `hx-vals="js:..."` re-reads it fresh on every trigger, including the automatic 2s poll -
+// `hx-vals="js:..."` re-reads it fresh on every trigger, including the automatic 60s poll -
 // that's what lets a chosen sort column/page survive each re-poll instead of resetting.
 window.subsTableState = { sort_by: 'id', sort_dir: 'asc', page: 1, page_size: 25, tag: '' };
 function subsSortBy(col) {
@@ -610,7 +610,7 @@ function subsSetPageSize(size) {
 
 // Girly-mode "group by source" state - separate from subsTableState above since flat mode
 // (sort/page) and grouped mode (group sort, expand/collapse) track different things and can't
-// both apply to the same request. Expanded groups persist across the 2s auto-poll (which
+// both apply to the same request. Expanded groups persist across the 60s auto-poll (which
 // replaces #girly-subs-panel's whole innerHTML) by living in a JS Set outside the DOM, reapplied
 // via applyGroupExpandState() after every swap instead of round-tripping to the server.
 window.subsGroupState = { grouped: true, group_sort: 'name', group_dir: 'asc', filter: '' };
