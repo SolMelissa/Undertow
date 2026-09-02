@@ -24,6 +24,13 @@ WATCHDOG_HISTORY_FILE = LOGS_DIR / "watchdog-history.jsonl"
 DAEMON_LAUNCH_STDOUT_LOG = LOGS_DIR / "daemon-launch-stdout.log"
 DAEMON_LAUNCH_STDERR_LOG = LOGS_DIR / "daemon-launch-stderr.log"
 
+# TagRank's comparison-window subprocess used to run under CREATE_NEW_CONSOLE, which flashed a
+# separate, untitled console window every time a pill was clicked. It's now launched hidden
+# (CREATE_NO_WINDOW) with output captured here instead, so the webui's loading screen can show
+# it inline (see tagrank_client.read_launch_log / templates/partials/girly/tagrank_starting.html).
+TAGRANK_LAUNCH_STDOUT_LOG = LOGS_DIR / "tagrank-launch-stdout.log"
+TAGRANK_LAUNCH_STDERR_LOG = LOGS_DIR / "tagrank-launch-stderr.log"
+
 # hydownloader's own main log - records subscription checks, downloads, and errors as they
 # happen. Used by logtail.py for the "what's it actually doing right now" live feed.
 DAEMON_LOG_FILE = LOGS_DIR / "daemon.txt"

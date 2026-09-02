@@ -1618,7 +1618,11 @@ if HAVE_FLASK:
             # Couldn't confirm the window came up (no pywin32, or it's just taking unusually
             # long) - stop polling forever and hand control back rather than spinning silently.
             return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
-        return render_template("partials/girly/tagrank_starting.html", tag=tag, started=started, polling=True)
+        return render_template(
+            "partials/girly/tagrank_starting.html",
+            tag=tag, started=started, polling=True,
+            console_log=tagrank_client.read_launch_log(),
+        )
 
     # ---------------------------------------------------------------- API keys
 

@@ -16,3 +16,6 @@
   </p>
   <p class="text-xs" style="margin-top:0.25rem; color:var(--k-text-dim-text);">TagRank's window will open automatically once it's ready.</p>
 </div>
+{% if console_log %}
+<pre class="kawaii-card" style="margin-top:0.75rem; text-align:left; font-size:0.72rem; max-height:220px; overflow-y:auto; white-space:pre-wrap; word-break:break-word;">{{ console_log }}</pre>
+{% endif %}

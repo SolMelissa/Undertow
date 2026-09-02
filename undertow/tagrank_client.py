@@ -131,13 +131,18 @@ def ensure_server_running() -> tuple[bool, str | None]:
 
 
 def launch_gui(tag: str | None = None) -> tuple[bool, str | None]:
-    """Opens TagRank's real PySide6 comparison window (`python main.py [--tag <tag>]`) in its
-    own console, same fresh-window pattern as webui.py's launch_tui(). This is the *actual*
-    judging UI - the in-browser pill picker only drives the read-only /search-options and
-    /history/graphs endpoints, not a live comparison session. Passing --tag skips TagRank's own
-    interactive numbered search-picker prompt (a small addition to tagrank/main.py +
-    tagrank/tagrank/app.py made specifically for this) so the window comes up already searching
-    the tag whose pill was clicked, instead of TagRank's generic start screen."""
+    """Opens TagRank's real PySide6 comparison window (`python main.py [--tag <tag>]`). This is
+    the *actual* judging UI - the in-browser pill picker only drives the read-only
+    /search-options and /history/graphs endpoints, not a live comparison session. Passing --tag
+    skips TagRank's own interactive numbered search-picker prompt (a small addition to
+    tagrank/main.py + tagrank/tagrank/app.py made specifically for this) so the window comes up
+    already searching the tag whose pill was clicked, instead of TagRank's generic start screen.
+
+    Runs hidden (CREATE_NO_WINDOW) with stdout/stderr captured to
+    config.TAGRANK_LAUNCH_STDOUT_LOG/STDERR_LOG rather than the previous CREATE_NEW_CONSOLE,
+    which flashed a separate, untitled console window on every launch. The webui's loading
+    screen (tagrank_starting.html) tails that log instead via read_launch_log() so the same
+    output is still visible, just inline in Undertow rather than as its own window."""
     main_py = config.find_tagrank_main()
     if main_py is None:
         return False, "TagRank isn't checked out at the configured path."
@@ -146,21 +151,41 @@ def launch_gui(tag: str | None = None) -> tuple[bool, str | None]:
     if tag:
         args += ["--tag", tag]
     try:
-        subprocess.Popen(
-            args,
-            cwd=str(config.TAGRANK_DIR),
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
+        config.TAGRANK_LAUNCH_STDOUT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        out = open(config.TAGRANK_LAUNCH_STDOUT_LOG, "w", encoding="utf-8")
+        err = open(config.TAGRANK_LAUNCH_STDERR_LOG, "w", encoding="utf-8")
+        try:
+            subprocess.Popen(
+                args,
+                cwd=str(config.TAGRANK_DIR),
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                stdout=out,
+                stderr=err,
+            )
+        finally:
+            out.close()
+            err.close()
     except OSError as e:
         return False, str(e)
     return True, None
 
 
+def read_launch_log(max_lines: int = 40) -> str:
+    """Tails the captured stdout+stderr of the most recent launch_gui() subprocess, for the
+    inline "console" shown on the webui's loading screen while TagRank's comparison window is
+    still coming up. Best-effort - returns "" if nothing's been captured yet."""
+    lines: list[str] = []
+    for path in (config.TAGRANK_LAUNCH_STDOUT_LOG, config.TAGRANK_LAUNCH_STDERR_LOG):
+        try:
+            lines += path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            pass
+    return "\n".join(lines[-max_lines:])
+
+
 # Set right when Window (tagrank/ui/window.py) is constructed, after pool-building has already
 # finished - so "does a window with this title prefix exist" is a reliable "pool is ready and
-# the comparison window is up" signal, distinct from the console window that appears the
-# instant the subprocess starts (same pid, but Popen's CREATE_NEW_CONSOLE window title is the
-# command line, never this).
+# the comparison window is up" signal.
 _READY_WINDOW_TITLE_PREFIX = "TagRank - Comparisons"
 
 
