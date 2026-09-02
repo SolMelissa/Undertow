@@ -326,17 +326,23 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
     Real scraped performer/alias data is noisy - a scene-descriptor alias like "petite teen"
     puts ordinary descriptive words into name_pairs, which would otherwise happily pair up with
     an unrelated neighbor (e.g. "angelic teen" in real data, even though neither is a real name
-    here) and defeat cfg.always_split/glue-word handling entirely. Worse, scraped alias data also
-    puts ordinary demographic/descriptor words (e.g. "brunette", "redhead", "hunk") into
-    name_pairs, which would otherwise tear a should-stand-alone descriptor tag apart by pairing
-    it with an unrelated neighbor. Any token that's a reserved always_split word, function word,
-    corpus glue word, or attribute-lexicon word (colors, sizes, demographic/scene-descriptor
-    adjectives - see Config.attribute_lexicon) is never allowed to participate in a match, in
-    either role."""
+    here) and defeat cfg.always_split/glue-word handling entirely. Any token that's a reserved
+    always_split word, function word, or corpus glue word is never allowed to participate in a
+    match, in either role - full-phrase or adjacent-pair/initial-form.
+
+    Attribute-lexicon words (colors, sizes, demographic/scene-descriptor adjectives - see
+    Config.attribute_lexicon, e.g. "brunette", "hunk") get that same protection, but ONLY for the
+    adjacent-pair/initial-form fallback below: that's the loose, heuristic match (any independently
+    known first name next to any independently known last name) that was tearing a
+    should-stand-alone descriptor apart by pairing it with an unrelated neighbor. An exact
+    full-name-phrase match is a different animal - a literal, specific alias the gazetteer already
+    has on file - so a real performer name that happens to contain a color/attribute word (e.g.
+    "Keira Blue") must NOT be blocked from matching there; excluding attribute words only from the
+    loose fallback keeps both guarantees at once."""
     if not gaz or not tokens:
         return [(t, False) for t in tokens]
-    protected = (cfg.always_split | cfg.function_words | cfg.corpus_glue_words
-                 | cfg.attribute_lexicon)
+    core_protected = cfg.always_split | cfg.function_words | cfg.corpus_glue_words
+    protected = core_protected | cfg.attribute_lexicon
     n = len(tokens)
     out: List[Tuple[str, bool]] = []
     i = 0
@@ -345,7 +351,7 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
         max_span = min(gaz.max_phrase_len, n - i)
         for span in range(max_span, 1, -1):
             span_tokens = tokens[i:i + span]
-            if any(t in protected for t in span_tokens):
+            if any(t in core_protected for t in span_tokens):
                 continue
             phrase = " ".join(span_tokens)
             if phrase in gaz.full_name_phrases:
