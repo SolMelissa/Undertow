@@ -264,8 +264,10 @@ def looks_truncated_dictionary(tok: str) -> bool:
 # hit on a single token is deliberately NOT enough to accept it as a name by
 # itself - that's exactly what causes false positives on common-word names.
 # Only a full multi-word name/alias phrase match, or two ADJACENT tokens that
-# gazetteer-match as a first+last name pair, are accepted; everything else
-# falls through to the normal attribute/content classifier untouched.
+# actually co-occurred as a first+last name pair in some real scraped
+# name/alias (or an initial standing in for the first-name half of one), are
+# accepted; everything else falls through to the normal attribute/content
+# classifier untouched.
 #
 # Fetching and building the gazetteer (from ThePornDB/StashDB) lives entirely
 # in the sibling script `performer_gazetteer.py` - run it directly to build or
@@ -278,8 +280,16 @@ PERFORMER_GAZETTEER_CACHE_FILE = JSON_OUTPUT_DIR / "performer-gazetteer.json"
 @dataclass
 class PerformerGazetteer:
     full_name_phrases: Set[str]
-    first_names: Set[str]
-    last_names: Set[str]
+    # (first_token, last_token) pairs pulled from the endpoints of every real
+    # multi-word name/alias performer_gazetteer.py fetched - NOT the cross
+    # product of independent first-name/last-name sets. That distinction is
+    # the whole point: "grace" and "cruz" can each be a real first/last name
+    # without "grace cruz" ever being an actual performer, so the adjacency
+    # check below only accepts pairs that were seen together.
+    name_pairs: Set[Tuple[str, str]]
+    # Derived at load time: last_token -> set of first-letters of every first
+    # name actually paired with it, for the "j smith" initial-form match.
+    initials_by_last: Dict[str, Set[str]] = field(default_factory=dict)
     max_phrase_len: int = 2
 
 
@@ -287,10 +297,16 @@ def load_performer_gazetteer() -> Optional[PerformerGazetteer]:
     try:
         with open(PERFORMER_GAZETTEER_CACHE_FILE, encoding="utf-8") as f:
             payload = json.load(f)
+        raw_pairs = payload.get("name_pairs", [])
+        name_pairs = {(p[0], p[1]) for p in raw_pairs if isinstance(p, (list, tuple)) and len(p) == 2}
+        initials_by_last: Dict[str, Set[str]] = {}
+        for first, last in name_pairs:
+            if first:
+                initials_by_last.setdefault(last, set()).add(first[0])
         return PerformerGazetteer(
             full_name_phrases=set(payload.get("full_name_phrases", [])),
-            first_names=set(payload.get("first_names", [])),
-            last_names=set(payload.get("last_names", [])),
+            name_pairs=name_pairs,
+            initials_by_last=initials_by_last,
             max_phrase_len=payload.get("max_phrase_len", 2),
         )
     except (OSError, ValueError, KeyError):
@@ -300,20 +316,23 @@ def load_performer_gazetteer() -> Optional[PerformerGazetteer]:
 def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
                          cfg: "Config") -> List[Tuple[str, bool]]:
     """Scans left-to-right for gazetteer matches: longest full-name/alias phrase match first
-    (2+ words), else an adjacent first-name+last-name gazetteer pair (either order). A lone
-    gazetteer hit on a single token is never enough by itself. Falls through untouched with
-    no gazetteer loaded.
+    (2+ words), else an adjacent pair that actually co-occurred as a first+last name in some
+    real scraped name/alias - either the literal pair (either order), or an initial standing in
+    for the first-name half (e.g. "j smith", either order). A lone gazetteer hit on a single
+    token is never enough by itself, and two tokens that are each independently a known
+    first/last name are never enough either unless they were actually seen together - see
+    PerformerGazetteer.name_pairs. Falls through untouched with no gazetteer loaded.
 
     Real scraped performer/alias data is noisy - a scene-descriptor alias like "petite teen"
-    puts ordinary descriptive words into the first/last-name sets, which would otherwise
-    happily pair up with an unrelated neighbor (e.g. "angelic teen" in real data, even though
-    neither is a real name here) and defeat cfg.always_split/glue-word handling entirely. Worse,
-    scraped alias data also puts ordinary demographic/descriptor words (e.g. "brunette",
-    "redhead", "hunk") into the first/last-name sets, which would otherwise tear a
-    should-stand-alone descriptor tag apart by pairing it with an unrelated neighbor. Any token
-    that's a reserved always_split word, function word, corpus glue word, or attribute-lexicon
-    word (colors, sizes, demographic/scene-descriptor adjectives - see Config.attribute_lexicon)
-    is never allowed to participate in a match, in either role."""
+    puts ordinary descriptive words into name_pairs, which would otherwise happily pair up with
+    an unrelated neighbor (e.g. "angelic teen" in real data, even though neither is a real name
+    here) and defeat cfg.always_split/glue-word handling entirely. Worse, scraped alias data also
+    puts ordinary demographic/descriptor words (e.g. "brunette", "redhead", "hunk") into
+    name_pairs, which would otherwise tear a should-stand-alone descriptor tag apart by pairing
+    it with an unrelated neighbor. Any token that's a reserved always_split word, function word,
+    corpus glue word, or attribute-lexicon word (colors, sizes, demographic/scene-descriptor
+    adjectives - see Config.attribute_lexicon) is never allowed to participate in a match, in
+    either role."""
     if not gaz or not tokens:
         return [(t, False) for t in tokens]
     protected = (cfg.always_split | cfg.function_words | cfg.corpus_glue_words
@@ -336,12 +355,16 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
                 break
         if matched:
             continue
-        if (i + 1 < n and tokens[i] not in protected and tokens[i + 1] not in protected and
-                ((tokens[i] in gaz.first_names and tokens[i + 1] in gaz.last_names) or
-                 (tokens[i] in gaz.last_names and tokens[i + 1] in gaz.first_names))):
-            out.append((f"{tokens[i]} {tokens[i + 1]}", True))
-            i += 2
-            continue
+        if i + 1 < n and tokens[i] not in protected and tokens[i + 1] not in protected:
+            a, b = tokens[i], tokens[i + 1]
+            is_known_pair = (a, b) in gaz.name_pairs or (b, a) in gaz.name_pairs
+            is_initial_form = (
+                (len(a) == 1 and a in gaz.initials_by_last.get(b, ())) or
+                (len(b) == 1 and b in gaz.initials_by_last.get(a, ())))
+            if is_known_pair or is_initial_form:
+                out.append((f"{a} {b}", True))
+                i += 2
+                continue
         out.append((tokens[i], False))
         i += 1
     return out
@@ -1200,18 +1223,22 @@ def run_self_test(cfg: Config) -> None:
 
     # Offline performer-gazetteer checks: a synthetic gazetteer standing in for a real
     # ThePornDB/StashDB fetch, so this exercises the name-detection path without a network
-    # call. "faith" and "cruz" are deliberately also plausible ordinary words/surnames to
-    # verify the adjacency requirement, not a real-world name list.
+    # call. "faith" and "cruz" are deliberately also plausible ordinary words/surnames, and
+    # "grace"+"cruz" is deliberately NOT a real pairing even though both halves are
+    # individually known, to verify the co-occurrence (not cross-product) requirement.
+    name_pairs = {("stacy", "cruz"), ("grace", "hall"), ("faith", "hall")}
     name_cfg = Config(performer_gazetteer=PerformerGazetteer(
         full_name_phrases={"stacy cruz", "grace hall", "faith hall"},
-        first_names={"stacy", "grace", "faith"},
-        last_names={"cruz", "hall"},
+        name_pairs=name_pairs,
+        initials_by_last={"hall": {"g", "f"}, "cruz": {"s"}},
         max_phrase_len=2,
     ))
     name_fixtures = [
         "dir:38-angelic teen stacy cruz gets ass fucked by big cock outdoors",
         "dir:12-quiet evening faith hall relaxes by the old lake shore",
         "dir:19-color study the ocean looked deep blue under fading light",
+        "dir:45-portrait session g hall poses by a quiet window in soft light",
+        "dir:61-market day grace cruz browses old stalls near the quiet square",
     ]
     name_results = parse_filename_tag_batch(name_fixtures, name_cfg)
     name_checks = [
@@ -1222,6 +1249,12 @@ def run_self_test(cfg: Config) -> None:
         ("Lone ambiguous word 'blue' (no adjacent gazetteer match) is NOT force-classified "
          "as a name - falls through to ordinary attribute handling",
          "blue" not in name_results[2].dropped),
+        ("Initial form 'g hall' (first-name initial + known last name) recognized as a name",
+         "g hall" in name_results[3].tags),
+        ("'grace cruz' is NOT recognized as a name - 'grace' and 'cruz' are each individually "
+         "known but never co-occurred, so the cross-product match is correctly rejected",
+         "grace cruz" not in name_results[4].tags
+         and "grace" in name_results[4].tags and "cruz" in name_results[4].tags),
     ]
     print("\nPerformer-gazetteer regression checks (offline, synthetic gazetteer):")
     for label, passed in name_checks:
