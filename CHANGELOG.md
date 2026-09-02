@@ -2,6 +2,26 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.10.0
+- TagRank tab filter bar rework:
+  - The DB Search button now shows a spinner and "Searching..." status while a search is in
+    flight, and a visible error if the request itself fails, instead of giving no feedback at
+    all while waiting.
+  - Removed the "live"/"DB" badges from every filter field - they described an internal
+    implementation detail (which metrics have data on-screen vs. only in the DB) rather than
+    anything a user needs to think about.
+  - Band+center sliders (score, resolution, rating count, date added) are now grouped in a
+    bordered panel, with larger slider thumbs and toggle buttons.
+  - Every filter now defaults to "show everything" - band sliders used to open on a narrow
+    default window (e.g. only scores within +-2 of center) that silently hid results; their
+    default ranges now cover the whole metric.
+  - The File/tag service pickers moved to the bottom of the filter panel, since their
+    "Select..." mode expands a panel downward.
+  - Removed the separate "Services" section between the tag pills and the rating-history
+    graphs - redundant now that file/tag service selection lives in the filter bar itself.
+  - The Top rated / Random / Bottom rated pill groups are now one flat block, deduped by tag
+    and sorted purely by TrueSkill (MMR) score, instead of three separate sections.
+
 ## 1.9.0
 - Added a "TagRank" status pill to the dashboard header, alongside Hydrus/Downloader/Tray/Drive
   - green when TagRank's headless API subprocess is up, red when it isn't, click to

@@ -126,16 +126,21 @@
 .tagrank-dualrange input[type="range"]::-moz-range-track { background: var(--k-border); height: 4px; border-radius: 2px; }
 .tagrank-dualrange input[type="range"]::-webkit-slider-thumb {
   pointer-events: all; -webkit-appearance: none; appearance: none;
-  width: 14px; height: 14px; border-radius: 50%; background: var(--k-accent);
-  border: 2px solid var(--k-panel); cursor: pointer; margin-top: -5px;
+  width: 18px; height: 18px; border-radius: 50%; background: var(--k-accent);
+  border: 2px solid var(--k-panel); cursor: pointer; margin-top: -7px;
 }
 .tagrank-dualrange input[type="range"]::-moz-range-thumb {
-  pointer-events: all; width: 14px; height: 14px; border-radius: 50%;
+  pointer-events: all; width: 18px; height: 18px; border-radius: 50%;
   background: var(--k-accent); border: 2px solid var(--k-panel); cursor: pointer;
 }
-.tagrank-band-row { display: flex; align-items: center; gap: 0.5rem; }
-.tagrank-band-readout { font-size: 0.7rem; color: var(--k-text-dim-text); min-width: 3.2rem; text-align: center; }
-.tagrank-band-center input[type="range"] { flex: 1; accent-color: var(--k-accent-2); }
+.tagrank-band-row { display: flex; align-items: center; gap: 0.6rem; }
+.tagrank-band-readout { font-size: 0.72rem; color: var(--k-text-dim-text); min-width: 3.4rem; text-align: center; }
+.tagrank-band-center input[type="range"] { flex: 1; accent-color: var(--k-accent-2); height: 18px; }
+
+.tagrank-band-group {
+  display: flex; flex-wrap: wrap; gap: 1rem; padding: 0.85rem 1rem;
+  border: 1px solid var(--k-border); border-radius: 0.75rem; background: var(--k-panel);
+}
 
 .tagrank-stepper { display: flex; align-items: center; gap: 0.3rem; }
 .tagrank-stepper-val { min-width: 3rem; text-align: center; font-size: 0.85rem; }
@@ -144,29 +149,36 @@
 .tagrank-segment { display: inline-flex; border: 1px solid var(--k-border); border-radius: 999px; overflow: hidden; }
 .tagrank-segment button {
   border: none; background: var(--k-panel); color: var(--k-text-dim-text);
-  font-size: 0.72rem; padding: 0.3rem 0.6rem; cursor: pointer;
+  font-size: 0.78rem; padding: 0.4rem 0.85rem; cursor: pointer;
 }
 .tagrank-segment button.active { background: var(--k-accent); color: #fff; }
 .tagrank-segment button + button { border-left: 1px solid var(--k-border); }
 
 .tagrank-service-panel {
-  display: none; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem;
-  padding: 0.5rem; border: 1px dashed var(--k-border); border-radius: 0.6rem;
+  display: none; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem;
+  padding: 0.6rem; border: 1px dashed var(--k-border); border-radius: 0.6rem;
 }
 .tagrank-service-panel.open { display: flex; }
 .tagrank-service-pill {
   border: 1px solid var(--k-border); border-radius: 999px; background: var(--k-panel);
-  color: var(--k-text-dim-text); font-size: 0.72rem; padding: 0.25rem 0.6rem; cursor: pointer;
+  color: var(--k-text-dim-text); font-size: 0.78rem; padding: 0.35rem 0.75rem; cursor: pointer;
 }
 .tagrank-service-pill.selected { background: var(--k-accent-2); color: var(--k-accent-2-text); border-color: var(--k-accent-2); }
 
-.tagrank-filter-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; min-width: 190px; }
+.tagrank-filter-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; min-width: 190px; }
 .tagrank-filter-field .tagrank-field-label { display: flex; justify-content: space-between; align-items: baseline; }
-.tagrank-live-badge, .tagrank-db-badge {
-  font-size: 0.6rem; padding: 0.05rem 0.35rem; border-radius: 999px; font-weight: 600;
+
+.tagrank-search-status {
+  font-size: 0.75rem; color: var(--k-text-dim-text); display: flex; align-items: center; gap: 0.4rem;
 }
-.tagrank-live-badge { background: color-mix(in srgb, var(--k-good) 25%, transparent); color: var(--k-good); }
-.tagrank-db-badge { background: color-mix(in srgb, var(--k-accent-2) 25%, transparent); color: var(--k-accent-2-text); }
+.tagrank-search-status.tagrank-status-error { color: var(--k-danger-text); }
+.tagrank-search-status.tagrank-status-ok { color: var(--k-good); }
+.tagrank-spinner {
+  width: 0.85rem; height: 0.85rem; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--k-accent) 35%, transparent);
+  border-top-color: var(--k-accent); animation: tagrank-spin 0.7s linear infinite;
+}
+@keyframes tagrank-spin { to { transform: rotate(360deg); } }
 
 .kawaii-btn-primary {
   background: linear-gradient(135deg, var(--k-accent), #ff3d94);
