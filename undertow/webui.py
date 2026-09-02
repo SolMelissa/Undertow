@@ -488,6 +488,8 @@ if HAVE_FLASK:
     def partial_status():
         svc = services.get_service_status()
         drive_mounted = Path(config.HYDRUS_VOLUME_DRIVE + "\\").exists()
+        tagrank_available = tagrank_client.is_available()
+        tagrank_running = tagrank_available and tagrank_client.is_server_running()
         status_resp = api_client.get_status_info()
         if status_resp.success and status_resp.data:
             d = status_resp.data
@@ -495,6 +497,7 @@ if HAVE_FLASK:
             subs_due = d.get("subscriptions_due") or 0
             ctx = dict(
                 status=svc, api_ok=True, drive_mounted=drive_mounted,
+                tagrank_available=tagrank_available, tagrank_running=tagrank_running,
                 sub_status=d.get("subscription_worker_status") or "",
                 url_status=d.get("url_worker_status") or "",
                 urls_queued=urls_queued,
@@ -502,7 +505,11 @@ if HAVE_FLASK:
             )
             _activity_history.append((urls_queued, subs_due))
         else:
-            ctx = dict(status=svc, api_ok=False, drive_mounted=drive_mounted, sub_status="", url_status="", urls_queued=0, subs_due=0)
+            ctx = dict(
+                status=svc, api_ok=False, drive_mounted=drive_mounted,
+                tagrank_available=tagrank_available, tagrank_running=tagrank_running,
+                sub_status="", url_status="", urls_queued=0, subs_due=0,
+            )
             _activity_history.append((0, 0))
         # Decorative "signature" readout for the header - a real hash of the current worker
         # state (not random), so it changes exactly when something real changes rather than
@@ -1526,6 +1533,27 @@ if HAVE_FLASK:
         t = max(0.0, min(1.0, (score - lo) / (hi - lo)))
         return f"hsl({t * 120:.0f}, 65%, 45%)"
 
+    def _tagrank_merge_search_options(search_options: dict | None) -> list[dict]:
+        """Flattens the API's top/random/bottom groups into one list, deduped by tag (a tag
+        can land in more than one group on small libraries - keep the first copy seen, order
+        doesn't matter since we re-sort next), sorted by TrueSkill score (MMR) descending, and
+        colored red->green across that combined range. The three-way split used to be shown as
+        separate sections in the UI; now it's one block sorted purely by rating."""
+        if not search_options:
+            return []
+        seen: set[str] = set()
+        merged: list[dict] = []
+        for group in ("top", "random", "bottom"):
+            for opt in search_options.get(group, []):
+                if opt["tag"] in seen:
+                    continue
+                seen.add(opt["tag"])
+                merged.append(opt)
+        merged.sort(key=lambda opt: opt["score"], reverse=True)
+        scores = [opt["score"] for opt in merged]
+        lo, hi = (min(scores), max(scores)) if scores else (0.0, 0.0)
+        return [{**opt, "color": _tagrank_score_color(opt["score"], lo, hi)} for opt in merged]
+
     def _tagrank_picker_ctx() -> dict:
         """Assumes the server is already answering - callers must check/wait for that first
         (see partial_tagrank/tagrank_server_poll below), so this never blocks on startup."""
@@ -1534,19 +1562,10 @@ if HAVE_FLASK:
         settings, settings_err = tagrank_client.get_settings()
         tag_services, file_services = _tagrank_service_options()
 
-        if search_options:
-            all_scores = [opt["score"] for group in ("top", "random", "bottom") for opt in search_options.get(group, [])]
-            lo, hi = (min(all_scores), max(all_scores)) if all_scores else (0.0, 0.0)
-            for group in ("top", "random", "bottom"):
-                search_options[group] = [
-                    {**opt, "color": _tagrank_score_color(opt["score"], lo, hi)}
-                    for opt in search_options.get(group, [])
-                ]
-
         return {
             "available": True,
             "error": so_err or g_err,
-            "search_options": search_options,
+            "search_options": _tagrank_merge_search_options(search_options),
             "graphs": graphs,
             "settings": settings,
             "settings_error": settings_err,
@@ -1614,14 +1633,7 @@ if HAVE_FLASK:
         if err:
             ctx["error"] = f"DB Search isn't available yet: {err}"
         elif search_options:
-            all_scores = [opt["score"] for group in ("top", "random", "bottom") for opt in search_options.get(group, [])]
-            lo, hi = (min(all_scores), max(all_scores)) if all_scores else (0.0, 0.0)
-            for group in ("top", "random", "bottom"):
-                search_options[group] = [
-                    {**opt, "color": _tagrank_score_color(opt["score"], lo, hi)}
-                    for opt in search_options.get(group, [])
-                ]
-            ctx["search_options"] = search_options
+            ctx["search_options"] = _tagrank_merge_search_options(search_options)
         return render_template("partials/girly/tagrank_inner.html", **ctx)
 
     @app.route("/tagrank/launch", methods=["POST"])
@@ -1774,6 +1786,19 @@ if HAVE_FLASK:
             ok = services.ensure_veracrypt_drive_mounted()
             message = "Drive mounted." if ok else "Failed to mount the drive - check VeraCrypt for a password prompt."
         return render_template("partials/message.html", message=message, error=not ok), 200, headers
+
+    @app.route("/services/tagrank/toggle", methods=["POST"])
+    def service_tagrank_toggle():
+        headers = {"HX-Trigger": "refreshSubs"}
+        if not tagrank_client.is_available():
+            return render_template("partials/message.html", message="TagRank isn't checked out at the configured path.", error=True), 200, headers
+        if tagrank_client.is_server_running():
+            tagrank_client.stop_server()
+            return render_template("partials/message.html", message="TagRank server stopped.", error=False), 200, headers
+        err = tagrank_client.start_server_async()
+        if err:
+            return render_template("partials/message.html", message=f"Failed to start TagRank: {err}", error=True), 200, headers
+        return render_template("partials/message.html", message="TagRank server starting...", error=False), 200, headers
 
     # ---------------------------------------------------------------- shutdown
 

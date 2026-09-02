@@ -16,6 +16,14 @@
           hx-confirm="{{ 'Dismount' if drive_mounted else 'Mount' }} the A: drive?">
     <span class="dot"></span>Drive
   </button>
+  {% if tagrank_available %}
+  <button type="button" class="kawaii-pill {{ 'ok' if tagrank_running else 'bad' }}"
+          title="TagRank server - {{ 'running' if tagrank_running else 'not running' }} - click to {{ 'stop' if tagrank_running else 'start' }}"
+          hx-post="/services/tagrank/toggle" hx-target="#girly-toast-stack" hx-swap="afterbegin"
+          {% if tagrank_running %}hx-confirm="Stop the TagRank server?"{% endif %}>
+    <span class="dot"></span>TagRank
+  </button>
+  {% endif %}
   {% if not api_ok %}
   <span class="kawaii-pill bad"><span class="dot"></span>API unreachable</span>
   {% else %}

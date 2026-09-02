@@ -2,6 +2,12 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.9.0
+- Added a "TagRank" status pill to the dashboard header, alongside Hydrus/Downloader/Tray/Drive
+  - green when TagRank's headless API subprocess is up, red when it isn't, click to
+  start or stop it. Hidden entirely on machines without a TagRank checkout. Reuses the
+  same `tagrank_client` start/stop functions the TagRank tab itself already relies on.
+
 ## 1.8.3
 - Fixed `Undertow.exe` failing to launch with "Couldn't start the WebView2 runtime: Unable to
   load DLL 'WebView2Loader.dll'" (0x8007007E), a regression from 1.8.2's framework-dependent
