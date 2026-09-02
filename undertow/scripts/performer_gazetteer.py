@@ -49,10 +49,15 @@ def _normalize_name_phrase(name: str) -> List[str]:
 
 
 def build_performer_gazetteer(raw_entries: List[Tuple[str, List[str]]]) -> PerformerGazetteer:
-    """raw_entries is a list of (name, aliases) pairs pulled from one or more sources. Only
-    multi-word names/aliases contribute - a single-word stage name can't corroborate itself
-    for the adjacency check tag_cleanup.py relies on, so it would just become a silent
-    single-token accept-list, the exact false-positive failure mode being avoided there.
+    """raw_entries is a list of (name, aliases) pairs pulled from one or more sources.
+
+    Multi-word names/aliases contribute a full phrase plus its (first_token, last_token)
+    endpoints - see name_pairs below. A single-word stage name can't corroborate itself for
+    that adjacency check (it would just become a silent single-token accept-list, the exact
+    false-positive failure mode name_pairs exists to avoid), so it goes into single_names
+    instead: tag_cleanup.py uses that set only to keep the token from being absorbed into a
+    neighboring attribute/content phrase, NOT to assert real-name confidence the way a
+    full-phrase or name_pairs match does - a deliberately lower, precision-doesn't-matter bar.
 
     name_pairs stores the (first_token, last_token) ENDPOINTS of each real multi-word
     name/alias - not independent first-name/last-name sets - so tag_cleanup.py's adjacency
@@ -60,19 +65,24 @@ def build_performer_gazetteer(raw_entries: List[Tuple[str, List[str]]]) -> Perfo
     next to any last name regardless of whether that specific pairing ever existed."""
     full_phrases = set()
     name_pairs = set()
+    single_names = set()
     max_len = 2
     for name, aliases in raw_entries:
         for candidate in [name, *aliases]:
             if not candidate:
                 continue
             tokens = _normalize_name_phrase(candidate)
+            if len(tokens) == 1:
+                if len(tokens[0]) >= 2:
+                    single_names.add(tokens[0])
+                continue
             if len(tokens) < 2:
                 continue
             full_phrases.add(" ".join(tokens))
             name_pairs.add((tokens[0], tokens[-1]))
             max_len = max(max_len, len(tokens))
     return PerformerGazetteer(full_name_phrases=full_phrases, name_pairs=name_pairs,
-                               max_phrase_len=max_len)
+                               single_names=single_names, max_phrase_len=max_len)
 
 
 def save_performer_gazetteer(gaz: PerformerGazetteer) -> None:
@@ -80,6 +90,7 @@ def save_performer_gazetteer(gaz: PerformerGazetteer) -> None:
         "generated": datetime.datetime.now().isoformat(timespec="seconds"),
         "full_name_phrases": sorted(gaz.full_name_phrases),
         "name_pairs": sorted([first, last] for first, last in gaz.name_pairs),
+        "single_names": sorted(gaz.single_names),
         "max_phrase_len": gaz.max_phrase_len,
     }
     PERFORMER_GAZETTEER_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -238,7 +249,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     gaz = build_performer_gazetteer(raw_entries)
     save_performer_gazetteer(gaz)
     print(f"\nBuilt performer gazetteer: {len(gaz.full_name_phrases):,} full name(s)/alias(es), "
-          f"{len(gaz.name_pairs):,} known first+last name pair(s).")
+          f"{len(gaz.name_pairs):,} known first+last name pair(s), "
+          f"{len(gaz.single_names):,} single-word stage name(s).")
     print(f"Saved to: {PERFORMER_GAZETTEER_CACHE_FILE}")
     return 1 if had_failure else 0
 

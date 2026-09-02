@@ -287,6 +287,14 @@ class PerformerGazetteer:
     # without "grace cruz" ever being an actual performer, so the adjacency
     # check below only accepts pairs that were seen together.
     name_pairs: Set[Tuple[str, str]]
+    # Single-word stage names/aliases - can't corroborate themselves as a real name the way a
+    # full phrase or a name_pairs co-occurrence can, so precision here is deliberately not the
+    # goal: many are foreign/invented words that would otherwise fail the dictionary-truncation
+    # check and get silently dropped rather than kept, which defeats the point. A hit gets the
+    # same full "name" protection as a full-phrase/pair match (never merged into a neighboring
+    # attribute/content phrase, never dropped as truncated) - being wrong about which single
+    # dictionary word is a name costs nothing here as long as it stays a separate tag.
+    single_names: Set[str] = field(default_factory=set)
     # Derived at load time: last_token -> set of first-letters of every first
     # name actually paired with it, for the "j smith" initial-form match.
     initials_by_last: Dict[str, Set[str]] = field(default_factory=dict)
@@ -306,6 +314,7 @@ def load_performer_gazetteer() -> Optional[PerformerGazetteer]:
         return PerformerGazetteer(
             full_name_phrases=set(payload.get("full_name_phrases", [])),
             name_pairs=name_pairs,
+            single_names=set(payload.get("single_names", [])),
             initials_by_last=initials_by_last,
             max_phrase_len=payload.get("max_phrase_len", 2),
         )
@@ -318,10 +327,14 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
     """Scans left-to-right for gazetteer matches: longest full-name/alias phrase match first
     (2+ words), else an adjacent pair that actually co-occurred as a first+last name in some
     real scraped name/alias - either the literal pair (either order), or an initial standing in
-    for the first-name half (e.g. "j smith", either order). A lone gazetteer hit on a single
-    token is never enough by itself, and two tokens that are each independently a known
-    first/last name are never enough either unless they were actually seen together - see
-    PerformerGazetteer.name_pairs. Falls through untouched with no gazetteer loaded.
+    for the first-name half (e.g. "j smith", either order) - else a lone token that's a known
+    single-word stage name/mononym (PerformerGazetteer.single_names). Two tokens that are each
+    independently a known first/last name are never enough on their own unless they were
+    actually seen together - see PerformerGazetteer.name_pairs; the single_names check is the
+    one deliberate exception to "a lone hit is never enough", made because mononym stage names
+    are common in this domain and getting the merge-avoidance right matters far more here than
+    being right about which specific word is a name (see single_names' own docstring). Falls
+    through untouched with no gazetteer loaded.
 
     Real scraped performer/alias data is noisy - a scene-descriptor alias like "petite teen"
     puts ordinary descriptive words into name_pairs, which would otherwise happily pair up with
@@ -371,6 +384,10 @@ def _extract_name_spans(tokens: List[str], gaz: Optional[PerformerGazetteer],
                 out.append((f"{a} {b}", True))
                 i += 2
                 continue
+        if tokens[i] not in protected and tokens[i] in gaz.single_names:
+            out.append((tokens[i], True))
+            i += 1
+            continue
         out.append((tokens[i], False))
         i += 1
     return out
@@ -1233,9 +1250,13 @@ def run_self_test(cfg: Config) -> None:
     # "grace"+"cruz" is deliberately NOT a real pairing even though both halves are
     # individually known, to verify the co-occurrence (not cross-product) requirement.
     name_pairs = {("stacy", "cruz"), ("grace", "hall"), ("faith", "hall")}
+    # "xyzelle" stands in for a real single-word stage name/mononym; "petite" is deliberately
+    # also stuffed into single_names (as noisy scraped data would) to verify attribute-lexicon
+    # protection still wins even on the lower-precision single-name path.
     name_cfg = Config(performer_gazetteer=PerformerGazetteer(
         full_name_phrases={"stacy cruz", "grace hall", "faith hall"},
         name_pairs=name_pairs,
+        single_names={"xyzelle", "petite"},
         initials_by_last={"hall": {"g", "f"}, "cruz": {"s"}},
         max_phrase_len=2,
     ))
@@ -1245,6 +1266,7 @@ def run_self_test(cfg: Config) -> None:
         "dir:19-color study the ocean looked deep blue under fading light",
         "dir:45-portrait session g hall poses by a quiet window in soft light",
         "dir:61-market day grace cruz browses old stalls near the quiet square",
+        "dir:73-garden shoot - petite xyzelle poses barefoot by the old fence",
     ]
     name_results = parse_filename_tag_batch(name_fixtures, name_cfg)
     name_checks = [
@@ -1261,6 +1283,12 @@ def run_self_test(cfg: Config) -> None:
          "known but never co-occurred, so the cross-product match is correctly rejected",
          "grace cruz" not in name_results[4].tags
          and "grace" in name_results[4].tags and "cruz" in name_results[4].tags),
+        ("Single-word stage name 'xyzelle' stays its own tag, not swallowed into the "
+         "preceding attribute ('petite xyzelle')", "xyzelle" in name_results[5].tags
+         and "petite xyzelle" not in name_results[5].tags),
+        ("'petite' is NOT treated as a single-word name even though it's (deliberately, for "
+         "this test) stuffed into single_names - attribute-lexicon protection still wins",
+         "petite" in name_results[5].tags),
     ]
     print("\nPerformer-gazetteer regression checks (offline, synthetic gazetteer):")
     for label, passed in name_checks:
