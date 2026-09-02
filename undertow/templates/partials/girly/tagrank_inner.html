@@ -2,10 +2,18 @@
 <div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
   TagRank isn't checked out on this machine (expected at the configured TAGRANK_DIR in
   undertow/config.py), so this tab has nothing to drive.
+  <div style="margin-top:0.6rem;">
+    <button type="button" class="kawaii-btn" hx-get="/partials/tagrank" hx-target="#tagrank-root" hx-swap="innerHTML">&#128260; Refresh</button>
+  </div>
 </div>
 
 {% elif error %}
-<div class="kawaii-card" style="color:var(--k-danger-text);">{{ error }}</div>
+<div class="kawaii-card" style="color:var(--k-danger-text);">
+  {{ error }}
+  <div style="margin-top:0.6rem;">
+    <button type="button" class="kawaii-btn" hx-get="/partials/tagrank" hx-target="#tagrank-root" hx-swap="innerHTML">&#128260; Refresh</button>
+  </div>
+</div>
 
 {% else %}
 {% include "partials/girly/tagrank_picker.html" %}

@@ -2,6 +2,10 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.10.2
+- Added a Refresh button to the TagRank tab's "not checked out" and error states, so a downed
+  or not-yet-started TagRank service can be retried without switching tabs away and back.
+
 ## 1.10.1
 - Fixed the version pill's update check: it now shows a spinning reload icon while checking,
   and the "update available" state turns red (it was showing the same blue as the default
