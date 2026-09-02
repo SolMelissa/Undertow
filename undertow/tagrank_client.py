@@ -300,6 +300,19 @@ def get_tags() -> tuple[list | None, str | None]:
     return _get("/tags")
 
 
+def search_options_filtered(filters: dict) -> tuple[dict | None, str | None]:
+    """Same {"top": [...], "random": [...], "bottom": [...]} shape as get_search_options(), but
+    computed over a Hydrus query built from `filters` instead of TagRank's default candidate
+    seed - backs the webui's TagRank DB Search (score/resolution/rating-count/date-added bands,
+    namespace/archive toggles, file/tag service selection - see tagrank_picker.html's
+    tagrankGatherDbFilters()). NOT YET IMPLEMENTED on TagRank's side as of this writing - see
+    F:\\0DocsF\\0Docs\\AI\\Claude\\tagrank\\plans\\undertow-filtered-search-api.md for the
+    contract this call assumes (POST /search-options/filtered). Until that endpoint exists this
+    will fail with a 404 and the caller (webui.py's tagrank_search_db route) surfaces that as a
+    normal picker error rather than crashing."""
+    return _post("/search-options/filtered", json_body=filters, timeout=180)
+
+
 def get_graphs() -> tuple[list | None, str | None]:
     """[{"title", "png_base64"}, ...] - the four summary charts. Rendering matplotlib figures
     to PNG server-side is slower than a plain JSON route, hence the longer timeout."""

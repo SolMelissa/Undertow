@@ -440,9 +440,26 @@ if HAVE_FLASK:
     def version_check():
         result = version.check_for_update()
         return render_template(
-            "partials/version_check.html", checked=True,
+            "partials/version_pill_inner.html", checked=True,
             update_available=result["update_available"], error=result["error"],
         )
+
+    @app.route("/version/update", methods=["POST"])
+    def version_update():
+        result = version.apply_update()
+        if not result["success"]:
+            return render_template(
+                "partials/version_pill_inner.html", checked=True,
+                update_available=True, error=result["error"],
+            )
+        # Fast-forwarded successfully - a full reload is the simplest way to pick up any
+        # template/static/Python changes that came in with the update, rather than trying to
+        # patch the running process's already-imported modules in place.
+        resp = make_response(
+            render_template("partials/version_pill_inner.html", checked=False)
+        )
+        resp.headers["HX-Refresh"] = "true"
+        return resp
 
     @app.route("/partials/changelog")
     def partial_changelog():
@@ -1578,6 +1595,33 @@ if HAVE_FLASK:
         ctx = _tagrank_picker_ctx()
         if err:
             ctx["error"] = f"Couldn't save service settings: {err}"
+        return render_template("partials/girly/tagrank_inner.html", **ctx)
+
+    @app.route("/tagrank/search-db", methods=["POST"])
+    def tagrank_search_db():
+        """DB Search: re-runs the tag search server-side against TagRank's own Hydrus
+        connection using the full filter set from tagrank_picker.html's filter bar (score,
+        resolution, rating count, date added, namespace, archive status, file/tag service) -
+        never queries Hydrus directly from Undertow (see tagrank_client.search_options_filtered
+        docstring; this needs a TagRank API endpoint that doesn't exist yet, tracked in
+        tagrank/plans/undertow-filtered-search-api.md)."""
+        try:
+            filters = json.loads(request.form.get("filters") or "{}")
+        except json.JSONDecodeError:
+            filters = {}
+        search_options, err = tagrank_client.search_options_filtered(filters)
+        ctx = _tagrank_picker_ctx()
+        if err:
+            ctx["error"] = f"DB Search isn't available yet: {err}"
+        elif search_options:
+            all_scores = [opt["score"] for group in ("top", "random", "bottom") for opt in search_options.get(group, [])]
+            lo, hi = (min(all_scores), max(all_scores)) if all_scores else (0.0, 0.0)
+            for group in ("top", "random", "bottom"):
+                search_options[group] = [
+                    {**opt, "color": _tagrank_score_color(opt["score"], lo, hi)}
+                    for opt in search_options.get(group, [])
+                ]
+            ctx["search_options"] = search_options
         return render_template("partials/girly/tagrank_inner.html", **ctx)
 
     @app.route("/tagrank/launch", methods=["POST"])

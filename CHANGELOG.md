@@ -2,6 +2,26 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.8.0
+- Overhauled the TagRank tab's tag-picker filter bar: two connected search modes, Live
+  (instant, client-side, only over already-fetched tags) and DB Search (round-trips to
+  TagRank for fresh results). Filter tag and Min files (now a logical-increment
+  0/1/2/3/4/5/10/15/20/25/50/100/.../10000 stepper) work in both modes.
+- Replaced the old Min/Max score number fields with a "band + centerpoint" slider pair (a
+  dual-thumb spread slider plus a single centerpoint slider below it) and reused that same
+  control for four new filter axes: resolution aspect ratio, resolution pixel count, rating
+  count, and date added. Score band filters live; the other four are DB Search only, since
+  that data isn't present on an already-fetched tag pill.
+- Added DB Search toggles for namespaced/unnamespaced, archived/inbox, and file/tag service
+  selection (multi-select pill panels, reusing the same service lists the Services panel
+  already sources from Undertow's own Hydrus API key).
+- New `tagrank_client.search_options_filtered()` and `/tagrank/search-db` route wire DB
+  Search through to a new TagRank API endpoint (`POST /search-options/filtered`) that doesn't
+  exist yet - DB Search surfaces a clear "not available yet" error until it's added. The full
+  request/response contract this was built against is written up at
+  `tagrank/plans/undertow-filtered-search-api.md` (in the separate TagRank repo, untracked)
+  for that endpoint's implementer.
+
 ## 1.7.0
 - Removed the console TUI (`undertow/tui/`) and its `python -m undertow.tui` fallback in
   `menu.py` for when Flask isn't installed - both were unneeded overhead. Dropped the
