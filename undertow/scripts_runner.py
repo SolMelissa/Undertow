@@ -21,6 +21,78 @@ from pathlib import Path
 PACKAGE_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = PACKAGE_DIR / "scripts"
 
+# Display metadata for the Scripts tab's cards - icon/label/description/group. A script with no
+# entry here still runs fine (list_scripts() only reads the filesystem), it just renders as a
+# bare pill with its filename, same as before this manifest existed.
+SCRIPT_META: dict[str, dict[str, str]] = {
+    "hydrus_health_check": {
+        "icon": "\U0001fa7a", "label": "Hydrus Health Check",
+        "desc": "Ping Hydrus + hydownloader; show file/inbox counts and daemon status.",
+        "group": "Reports",
+    },
+    "inbox_triage_report": {
+        "icon": "\U0001f4e5", "label": "Inbox Triage",
+        "desc": "Bucket the Hydrus inbox by file age so backlog is visible at a glance.",
+        "group": "Reports",
+    },
+    "untagged_files_report": {
+        "icon": "\U0001f3f7️", "label": "Untagged Files",
+        "desc": "List files with zero tags on the local tag service.",
+        "group": "Reports",
+    },
+    "duplicate_tag_finder": {
+        "icon": "\U0001f50d", "label": "Duplicate Tag Finder",
+        "desc": "Find probable near-duplicate tags (casing/whitespace variants).",
+        "group": "Reports",
+    },
+    "tag_namespace_summary": {
+        "icon": "\U0001f4ca", "label": "Namespace Summary",
+        "desc": "Tag + usage counts per common namespace (creator, character, ...).",
+        "group": "Reports",
+    },
+    "subscription_health_report": {
+        "icon": "\U0001f4e1", "label": "Subscription Health",
+        "desc": "Flag paused, zero-download, or currently-failing subscriptions.",
+        "group": "Reports",
+    },
+    "queued_urls_report": {
+        "icon": "\U0001f5c2️", "label": "Queue Report",
+        "desc": "Summarize hydownloader's queued URLs and flag the oldest entries.",
+        "group": "Reports",
+    },
+    "disk_usage_report": {
+        "icon": "\U0001f4be", "label": "Disk Usage",
+        "desc": "Folder size breakdown plus free space on the install drive.",
+        "group": "Reports",
+    },
+    "log_archiver": {
+        "icon": "\U0001f5c3️", "label": "Log Archiver",
+        "desc": "Zip logs older than 14 days; prune archives older than 90.",
+        "group": "Housekeeping",
+    },
+    "empty_folder_sweep": {
+        "icon": "\U0001f9f9", "label": "Empty Folder Sweep",
+        "desc": "Remove empty leftover folders under hydownloader-data.",
+        "group": "Housekeeping",
+    },
+    "tag_cleanup": {
+        "icon": "\U0001f9fd", "label": "Tag Cleanup Wizard",
+        "desc": "Interactive filename-tag splitter/cleaner, with preview before writing.",
+        "group": "Interactive Wizards",
+    },
+    "performer_gazetteer": {
+        "icon": "\U0001f575️", "label": "Performer Gazetteer",
+        "desc": "Build the performer-name cache Tag Cleanup's name detection reads.",
+        "group": "Interactive Wizards",
+    },
+}
+
+GROUP_ORDER = ["Reports", "Housekeeping", "Interactive Wizards", "Other"]
+
+
+def meta_for(name: str) -> dict[str, str]:
+    return SCRIPT_META.get(name) or {"icon": "▶️", "label": name, "desc": "", "group": "Other"}
+
 
 @dataclass
 class ScriptRun:
@@ -45,6 +117,17 @@ def list_scripts() -> list[str]:
     if not SCRIPTS_DIR.exists():
         return []
     return sorted(p.stem for p in SCRIPTS_DIR.glob("*.py") if p.is_file() and not p.stem.startswith("_"))
+
+
+def list_scripts_grouped() -> list[tuple[str, list[str]]]:
+    """Script names bucketed by SCRIPT_META's "group" (GROUP_ORDER's order, alphabetical within
+    each group), as (group_name, [script_name, ...]) pairs - what the Scripts tab renders as
+    separate card sections instead of one flat pile of pills."""
+    by_group: dict[str, list[str]] = {}
+    for name in list_scripts():
+        by_group.setdefault(meta_for(name)["group"], []).append(name)
+    ordered_groups = GROUP_ORDER + sorted(g for g in by_group if g not in GROUP_ORDER)
+    return [(g, by_group[g]) for g in ordered_groups if g in by_group]
 
 
 def _script_path(name: str) -> Path | None:

@@ -2,6 +2,23 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.12.1
+- Added a "Similarity search" toggle to the TagRank filter panel (off by default) so clicking a
+  tag pill starts a comparison session with a fast plain tag search instead of TagRank's slower
+  visual-similarity pool expansion, unless you specifically want visually-similar files in the
+  pool. Required matching changes in the tagrank fork (`StartSessionRequest.use_similarity`,
+  threaded through `service.start_session()` into `pool.build_pool(use_similarity=...)`).
+
+## 1.12.0
+- Added 10 backend/tag utility scripts to the Scripts tab, and redesigned the tab into
+  icon+description cards grouped into **Reports** (Hydrus Health Check, Inbox Triage, Untagged
+  Files, Duplicate Tag Finder, Namespace Summary, Subscription Health, Queue Report, Disk Usage)
+  and **Housekeeping** (Log Archiver, Empty Folder Sweep), alongside the existing Interactive
+  Wizards group (Tag Cleanup, Performer Gazetteer). Each script is a plain standalone `.py` file
+  under `undertow/scripts/` reusing the existing scripts_runner subprocess/terminal
+  infrastructure - a new script just needs an entry in `scripts_runner.SCRIPT_META` to get a
+  labeled card instead of a bare filename pill.
+
 ## 1.11.0
 - Tag Relations tab redesign - it had grown into 5 sub-tabs (2 of them unbuilt stubs) with
   duplicate search boxes and no clear story for what to use it for, so it's now 3:
