@@ -1,0 +1,95 @@
+{#- The embedded comparer. Rendered directly by every /tagrank/compare/* route into
+    #tagrank-comparer-body, so this fragment only ever shows one of: idle (no session_id, no
+    error, not done), an error, "pool exhausted", or a live pair to judge. #}
+
+{% if error %}
+<div style="text-align:center; color:var(--k-danger-text); padding:0.5rem 0;">
+  {{ error }}
+  <p class="text-xs" style="margin-top:0.4rem; color:var(--k-text-dim-text);">Click a tag pill to try again.</p>
+</div>
+
+{% elif done %}
+<div style="text-align:center; padding:0.5rem 0;">
+  <p>&#127881; Nothing left to compare in this pool.</p>
+  <p class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.3rem;">Click another tag pill to start a new comparison pool.</p>
+</div>
+
+{% elif session_id and left and right %}
+<div id="tagrank-comparer-focus" tabindex="0"
+     style="outline:none; display:flex; flex-direction:column; gap:0.6rem;"
+     onkeydown="tagrankComparerKeydown(event)">
+  <p class="text-xs" style="text-align:center; color:var(--k-text-dim-text);">
+    &#8592;/A left wins &middot; &#8594;/D right wins &middot; Backspace/R undo &middot; Esc stop
+    <span id="tagrank-comparer-busy" style="display:none;"> &middot; <span class="tagrank-spinner"></span> recording&hellip;</span>
+  </p>
+  <div style="display:flex; gap:0.75rem;">
+    {% for side, meta in (("left", left), ("right", right)) %}
+    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
+      <img src="/media/file/{{ meta.file_id }}" alt="{{ side }}" loading="eager"
+           style="width:100%; max-height:70vh; object-fit:contain; border-radius:0.5rem; background:#000; cursor:pointer;"
+           onclick="tagrankComparerChoice('{{ 'A' if side == 'left' else 'B' }}')">
+      <div style="display:flex; flex-wrap:wrap; gap:0.25rem; max-height:4.5em; overflow-y:auto;">
+        {% for tag in meta.tags[:24] %}
+        <span class="tagrank-service-pill" style="cursor:default;">{{ tag }}</span>
+        {% endfor %}
+        {% if meta.tags|length > 24 %}
+        <span class="text-xs" style="color:var(--k-text-dim-text);">+{{ meta.tags|length - 24 }} more</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display:flex; justify-content:center; gap:0.5rem;">
+    <button type="button" class="kawaii-btn" style="font-size:0.75rem;" onclick="tagrankComparerChoice('A')">&#8592; Left wins</button>
+    <button type="button" class="kawaii-btn" style="font-size:0.75rem;" onclick="tagrankComparerUndo()">&#8617; Undo</button>
+    <button type="button" class="kawaii-btn" style="font-size:0.75rem;" onclick="tagrankComparerChoice('B')">Right wins &#8594;</button>
+    <button type="button" class="kawaii-btn" style="font-size:0.75rem;" onclick="tagrankComparerEnd()">Stop</button>
+  </div>
+  <input type="hidden" id="tagrank-comparer-session" value="{{ session_id }}">
+</div>
+<script>
+(function() {
+  window.tagrankComparerBusy = false;
+  const focusEl = document.getElementById('tagrank-comparer-focus');
+  if (focusEl) focusEl.focus({ preventScroll: true });
+
+  window.tagrankComparerKeydown = function(event) {
+    let action = null;
+    if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') action = () => tagrankComparerChoice('A');
+    else if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') action = () => tagrankComparerChoice('B');
+    else if (event.key === 'Backspace' || event.key === 'r' || event.key === 'R') action = () => tagrankComparerUndo();
+    else if (event.key === 'Escape') action = () => tagrankComparerEnd();
+    if (!action) return; // let anything else (e.g. Tab) behave normally
+    event.preventDefault();
+    event.stopPropagation();
+    action();
+  };
+
+  function sessionId() {
+    return document.getElementById('tagrank-comparer-session')?.value || '';
+  }
+
+  function post(url, extra) {
+    if (window.tagrankComparerBusy) return;
+    window.tagrankComparerBusy = true;
+    const busy = document.getElementById('tagrank-comparer-busy');
+    if (busy) busy.style.display = '';
+    htmx.ajax('POST', url, {
+      target: '#tagrank-comparer-body', swap: 'innerHTML',
+      values: Object.assign({ session_id: sessionId() }, extra || {}),
+    }).finally(() => { window.tagrankComparerBusy = false; });
+  }
+
+  window.tagrankComparerChoice = function(choice) {
+    post('/tagrank/compare/result', { choice: choice === 'A' ? 'left' : 'right' });
+  };
+  window.tagrankComparerUndo = function() { post('/tagrank/compare/undo'); };
+  window.tagrankComparerEnd = function() { post('/tagrank/compare/end'); };
+})();
+</script>
+
+{% else %}
+<div style="text-align:center; color:var(--k-text-dim-text); padding:0.5rem 0;">
+  Click a tag pill above to start comparing.
+</div>
+{% endif %}

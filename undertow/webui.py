@@ -648,9 +648,11 @@ if HAVE_FLASK:
 
     @app.route("/partials/scripts")
     def partial_scripts():
-        names = scripts_runner.list_scripts()
+        groups = scripts_runner.list_scripts_grouped()
+        names = [n for _group, group_names in groups for n in group_names]
         running = {n: scripts_runner.is_running(n) for n in names}
-        return render_template("partials/scripts.html", names=names, running=running)
+        meta = {n: scripts_runner.meta_for(n) for n in names}
+        return render_template("partials/scripts.html", groups=groups, running=running, meta=meta)
 
     @app.route("/scripts/run/<name>", methods=["POST"])
     def scripts_run(name):
@@ -1728,7 +1730,8 @@ if HAVE_FLASK:
     @app.route("/tagrank/compare/start", methods=["POST"])
     def tagrank_compare_start():
         tag = (request.form.get("tag") or "").strip()
-        job, err = tagrank_client.start_session([tag] if tag else [])
+        use_similarity = (request.form.get("use_similarity") or "").strip() == "1"
+        job, err = tagrank_client.start_session([tag] if tag else [], use_similarity=use_similarity)
         if err or not job:
             return render_template("partials/girly/tagrank_comparer.html", error=f"Couldn't start comparing: {err}")
         return render_template("partials/girly/tagrank_comparer_starting.html", tag=tag, job_id=job.get("job_id"), started=time.time())

@@ -1,0 +1,12 @@
+{#- One consolidated loading state for building the comparison pool - a single spinner + status
+    line, replacing the old two-step "server starting" then "GUI window opening" screens for the
+    in-tab comparer path. Self-polls #tagrank-comparer-body only, so the filter bar and pill
+    list above it never move. #}
+<div style="text-align:center; padding:0.75rem 0;"
+     hx-get="/tagrank/compare/start-poll?tag={{ tag|urlencode }}&job_id={{ job_id }}&started={{ started }}"
+     hx-target="#tagrank-comparer-body" hx-swap="innerHTML" hx-trigger="load delay:600ms">
+  <span class="loading loading-spinner loading-md"></span>
+  <p style="margin-top:0.5rem; color:var(--k-text-dim-text);">
+    {% if tag %}Building comparison pool around <strong>{{ tag }}</strong>&hellip;{% else %}Building comparison pool&hellip;{% endif %}
+  </p>
+</div>

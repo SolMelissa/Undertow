@@ -1,7 +1,16 @@
 <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
-  Click a tag pill to launch TagRank's own comparison window around that tag - pill border
+  Click a tag pill to start comparing around that tag right here in the tab - pill border
   color tracks its TrueSkill score (red = lowest-rated on screen, green = highest-rated).
 </p>
+
+{#- Embedded comparer: judging happens in this panel via TagRank's session API instead of a
+    separate window (see webui.py's /tagrank/compare/* routes) - it never replaces the filter
+    bar or pill list above/below it, only its own contents swap between idle/loading/pair/done. #}
+<div id="tagrank-comparer" class="kawaii-card" style="margin-bottom:0.85rem;">
+  <div id="tagrank-comparer-body">
+    {% include "partials/girly/tagrank_comparer.html" %}
+  </div>
+</div>
 
 {% macro pill_group(key, title, options) %}
 <p class="kawaii-section-title" style="font-size:1rem; margin-top:1rem;">{{ title|safe }}</p>
@@ -10,8 +19,8 @@
   <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
           style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
           title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
-          hx-post="/tagrank/launch" hx-target="#tagrank-root" hx-swap="innerHTML"
-          hx-vals='{"tag": {{ opt.tag|tojson }}}'>
+          hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
+          hx-vals="js:{tag: {{ opt.tag|tojson }}, use_similarity: tagrankBandValues('similarity').max >= 1 ? '1' : '0'}">
     <span>{{ opt.tag }}</span>
     <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
   </button>
@@ -109,6 +118,7 @@
   </div>
 
   <div class="tagrank-band-group">
+    {{ band_control("similarity", "Similarity search (slower, finds visually-similar files)", 0, 1, 1, 0, 0, 0, 1, 1, 0) }}
     {{ band_control("score", "Score band (TrueSkill)", -10, 10, 0.1, -10, 10, -5, 5, 0.1, 0) }}
     {{ band_control("ratio", "Resolution: aspect ratio (tall &#8596; wide)", -3, 3, 0.05, -3, 3, 0.1, 5, 0.05, 2.55) }}
     {{ band_control("pixels", "Resolution: pixel count", -15000000, 15000000, 10000, -15000000, 15000000, 0, 30000000, 10000, 15000000) }}
@@ -138,6 +148,7 @@ function tagrankStep(which, dir) {
 // Formats a raw value for on-screen readouts, per metric (pixel counts and day-offsets read
 // better abbreviated/labeled than as bare numbers).
 function tagrankFormatMetric(metric, value) {
+  if (metric === 'similarity') return value >= 1 ? 'On' : 'Off';
   if (metric === 'pixels') return (value / 1e6).toFixed(2) + 'MP';
   if (metric === 'dateadded') return value + 'd';
   if (metric === 'ratio') return value >= 0 ? '+' + value.toFixed(2) : value.toFixed(2);
@@ -284,9 +295,49 @@ tagrankInitBands();
 
 {{ pill_group("all", "&#127991; Tags (sorted by rating)", search_options) }}
 
-<p class="kawaii-section-title" style="margin-top:1.5rem;">&#128202; Rating History</p>
+<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; margin-top:1.5rem;">
+  <p class="kawaii-section-title" style="margin:0;">&#128202; Rating History</p>
+  {% if graphs %}
+  <div style="display:flex; align-items:center; gap:0.6rem;">
+    <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:var(--k-text-dim-text);">
+      <input type="checkbox" id="tagrank-chart-live" onchange="tagrankChartSizeLiveToggled()"> Resize live
+    </label>
+    <span class="text-xs" style="color:var(--k-text-dim-text);">Chart size</span>
+    <input type="range" id="tagrank-chart-size" min="260" max="1000" step="10"
+           oninput="tagrankChartSizeInput()" onchange="tagrankChartSizeCommit()" style="width:140px;">
+    <span class="text-xs" id="tagrank-chart-size-val" style="color:var(--k-text-dim-text); min-width:3.5em;"></span>
+  </div>
+  {% endif %}
+</div>
+<script>
+(function() {
+  const KEY = 'tagrank-chart-min-px';
+  const slider = document.getElementById('tagrank-chart-size');
+  const liveBox = document.getElementById('tagrank-chart-live');
+  if (!slider) return; // no graphs rendered - nothing to size
+  const grid = document.getElementById('tagrank-graphs-grid');
+  const saved = parseInt(localStorage.getItem(KEY) || '420', 10);
+  slider.value = saved;
+  document.getElementById('tagrank-chart-size-val').textContent = saved + 'px';
+  grid.style.setProperty('--tagrank-chart-min', saved + 'px');
+  liveBox.checked = localStorage.getItem('tagrank-chart-live') === '1';
+
+  window.tagrankChartSizeInput = function() {
+    document.getElementById('tagrank-chart-size-val').textContent = slider.value + 'px';
+    if (liveBox.checked) grid.style.setProperty('--tagrank-chart-min', slider.value + 'px');
+  };
+  window.tagrankChartSizeCommit = function() {
+    grid.style.setProperty('--tagrank-chart-min', slider.value + 'px');
+    localStorage.setItem(KEY, slider.value);
+  };
+  window.tagrankChartSizeLiveToggled = function() {
+    localStorage.setItem('tagrank-chart-live', liveBox.checked ? '1' : '0');
+    if (liveBox.checked) grid.style.setProperty('--tagrank-chart-min', slider.value + 'px');
+  };
+})();
+</script>
 {% if graphs %}
-<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:1rem;">
+<div id="tagrank-graphs-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(var(--tagrank-chart-min, 420px), 1fr)); gap:1rem;">
   {% for g in graphs %}
   <div class="kawaii-card">
     <p style="font-weight:600; margin-bottom:0.4rem;">{{ g.title }}</p>
