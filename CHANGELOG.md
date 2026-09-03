@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.12.3
+- Fixed the header's TagRank status pill showing stale red/"not running" for up to 60s after the
+  server actually came up (e.g. right after opening the TagRank tab, which silently starts the
+  server in the background). Because the pill's own poll loop only re-checks every 60s while the
+  toggle button always re-checks live state, this made clicking the still-red pill hit the
+  "already running -> stop" branch instead of "start" - stopping a server the header never showed
+  as up in the first place. `/partials/tagrank` and `/tagrank/server-poll` now fire the same
+  `refreshSubs` header-refresh trigger other service actions already use, the moment they confirm
+  the server is live.
+
 ## 1.12.2
 - Fixed the version-check pill in the dashboard header permanently showing its "checking..."
   spinner stacked on top of the real status pill, making it look stuck/duplicated forever and

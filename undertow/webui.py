@@ -1603,7 +1603,13 @@ if HAVE_FLASK:
         if not tagrank_client.is_available():
             return render_template("partials/girly/tagrank_inner.html", available=False)
         if tagrank_client.is_server_running():
-            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+            # The header's TagRank pill (see partials/girly/status.html) only re-polls every
+            # 60s - without this, opening this tab and finding the server already running
+            # (started by a previous tab-open, or left running from an earlier session) leaves
+            # the header pill red/stale for up to a minute, so a click on it hits the "already
+            # running -> stop" branch of service_tagrank_toggle instead of the "start" branch
+            # the still-red pill implied. Force an immediate header refresh instead.
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx()), 200, {"HX-Trigger": "refreshSubs"}
         # Don't block this request on startup (can take well over a minute) - kick off the
         # subprocess and hand control to a poll loop instead, same pattern as the GUI-launch
         # loading screen below.
@@ -1619,7 +1625,10 @@ if HAVE_FLASK:
         except ValueError:
             started = 0.0
         if tagrank_client.is_server_running():
-            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx())
+            # Same header-staleness fix as partial_tagrank above, for the case where this tab
+            # itself started the server - the header pill should flip to green the moment the
+            # startup poll confirms it, not up to 60s later.
+            return render_template("partials/girly/tagrank_inner.html", **_tagrank_picker_ctx()), 200, {"HX-Trigger": "refreshSubs"}
         if not tagrank_client.is_server_starting() or time.time() - started > tagrank_client.STARTUP_DEADLINE_SECONDS:
             return render_template(
                 "partials/girly/tagrank_inner.html", available=True,
