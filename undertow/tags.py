@@ -38,7 +38,13 @@ def load_tags() -> dict[int, list[str]]:
         _cache, _cache_mtime = {}, None
         return {}
     if _cache is not None and mtime == _cache_mtime:
-        return _cache
+        # Return a shallow copy, not the cached dict itself - the Flask app runs
+        # threaded=True, and callers like set_tags_for/remove below mutate whatever dict
+        # they get back before calling save_tags(). Handing out the literal module-level
+        # dict let one request's in-place mutation race a concurrent request iterating it
+        # (e.g. all_tags()/get_tags_for reading the same object), which can raise
+        # "dictionary changed size during iteration" or hand back half-mutated data.
+        return dict(_cache)
     try:
         with open(TAGS_FILE, encoding="utf-8") as f:
             stored = json.load(f)
@@ -57,7 +63,7 @@ def load_tags() -> dict[int, list[str]]:
         if isinstance(v, list):
             result[sub_id] = [str(t) for t in v if str(t).strip()]
     _cache, _cache_mtime = result, mtime
-    return result
+    return dict(result)
 
 
 def save_tags(tags_by_id: dict[int, list[str]]) -> None:
