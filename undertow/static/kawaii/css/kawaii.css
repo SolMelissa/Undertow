@@ -327,7 +327,11 @@
 .kawaii-bar-fill.warn { background: linear-gradient(90deg, var(--k-accent-3), var(--k-danger)); }
 
 /* pills (status, service up/down) */
-.version-pill-spinner { display: none; }
+/* Specificity note: .kawaii-pill below also sets display, and it comes later in this file -
+   a plain .version-pill-spinner{display:none} rule loses that tie (equal specificity, later
+   rule wins) so the spinner would stay visible permanently, stacked next to the real pill.
+   The extra .kawaii-pill qualifier here raises specificity enough to actually win. */
+span.kawaii-pill.version-pill-spinner { display: none; }
 #version-pill-wrapper.htmx-request .version-pill-spinner { display: inline-flex; align-items: center; gap: 0.35rem; }
 #version-pill-wrapper.htmx-request .version-pill-content { display: none; }
 

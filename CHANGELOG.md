@@ -2,6 +2,19 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.12.2
+- Fixed the version-check pill in the dashboard header permanently showing its "checking..."
+  spinner stacked on top of the real status pill, making it look stuck/duplicated forever and
+  never settling on an up-to-date/update-available state. The spinner's `display: none` CSS rule
+  had the same specificity as the later `.kawaii-pill { display: inline-flex }` rule it needed to
+  override, so the later rule always won and the spinner never actually hid. Also fixed the
+  spinner not appearing at all when manually clicking the pill to re-check (the click's htmx
+  request only marked the clicked span, not the wrapper the spinner CSS keys off of) by adding
+  `hx-indicator` so clicks mark the wrapper too. Verified against a real update: pointed the
+  version-check code at a disposable local git sandbox, advanced its "origin" a commit ahead,
+  and confirmed the live dashboard correctly flagged the update, pulled it via a real click, and
+  landed on "up to date" afterward.
+
 ## 1.12.1
 - Added a "Similarity search" toggle to the TagRank filter panel (off by default) so clicking a
   tag pill starts a comparison session with a fast plain tag search instead of TagRank's slower
