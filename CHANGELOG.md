@@ -2,6 +2,18 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.12
+- Fixed TagRank DB Search's namespace toggle: it was checking whether *any* tag on a matching
+  file had a namespace, instead of whether the candidate tag itself did, so "Namespaced" and
+  "Unnamespaced" filtered essentially at random. Fixed in TagRank's `pool.py`.
+- Fixed filtered searches under-reporting file counts (sometimes showing 0) for files whose
+  Hydrus metadata never made it into TagRank's in-memory index: those files used to be dropped
+  from every filtered count unconditionally, even when the active filters never needed their
+  metadata at all. Fixed in TagRank's `pool.py`; added a regression test.
+- Removed the DB Search filter bar's "Archive status" toggle and "Clear" button (declined by
+  the client) and added a small spinner next to the search-status text so a live search has a
+  visible "loading" indicator while it's in flight.
+
 ## 1.13.11
 - TagRank tab's Rating History charts are now fetched on demand via a "Fetch graphs" button
   instead of always being rendered. Rendering them is real server-side work (TagRank builds

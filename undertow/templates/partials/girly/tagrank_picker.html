@@ -57,9 +57,8 @@
     </label>
 
     {{ segment("namespace", "Namespace", [("all","All"), ("namespaced","Namespaced"), ("unnamespaced","Unnamespaced")], "all") }}
-    {{ segment("archive", "Archive status", [("all","All"), ("archived","Archived"), ("inbox","Inbox")], "all") }}
 
-    <button type="button" class="kawaii-btn" style="font-size:0.75rem; padding:0.3rem 0.6rem;" onclick="tagrankClearFilters()">Clear</button>
+    <span class="tagrank-spinner" id="tagrank-search-spinner" style="display:none;" aria-hidden="true"></span>
     <span class="tagrank-search-status" id="tagrank-search-status"></span>
   </div>
 
@@ -81,7 +80,7 @@ function tagrankStep(which, dir) {
   tagrankRunDbSearch();
 }
 
-// ---- 3-way segmented toggles (namespace / archive) ------------------------------------------
+// ---- 3-way segmented toggle (namespace) ------------------------------------------------------
 function tagrankSetSegment(name, value) {
   const el = document.getElementById(`tagrank-segment-${name}`);
   el.dataset.value = value;
@@ -108,18 +107,6 @@ function tagrankSelectedServiceKeys(name) {
     .map((el) => el.dataset.key);
 }
 
-function tagrankClearFilters() {
-  document.getElementById('tagrank-filter-text').value = '';
-  tagrankMinFilesIdx = 0;
-  document.getElementById('tagrank-minfiles-val').textContent = '0';
-  tagrankSetSegment('namespace', 'all');   // each already re-searches; harmless to do it 4x here,
-  tagrankSetSegment('archive', 'all');     // clearing all filters is not a hot path worth
-  tagrankSetServiceMode('file', 'all');    // special-casing.
-  tagrankSetServiceMode('tag', 'all');
-  document.querySelectorAll('.tagrank-service-pill.selected').forEach((el) => el.classList.remove('selected'));
-  tagrankRunDbSearch();
-}
-
 // ---- Live DB search: every filter change re-queries TagRank's in-memory tag index
 // (tagrank/tag_index.py) - no separate Search button, since that index makes a full re-search
 // fast enough to run on every keystroke. Text input is debounced so fast typing doesn't fire a
@@ -140,7 +127,6 @@ function tagrankGatherDbFilters() {
     filter_tag: (document.getElementById('tagrank-filter-text')?.value || '').trim(),
     min_files: TAGRANK_MINFILES_STEPS[tagrankMinFilesIdx] || 0,
     namespace_mode: document.getElementById('tagrank-segment-namespace')?.dataset.value || 'all',
-    archive_mode: document.getElementById('tagrank-segment-archive')?.dataset.value || 'all',
     file_service_keys: tagrankSelectedServiceKeys('file'),
     tag_service_keys: tagrankSelectedServiceKeys('tag'),
   };
@@ -150,18 +136,23 @@ function tagrankRunDbSearch() {
   clearTimeout(tagrankSearchDebounce);
   const filters = tagrankGatherDbFilters();
   const status = document.getElementById('tagrank-search-status');
+  const spinner = document.getElementById('tagrank-search-spinner');
   const seq = ++tagrankSearchSeq; // stale-response guard for the status text only - htmx already
   // performs each response's pill swap as it lands, so an out-of-order reply (unlikely at this
   // debounce interval against a fast in-memory search) could still briefly show stale pills
+  spinner.style.display = '';
   htmx.ajax('POST', '/tagrank/search-db', {
     target: '#tagrank-results', swap: 'innerHTML',
     values: { filters: JSON.stringify(filters) },
   }).then(() => {
-    if (seq === tagrankSearchSeq) status.textContent = '';
+    if (seq !== tagrankSearchSeq) return;
+    status.textContent = '';
+    spinner.style.display = 'none';
   }).catch(() => {
     if (seq !== tagrankSearchSeq) return;
     status.className = 'tagrank-search-status tagrank-status-error';
     status.textContent = "Search request failed - check that TagRank's server is still running.";
+    spinner.style.display = 'none';
   });
 }
 </script>
