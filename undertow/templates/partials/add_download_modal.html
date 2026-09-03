@@ -2,7 +2,7 @@
   <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">ONE-OFF DOWNLOAD</div>
   <p class="text-xs text-[#8aa0a8]">Paste a URL to download once. Several, comma-separated, is fine.</p>
   <form hx-post="/downloads/add" hx-target="#modal-content" hx-swap="innerHTML" class="flex flex-col gap-2">
-    <input type="text" name="urls" required placeholder="https://example.com/gallery/..."
+    <input type="text" name="urls" required placeholder="https://example.com/gallery/..." autocomplete="off"
            class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
     <div class="flex justify-end gap-2">
       <button type="button" class="btn btn-sm" onclick="document.getElementById('modal').close()">Cancel</button>

@@ -156,7 +156,7 @@
               hx-on::after-request="if(event.detail.successful) this.reset()"
               style="display:flex; gap:0.6rem;">
           <input type="text" name="url" required placeholder="Paste a subscription URL to add it&hellip;"
-                 class="kawaii-input" style="flex:1;">
+                 autocomplete="off" class="kawaii-input" style="flex:1;">
           <input type="hidden" name="hours" value="">
           <button type="submit" class="kawaii-btn kawaii-btn-primary">Add</button>
         </form>
@@ -171,6 +171,7 @@
              applyGroupExpandState(document.getElementById('girly-subs-panel'));
            ">
         <input type="text" x-model.debounce.150ms="filter" placeholder="search subs&hellip; (or tag:foo)"
+               autocomplete="off"
                title="Plain text expands and searches within groups. Prefix with tag: (e.g. tag:favorites) to search by tag across every source instead."
                class="kawaii-input" style="flex:1; min-width:12rem;">
       </div>

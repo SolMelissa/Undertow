@@ -6,7 +6,7 @@
   </p>
   <form hx-post="/subscriptions/{{ sub.id }}/edit" hx-target="#modal-content" hx-swap="innerHTML" class="flex flex-col gap-2">
     <label class="text-xs text-[#8aa0a8]">Keywords
-      <input type="text" name="keywords" required value="{{ sub.keywords }}"
+      <input type="text" name="keywords" required value="{{ sub.keywords }}" autocomplete="off"
              class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full">
     </label>
     <label class="text-xs text-[#8aa0a8]">Check interval (hours)
@@ -24,11 +24,11 @@
       </label>
     </div>
     <label class="text-xs text-[#8aa0a8]">File filter (gallery-dl --filter expression, blank = allow everything)
-      <input type="text" name="filter" value="{{ sub.filter or '' }}"
+      <input type="text" name="filter" value="{{ sub.filter or '' }}" autocomplete="off"
              class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full font-mono">
     </label>
     <label class="text-xs text-[#8aa0a8]">Tags (comma-separated, local to this dashboard only - not stored in hydownloader)
-      <input type="text" name="tags" value="{{ tags_value or '' }}" placeholder="e.g. favorites, nsfw, low-priority"
+      <input type="text" name="tags" value="{{ tags_value or '' }}" placeholder="e.g. favorites, nsfw, low-priority" autocomplete="off"
              class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full">
     </label>
 

@@ -8,7 +8,7 @@
 
   <form hx-get="/partials/tag-explore" hx-target="#girly-explore-panel" hx-swap="outerHTML"
         style="display:flex; gap:0.6rem; margin-bottom:0.75rem; flex-wrap:wrap;">
-    <input type="text" name="tag" value="{{ searched_tag }}" placeholder="tag to explore&hellip;" required
+    <input type="text" name="tag" value="{{ searched_tag }}" placeholder="tag to explore&hellip;" required autocomplete="off"
            class="kawaii-input" style="flex:1; min-width:12rem;">
     <select name="depth" class="kawaii-select">
       {% for d in (1, 2, 3, 4) %}

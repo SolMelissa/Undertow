@@ -23,7 +23,7 @@
       then services &rarr; review services &rarr; Client API &rarr; generate a new access key.
     </p>
     <form hx-post="/api-keys/hydrus" hx-target="#modal-content" hx-swap="innerHTML" class="flex gap-2">
-      <input type="text" name="api_key" required placeholder="paste Hydrus Client API access key"
+      <input type="text" name="api_key" required placeholder="paste Hydrus Client API access key" autocomplete="off"
              class="input input-sm input-bordered flex-1 bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
       <button type="submit" class="btn btn-sm btn-primary">Save</button>
     </form>
@@ -54,7 +54,7 @@
             <p class="text-xs text-[#8aa0a8]">Uses gallery-dl's own built-in shared OAuth client. --simulate, nothing gets saved.</p>
             <form hx-post="/api-keys/reddit/test-shared" hx-target="#modal-content" hx-swap="innerHTML" hx-indicator="#reddit-test-indicator" class="flex gap-2">
               <input type="hidden" name="_tab" value="services">
-              <input type="text" name="subreddit" placeholder="subreddit (default pics)"
+              <input type="text" name="subreddit" placeholder="subreddit (default pics)" autocomplete="off"
                      class="input input-sm input-bordered flex-1 bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
               <button type="submit" class="btn btn-sm">Test</button>
               <span id="reddit-test-indicator" class="htmx-indicator loading loading-spinner loading-sm text-[#39d3ff]"></span>
@@ -73,9 +73,9 @@
             </p>
             <form hx-post="/api-keys/reddit/configure" hx-target="#modal-content" hx-swap="innerHTML" hx-indicator="#reddit-oauth-indicator" class="flex flex-col gap-2">
               <input type="hidden" name="_tab" value="services">
-              <input type="text" name="client_id" required placeholder="Reddit app client ID"
+              <input type="text" name="client_id" required placeholder="Reddit app client ID" autocomplete="off"
                      class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
-              <input type="text" name="username" required placeholder="Your Reddit username (for the User-Agent header)"
+              <input type="text" name="username" required placeholder="Your Reddit username (for the User-Agent header)" autocomplete="off"
                      class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-sm btn-primary">Save &amp; Run OAuth</button>
@@ -87,7 +87,7 @@
             <pre class="text-xs bg-[#020304] border border-[#17323a] rounded p-2 max-h-40 overflow-y-auto whitespace-pre-wrap">{{ oauth_output }}</pre>
             <form hx-post="/api-keys/reddit/refresh-token" hx-target="#modal-content" hx-swap="innerHTML" class="flex gap-2">
               <input type="hidden" name="_tab" value="services">
-              <input type="text" name="refresh_token" required placeholder="paste the refresh-token printed above"
+              <input type="text" name="refresh_token" required placeholder="paste the refresh-token printed above" autocomplete="off"
                      class="input input-sm input-bordered flex-1 bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
               <button type="submit" class="btn btn-sm btn-primary">Save token</button>
             </form>
@@ -113,6 +113,7 @@
           {% for field in svc.fields %}
           <input type="text" name="{{ field.key }}"
                  placeholder="{{ field.label }}{% if svc.masked_values.get(field.key) not in (none, '(not set)') %} (currently {{ svc.masked_values[field.key] }}){% endif %}"
+                 autocomplete="off"
                  class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
           {% endfor %}
           <button type="submit" class="btn btn-sm btn-primary w-fit">Save</button>

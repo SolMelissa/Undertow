@@ -8,7 +8,7 @@
 
   <form hx-get="/partials/tag-namespaces" hx-target="#girly-namespaces-panel" hx-swap="outerHTML"
         style="display:flex; gap:0.6rem; margin-bottom:0.75rem;">
-    <input type="text" name="namespace" value="{{ ns_query }}" placeholder="namespace, e.g. character&hellip;" required
+    <input type="text" name="namespace" value="{{ ns_query }}" placeholder="namespace, e.g. character&hellip;" required autocomplete="off"
            class="kawaii-input" style="flex:1;">
     <button type="submit" class="kawaii-btn kawaii-btn-primary">Browse</button>
   </form>

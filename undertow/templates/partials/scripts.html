@@ -30,9 +30,11 @@
 <div class="kawaii-card">
   <pre id="script-term" style="margin:0 0 0.5rem; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-family:'Consolas','Courier New',monospace; font-size:12px; background:#0d0f12; color:#c9f7c9; border-radius:8px; padding:0.75rem;">Pick a script above to run it.</pre>
   <form onsubmit="return sendScriptInput(event)" style="display:flex; gap:0.5rem;">
-    <input type="text" id="script-input" placeholder="Type a response and press Enter&hellip;" disabled
+    <input type="text" id="script-input" placeholder="Type a response and press Enter&hellip;" disabled autocomplete="off"
            style="flex:1; font-family:'Consolas','Courier New',monospace; font-size:12px; padding:0.4rem 0.6rem; border-radius:6px; border:1px solid var(--k-border, #ccc); background:#0d0f12; color:#c9f7c9;">
     <button type="submit" class="kawaii-btn" id="script-input-send" disabled>Send</button>
+    <button type="button" class="kawaii-btn" id="script-kill-btn" onclick="killScript()" disabled
+            style="background:#c0392b; color:#fff;">Kill</button>
   </form>
 </div>
 
@@ -69,7 +71,19 @@
     }
     document.getElementById('script-input').disabled = false;
     document.getElementById('script-input-send').disabled = false;
+    document.getElementById('script-kill-btn').disabled = false;
     pollScriptOutput();
+  };
+
+  window.killScript = async function () {
+    const name = window.scriptRunning;
+    if (!name) return;
+    document.getElementById('script-kill-btn').disabled = true;
+    try {
+      await fetch('/scripts/kill/' + encodeURIComponent(name), { method: 'POST' });
+    } catch (e) {
+      document.getElementById('script-kill-btn').disabled = false;
+    }
   };
 
   window.sendScriptInput = function (evt) {
@@ -119,6 +133,7 @@
         document.querySelectorAll('[id^="script-pill-"]').forEach(function (btn) { btn.disabled = false; });
         document.getElementById('script-input').disabled = true;
         document.getElementById('script-input-send').disabled = true;
+        document.getElementById('script-kill-btn').disabled = true;
         return;
       }
     } catch (e) {

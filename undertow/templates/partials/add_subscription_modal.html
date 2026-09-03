@@ -5,7 +5,7 @@
     unrecognized sites still work by re-checking the exact URL on an interval.
   </p>
   <form hx-post="/subscriptions/add" hx-target="#modal-content" hx-swap="innerHTML" class="flex flex-col gap-2">
-    <input type="text" name="urls" required placeholder="https://example.com/artist/..." value="{{ urls_value or '' }}"
+    <input type="text" name="urls" required placeholder="https://example.com/artist/..." value="{{ urls_value or '' }}" autocomplete="off"
            class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]">
     <input type="number" name="hours" step="0.5" min="0.1" value="{{ hours_value or '' }}" placeholder="check interval in hours (default: random 12-24h)"
            class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-64">

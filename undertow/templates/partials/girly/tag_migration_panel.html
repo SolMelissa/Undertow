@@ -9,12 +9,12 @@
   </p>
 
   <form style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
-    <input type="text" name="old_tag" value="{{ migration_old_tag }}" placeholder="old tag&hellip;"
+    <input type="text" name="old_tag" value="{{ migration_old_tag }}" placeholder="old tag&hellip;" autocomplete="off"
            class="kawaii-input" style="flex:1; min-width:10rem;">
     <span style="color:var(--k-text-dim-text);">&rarr;</span>
-    <input type="text" name="new_tag" value="{{ migration_new_tag }}" placeholder="new tag&hellip;"
+    <input type="text" name="new_tag" value="{{ migration_new_tag }}" placeholder="new tag&hellip;" autocomplete="off"
            class="kawaii-input" style="flex:1; min-width:10rem;">
-    <input type="text" name="extra_predicate" value="{{ migration_extra }}" placeholder="optional: narrow scope, comma-separated&hellip;"
+    <input type="text" name="extra_predicate" value="{{ migration_extra }}" placeholder="optional: narrow scope, comma-separated&hellip;" autocomplete="off"
            class="kawaii-input" style="flex:1; min-width:12rem;">
     <button type="button" class="kawaii-btn"
             hx-get="/partials/tag-migration" hx-include="closest form" hx-target="#girly-migration-panel" hx-swap="innerHTML">

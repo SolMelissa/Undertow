@@ -199,6 +199,24 @@ def start(name: str) -> bool:
     return True
 
 
+def stop(name: str) -> bool:
+    """Force-kills the named script's process if it's currently running (for a hung/stuck
+    script the Scripts tab needs to reset without waiting on it). Returns False if there's
+    nothing running for that name."""
+    run = _runs.get(name)
+    if run is None:
+        return False
+    with run.lock:
+        proc = run.proc
+    if proc is None or proc.poll() is not None:
+        return False
+    try:
+        proc.kill()
+    except OSError:
+        return False
+    return True
+
+
 def send_input(name: str, text: str) -> bool:
     """Writes a line to the running script's stdin (e.g. answering an input() prompt).
     Returns False if the script isn't currently running."""

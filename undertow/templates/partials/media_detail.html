@@ -31,7 +31,7 @@
   <form hx-post="/media/{{ file_id }}/tags/add" hx-target="#modal-content" hx-swap="innerHTML"
         hx-on::after-request="if(event.detail.successful) this.reset()"
         style="display:flex; gap:0.5rem; margin-top:0.4rem;">
-    <input type="text" name="tag" placeholder="namespace:value or tag&hellip;" required
+    <input type="text" name="tag" placeholder="namespace:value or tag&hellip;" required autocomplete="off"
            class="input input-sm input-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff]" style="flex:1;">
     <button type="submit" class="btn btn-sm btn-primary">Add tag</button>
   </form>

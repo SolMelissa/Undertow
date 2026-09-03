@@ -659,6 +659,11 @@ if HAVE_FLASK:
         scripts_runner.start(name)
         return "", 204
 
+    @app.route("/scripts/kill/<name>", methods=["POST"])
+    def scripts_kill(name):
+        ok = scripts_runner.stop(name)
+        return jsonify({"ok": ok})
+
     @app.route("/scripts/input/<name>", methods=["POST"])
     def scripts_input(name):
         text = request.form.get("text", "")

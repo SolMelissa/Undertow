@@ -2,7 +2,14 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
-## 1.12.3
+## 1.12.4
+- Disabled the browser's saved-history autocomplete dropdown on every text input across the
+  dashboard (subscription/tag/search/API-key/script-input fields) by adding `autocomplete="off"`,
+  matching what the Media tab's predicate field already did.
+- Added a Kill button to the Scripts tab, next to the Send button in a running script's terminal.
+  Backed by a new `scripts_runner.stop()` that force-kills the subprocess (`Popen.kill()`), so a
+  hung/stuck script can be reset without waiting it out. Wired through a new
+  `POST /scripts/kill/<name>` route.
 - Fixed the header's TagRank status pill showing stale red/"not running" for up to 60s after the
   server actually came up (e.g. right after opening the TagRank tab, which silently starts the
   server in the background). Because the pill's own poll loop only re-checks every 60s while the
