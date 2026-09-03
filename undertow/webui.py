@@ -757,7 +757,12 @@ if HAVE_FLASK:
     def quick_add():
         url = (request.form.get("url") or "").strip()
         hours_raw = (request.form.get("hours") or "").strip()
-        hours = float(hours_raw) if hours_raw else None  # None -> fuzzed standard interval
+        try:
+            hours = float(hours_raw) if hours_raw else None  # None -> fuzzed standard interval
+            if hours is not None and hours <= 0:
+                hours = None
+        except (TypeError, ValueError):
+            return render_template("partials/message.html", message="Check interval must be a positive number of hours.", error=True)
         if not url:
             return render_template("partials/message.html", message="Enter a URL.", error=True)
         result = add_single_subscription(url, hours)
@@ -922,11 +927,17 @@ if HAVE_FLASK:
             raw = (request.form.get(field) or "").strip()
             return int(raw) if raw else None
 
+        try:
+            max_files_initial = parse_cap("max_files_initial")
+            max_files_regular = parse_cap("max_files_regular")
+        except ValueError:
+            return render_template("partials/edit_subscription_modal.html", sub=sub, message="File caps must be whole numbers, or blank for hydownloader's own default.", message_error=True, tags_value=_tags_value())
+
         file_filter = (request.form.get("filter") or "").strip()
 
         ok, error = subscriptions.update_subscription(
             sub_id, keywords=keywords, check_interval_hours=hours,
-            max_files_initial=parse_cap("max_files_initial"), max_files_regular=parse_cap("max_files_regular"),
+            max_files_initial=max_files_initial, max_files_regular=max_files_regular,
             file_filter=file_filter,
         )
         if not ok:
