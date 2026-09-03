@@ -2079,6 +2079,29 @@ def is_running() -> bool:
     return thread is not None and thread.is_alive()
 
 
+def _port_already_bound(port: int) -> bool:
+    """True if some other process (an earlier launch's backend that never got killed, most
+    likely) already has this port bound. Werkzeug's dev server sets allow_reuse_address, which
+    on Windows lets a second process LISTEN on a port an earlier one is still actively serving
+    - no bind error, just multiple processes silently answering the same address, with the OS
+    routing each new connection to one of them essentially at random. A client (the WebView2
+    launcher, a browser tab) can then get load-balanced onto a stale/hung process from a
+    previous run and hang forever waiting for a reply that never comes, even though a perfectly
+    healthy server is also listening right there. Checking with our own plain (non-reuse)
+    socket bind first - which Windows *does* refuse if anything is already listening - catches
+    that before we'd otherwise add yet another process to the pile-up."""
+    import socket
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", port))
+    except OSError:
+        return True
+    finally:
+        probe.close()
+    return False
+
+
 def run_webui(port: int = 8765, open_browser: bool = True) -> int | None:
     """Starts the Flask app in a background daemon thread (so it dies with the console
     process, same lifetime as everything else this pipeline starts) and returns the port it's
@@ -2094,6 +2117,17 @@ def run_webui(port: int = 8765, open_browser: bool = True) -> int | None:
         if open_browser:
             webbrowser.open(f"http://127.0.0.1:{_webui_state['port']}")
         return _webui_state["port"]
+
+    if _port_already_bound(port):
+        # Someone else (almost certainly an earlier launch's backend, still alive) is already
+        # serving this port - see _port_already_bound's docstring. Don't stack another server
+        # on top of it; just point the caller at what's already there.
+        print(f"  port {port} is already in use by another process - reusing it instead of "
+              "starting a second backend.")
+        _webui_state["port"] = port
+        if open_browser:
+            webbrowser.open(f"http://127.0.0.1:{port}")
+        return port
 
     def _serve():
         # The dev server's request logger (werkzeug) writes a line per poll to stdout by

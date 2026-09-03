@@ -2,6 +2,20 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.9
+- Fixed the WebView2 app frame (`Undertow.exe`) getting permanently stuck on "web dashboard
+  running at ... this console window will now hide" instead of loading the dashboard.
+  Werkzeug's dev server sets `allow_reuse_address`, which on Windows lets a *second* process
+  bind and `LISTEN` on a port an earlier process is still actively serving - no bind error,
+  just several `python.exe` backends from past launches (never cleanly killed) silently piling
+  up on port 8765 at once, with the OS routing each new connection to one of them essentially
+  at random. The WebView2 launcher's own dashboard-readiness poll, or a plain browser tab,
+  could get load-balanced onto a stale/hung process from a previous run and hang forever
+  waiting for a reply that a perfectly healthy process sitting right next to it would have
+  answered instantly. `webui.run_webui()` now probes the port with a plain (non-reuse) socket
+  bind before starting the Flask thread - which Windows *does* refuse if anything is already
+  listening - and reuses that existing server instead of stacking another one on top of it.
+
 ## 1.13.8
 - Fixed the TagRank tab's DB Search always spinning "Searching..." forever without failing or
   returning results: TagRank's `/search-options/filtered` narrowed every rated tag with a fresh,
