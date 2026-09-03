@@ -37,7 +37,7 @@ def main() -> int:
 
     for start in range(0, len(file_ids), CHUNK):
         chunk = file_ids[start:start + CHUNK]
-        meta = hydrus_client.get_file_metadata(chunk)
+        meta = hydrus_client.get_file_metadata(chunk, include_tags=False)
         if not meta.success:
             continue
         for m in (meta.data or {}).get("metadata", []):

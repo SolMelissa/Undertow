@@ -29,7 +29,7 @@ def main() -> int:
     section("Paused subscriptions")
     paused = [s for s in subs if s.get("paused")]
     for s in paused:
-        print(f"  {s.get('name', '?')}")
+        print(f"  {s.get('keywords', '?')}")
     if not paused:
         print("  (none)")
 
@@ -39,7 +39,7 @@ def main() -> int:
         history = checks_by_id.get(s.get("id"), [])
         total_new = sum(c.get("new_count", 0) for c in history)
         if history and total_new == 0:
-            zero.append(s.get("name", "?"))
+            zero.append(s.get("keywords", "?"))
     for name in zero:
         print(f"  {name}")
     if not zero:
@@ -54,7 +54,7 @@ def main() -> int:
         last = history[-1]
         status = str(last.get("status", "")).lower()
         if "error" in status or "fail" in status:
-            failing.append((s.get("name", "?"), last.get("status")))
+            failing.append((s.get("keywords", "?"), last.get("status")))
     for name, status in failing:
         print(f"  {name}: {status}")
     if not failing:

@@ -210,18 +210,20 @@ def search_files(predicates: list[str], return_hashes: bool = False) -> ApiResul
     )
 
 
-def get_file_metadata(file_ids: list[int]) -> ApiResult:
+def get_file_metadata(file_ids: list[int], include_tags: bool = True) -> ApiResult:
     """Per-file metadata for the detail view - dimensions, size, and (with include_service_keys_
     to_tags) every tag on the file grouped by tag service. Hydrus caps how many ids one call can
     take; callers doing full-library operations should chunk, but the browser's own page-sized
-    grid (see media.py) never sends more than one page's worth."""
-    return invoke_hydrus_api(
-        "/get_files/file_metadata",
-        params={
-            "file_ids": str(file_ids),
-            "include_service_keys_to_tags": "true",
-        },
-    )
+    grid (see media.py) never sends more than one page's worth.
+
+    include_tags=False skips include_service_keys_to_tags - Hydrus still returns file_services
+    (and thus time_imported) regardless, so bulk scans that only need timing/size data (not the
+    tags themselves) should pass it to avoid making Hydrus compute and serialize every tag on
+    every file in the chunk."""
+    params = {"file_ids": str(file_ids)}
+    if include_tags:
+        params["include_service_keys_to_tags"] = "true"
+    return invoke_hydrus_api("/get_files/file_metadata", params=params)
 
 
 def search_tags(query: str, tag_service_key: str | None = None) -> ApiResult:

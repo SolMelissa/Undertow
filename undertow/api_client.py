@@ -227,7 +227,10 @@ def add_or_update_urls(urls: list[str], file_filter: str | None = None) -> ApiRe
 
 
 def get_queued_urls() -> ApiResult:
-    return invoke_daemon_api("/get_queued_urls")
+    # Same reasoning as get_subscriptions above: route_get_queued_urls does
+    # `'from' in bottle.request.json` with no null-check, so a bodyless POST (request.json is
+    # None) 500s inside hydownloader itself instead of returning a clean result.
+    return invoke_daemon_api("/get_queued_urls", {})
 
 
 # Short-TTL caches for the two calls that get fetched multiple times per poll cycle:

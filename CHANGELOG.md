@@ -2,6 +2,27 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.6
+- Fixed the Inbox Triage report (`scripts/inbox_triage_report.py`) never finishing on large
+  libraries: `hydrus_client.get_file_metadata()` unconditionally requested full tag data
+  (`include_service_keys_to_tags`) for every file even though the report only reads
+  `time_imported` from `file_services`, which Hydrus returns regardless. On a ~460k-file inbox
+  this meant Hydrus computing and serializing every tag for every one of ~1,800 chunked API
+  calls - the report never completed. Added an `include_tags` flag (default True, preserving the
+  three existing single-file callers' behavior) and set it False for the bulk scan; same real
+  data, several minutes instead of never finishing.
+- Fixed `subscription_health_report.py` labeling every subscription "?" instead of its real name
+  in all three of its sections - hydownloader subscription objects have no `name` field, only
+  `keywords` (the same field the dashboard itself displays), but the script was reading
+  `s.get("name", "?")` everywhere.
+- Fixed the Queue Report (`scripts/queued_urls_report.py`) always crashing with a 500:
+  `api_client.get_queued_urls()` sent a bodyless POST, and hydownloader's own
+  `route_get_queued_urls` does `'from' in bottle.request.json` with no null-check - the same
+  class of bug `get_subscriptions()` already works around by sending `{}`. Applied the same fix.
+- All 8 Reports-group scripts now verified against live Hydrus/hydownloader data (204 real
+  subscriptions, 460k+ inbox files) through the actual Scripts tab run/poll mechanism, not just
+  read for correctness.
+
 ## 1.13.5
 - Fixed two unhandled-exception crashes in the subscriptions UI from unvalidated numeric form
   input: quick-add's "hours" field (`/subscriptions/quick-add`) and edit-subscription's
