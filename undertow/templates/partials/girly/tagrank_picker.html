@@ -1,8 +1,3 @@
-<p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
-  Click a tag pill to start comparing around that tag right here in the tab - pill border
-  color tracks its TrueSkill score (red = lowest-rated on screen, green = highest-rated).
-</p>
-
 {#- Embedded comparer: judging happens in this panel via TagRank's session API instead of a
     separate window (see webui.py's /tagrank/compare/* routes) - it never replaces the filter
     bar or pill list above/below it, only its own contents swap between idle/loading/pair/done. #}
@@ -20,45 +15,13 @@
           style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
           title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
           hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
-          hx-vals="js:{tag: {{ opt.tag|tojson }}, use_similarity: tagrankBandValues('similarity').max >= 1 ? '1' : '0'}">
+          hx-vals='js:{tag: {{ opt.tag|tojson }}}'>
     <span>{{ opt.tag }}</span>
     <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
   </button>
   {% else %}
   <span class="text-xs" style="color:var(--k-text-dim-text);">none yet</span>
   {% endfor %}
-</div>
-{% endmacro %}
-
-{#- Band+center control: a dual-thumb "spread" slider (two offsets from a virtual zero) plus a
-    single-thumb "centerpoint" slider below it - final effective range is
-    [center + offset_lo, center + offset_hi]. Used identically for score, resolution (ratio +
-    pixel count), rating count, and date-added, so the shape only needs writing once. Every band
-    filters the tags currently on screen live as you drag it (tagrankApplyFilters()); score is
-    the only metric whose data already sits on every pill, so it's the only one that visibly
-    narrows the list before you press Search - the rest take full effect once Search re-fetches
-    from the DB (see tagrankGatherDbFilters() below). Defaults are chosen so the combined
-    [center + offset] range always starts at "show everything". #}
-{% macro band_control(metric, title, off_min, off_max, off_step, off_lo_default, off_hi_default, center_min, center_max, center_step, center_default) %}
-<div class="tagrank-filter-field" data-tagrank-band="{{ metric }}">
-  <div class="tagrank-field-label">
-    <span>{{ title }}</span>
-  </div>
-  <div class="tagrank-band-row">
-    <span class="tagrank-band-readout" id="tagrank-{{ metric }}-offlo-val"></span>
-    <div class="tagrank-dualrange" style="flex:1;">
-      <input type="range" id="tagrank-{{ metric }}-offlo" min="{{ off_min }}" max="{{ off_max }}" step="{{ off_step }}" value="{{ off_lo_default }}"
-             oninput="tagrankBandChanged('{{ metric }}')">
-      <input type="range" id="tagrank-{{ metric }}-offhi" min="{{ off_min }}" max="{{ off_max }}" step="{{ off_step }}" value="{{ off_hi_default }}"
-             oninput="tagrankBandChanged('{{ metric }}')">
-    </div>
-    <span class="tagrank-band-readout" id="tagrank-{{ metric }}-offhi-val"></span>
-  </div>
-  <div class="tagrank-band-row tagrank-band-center">
-    <input type="range" id="tagrank-{{ metric }}-center" min="{{ center_min }}" max="{{ center_max }}" step="{{ center_step }}" value="{{ center_default }}"
-           oninput="tagrankBandChanged('{{ metric }}')">
-    <span class="tagrank-band-readout" id="tagrank-{{ metric }}-center-val"></span>
-  </div>
 </div>
 {% endmacro %}
 
@@ -117,15 +80,6 @@
     <span class="tagrank-search-status" id="tagrank-search-status"></span>
   </div>
 
-  <div class="tagrank-band-group">
-    {{ band_control("similarity", "Similarity search (slower, finds visually-similar files)", 0, 1, 1, 0, 0, 0, 1, 1, 0) }}
-    {{ band_control("score", "Score band (TrueSkill)", -10, 10, 0.1, -10, 10, -5, 5, 0.1, 0) }}
-    {{ band_control("ratio", "Resolution: aspect ratio (tall &#8596; wide)", -3, 3, 0.05, -3, 3, 0.1, 5, 0.05, 2.55) }}
-    {{ band_control("pixels", "Resolution: pixel count", -15000000, 15000000, 10000, -15000000, 15000000, 0, 30000000, 10000, 15000000) }}
-    {{ band_control("ratingcount", "Rating count", -1000, 1000, 5, -1000, 1000, 0, 2000, 5, 1000) }}
-    {{ band_control("dateadded", "Date added (days ago)", -1825, 1825, 1, -1825, 1825, 0, 3650, 1, 1825) }}
-  </div>
-
   <div style="display:flex; flex-wrap:wrap; gap:1.5rem;">
     {{ service_picker("file", "File service", file_services) }}
     {{ service_picker("tag", "Tag service", tag_services) }}
@@ -142,48 +96,6 @@ function tagrankStep(which, dir) {
   tagrankMinFilesIdx = Math.max(0, Math.min(TAGRANK_MINFILES_STEPS.length - 1, tagrankMinFilesIdx + dir));
   document.getElementById('tagrank-minfiles-val').textContent = TAGRANK_MINFILES_STEPS[tagrankMinFilesIdx];
   tagrankApplyFilters();
-}
-
-// ---- Band+center controls ------------------------------------------------------------------
-// Formats a raw value for on-screen readouts, per metric (pixel counts and day-offsets read
-// better abbreviated/labeled than as bare numbers).
-function tagrankFormatMetric(metric, value) {
-  if (metric === 'similarity') return value >= 1 ? 'On' : 'Off';
-  if (metric === 'pixels') return (value / 1e6).toFixed(2) + 'MP';
-  if (metric === 'dateadded') return value + 'd';
-  if (metric === 'ratio') return value >= 0 ? '+' + value.toFixed(2) : value.toFixed(2);
-  return value.toFixed(2);
-}
-
-function tagrankBandValues(metric) {
-  const offLo = parseFloat(document.getElementById(`tagrank-${metric}-offlo`).value);
-  const offHi = parseFloat(document.getElementById(`tagrank-${metric}-offhi`).value);
-  const center = parseFloat(document.getElementById(`tagrank-${metric}-center`).value);
-  // The two offset handles are independent (a user can drag either past the other), so sort
-  // them into low/high rather than assuming #offlo stays left of #offhi.
-  const lo = Math.min(offLo, offHi), hi = Math.max(offLo, offHi);
-  return { min: center + lo, max: center + hi, offLo: lo, offHi: hi, center };
-}
-
-function tagrankBandChanged(metric) {
-  const v = tagrankBandValues(metric);
-  document.getElementById(`tagrank-${metric}-offlo-val`).textContent = tagrankFormatMetric(metric, v.offLo);
-  document.getElementById(`tagrank-${metric}-offhi-val`).textContent = tagrankFormatMetric(metric, v.offHi);
-  document.getElementById(`tagrank-${metric}-center-val`).textContent = tagrankFormatMetric(metric, v.center);
-  // Every band re-applies the live filter immediately. Only score has matching data on each
-  // pill today, so it's the only one that visibly narrows the list before Search is pressed -
-  // the rest are no-ops here and only take effect once Search re-fetches from the DB.
-  tagrankApplyFilters();
-}
-
-function tagrankInitBands() {
-  document.querySelectorAll('[data-tagrank-band]').forEach((el) => {
-    const metric = el.dataset.tagrankBand;
-    const v = tagrankBandValues(metric);
-    document.getElementById(`tagrank-${metric}-offlo-val`).textContent = tagrankFormatMetric(metric, v.offLo);
-    document.getElementById(`tagrank-${metric}-offhi-val`).textContent = tagrankFormatMetric(metric, v.offHi);
-    document.getElementById(`tagrank-${metric}-center-val`).textContent = tagrankFormatMetric(metric, v.center);
-  });
 }
 
 // ---- 3-way segmented toggles (namespace / archive) ------------------------------------------
@@ -214,15 +126,12 @@ function tagrankSelectedServiceKeys(name) {
 function tagrankApplyFilters() {
   const text = (document.getElementById('tagrank-filter-text')?.value || '').trim().toLowerCase();
   const minFiles = TAGRANK_MINFILES_STEPS[tagrankMinFilesIdx] || 0;
-  const score = tagrankBandValues('score');
   document.querySelectorAll('.tagrank-pill').forEach((el) => {
     const tag = el.dataset.tag || '';
     const files = parseFloat(el.dataset.files);
-    const s = parseFloat(el.dataset.score);
     let show = true;
     if (text && !tag.includes(text)) show = false;
     if (minFiles > 0 && !(files >= minFiles)) show = false;
-    if (!(s >= score.min && s <= score.max)) show = false;
     el.style.display = show ? '' : 'none';
   });
 }
@@ -231,13 +140,6 @@ function tagrankClearFilters() {
   document.getElementById('tagrank-filter-text').value = '';
   tagrankMinFilesIdx = 0;
   document.getElementById('tagrank-minfiles-val').textContent = '0';
-  document.querySelectorAll('[data-tagrank-band]').forEach((el) => {
-    const metric = el.dataset.tagrankBand;
-    document.getElementById(`tagrank-${metric}-offlo`).value = el.querySelector(`#tagrank-${metric}-offlo`).defaultValue;
-    document.getElementById(`tagrank-${metric}-offhi`).value = el.querySelector(`#tagrank-${metric}-offhi`).defaultValue;
-    document.getElementById(`tagrank-${metric}-center`).value = el.querySelector(`#tagrank-${metric}-center`).defaultValue;
-    tagrankBandChanged(metric);
-  });
   tagrankSetSegment('namespace', 'all');
   tagrankSetSegment('archive', 'all');
   tagrankSetServiceMode('file', 'all');
@@ -246,24 +148,13 @@ function tagrankClearFilters() {
   tagrankApplyFilters();
 }
 
-// ---- DB search: sends every filter to TagRank and re-renders with fresh server-side results -
-// Requires a TagRank API endpoint this app doesn't have yet (see tagrank_client.search_options_filtered
-// and the plan doc under tagrank/plans/ for the exact contract) - until that lands, this surfaces
-// whatever error the current /search-options fallback in webui.py's tagrank_search_db route reports.
+// ---- DB search: sends every filter to TagRank and re-renders with fresh server-side results,
+// computed from TagRank's in-memory tag index (tagrank/tag_index.py) rather than a live Hydrus
+// query per candidate tag - see tagrank_client.search_options_filtered.
 function tagrankGatherDbFilters() {
-  const score = tagrankBandValues('score');
-  const ratio = tagrankBandValues('ratio');
-  const pixels = tagrankBandValues('pixels');
-  const ratingcount = tagrankBandValues('ratingcount');
-  const dateadded = tagrankBandValues('dateadded');
   return {
     filter_tag: (document.getElementById('tagrank-filter-text')?.value || '').trim(),
     min_files: TAGRANK_MINFILES_STEPS[tagrankMinFilesIdx] || 0,
-    score_min: score.min, score_max: score.max,
-    aspect_ratio_min: ratio.min, aspect_ratio_max: ratio.max,
-    pixel_count_min: pixels.min, pixel_count_max: pixels.max,
-    rating_count_min: ratingcount.min, rating_count_max: ratingcount.max,
-    date_added_days_ago_min: dateadded.min, date_added_days_ago_max: dateadded.max,
     namespace_mode: document.getElementById('tagrank-segment-namespace')?.dataset.value || 'all',
     archive_mode: document.getElementById('tagrank-segment-archive')?.dataset.value || 'all',
     file_service_keys: tagrankSelectedServiceKeys('file'),
@@ -289,8 +180,6 @@ function tagrankRunDbSearch() {
     status.textContent = "Search request failed - check that TagRank's server is still running.";
   });
 }
-
-tagrankInitBands();
 </script>
 
 {{ pill_group("all", "&#127991; Tags (sorted by rating)", search_options) }}

@@ -2,6 +2,28 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.8
+- Fixed the TagRank tab's DB Search always spinning "Searching..." forever without failing or
+  returning results: TagRank's `/search-options/filtered` narrowed every rated tag with a fresh,
+  live Hydrus search per tag on every request (the same per-request cost that already forced the
+  plain `/search-options` endpoint's timeout up to 180s) - on a real library this could run for
+  minutes with no feedback. TagRank now builds an in-memory tag/file index once, eagerly, at
+  server startup (`tagrank/tag_index.py`), and both search endpoints answer from that cache
+  instead of re-querying Hydrus per tag per request; only judging a comparison still touches
+  Hydrus/the rating store directly. Undertow's startup wait (`tagrank_client.py`) was bumped from
+  75s to 240s to cover that one-time upfront cost.
+- Fixed a broken `hx-vals` attribute on every tag pill in the TagRank tab rendering stray
+  `= 1 ? '1' : '0'}">`-shaped text above each pill: `{{ opt.tag|tojson }}` was interpolated inside
+  a double-quoted HTML attribute, and Flask's `tojson` filter (meant for `<script>` blocks) emits
+  its own unescaped double quotes, silently truncating the attribute mid-value. Switched the
+  attribute to single quotes.
+- Removed the TagRank filter bar's six band/slider controls (Similarity, Score, Resolution x2,
+  Rating count, Date added) entirely, per client feedback that they weren't functional enough to
+  keep; DB Search's namespace/archive/service filters and the always-live tag-text/min-files
+  filters are unaffected.
+- Removed the redundant "Click a tag pill to start comparing" instruction card from the top of
+  the TagRank tab.
+
 ## 1.13.7
 - Tag Cleanup wizard (`scripts/tag_cleanup.py`) now asks for the two length thresholds that were
   previously hardcoded on `Config`: the minimum full raw-tag length worth parsing at all

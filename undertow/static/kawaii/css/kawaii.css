@@ -113,35 +113,7 @@
 }
 
 /* ==================================================================== TagRank filter bar:
-   dual-thumb "band" sliders (two overlapping native <input type=range>, transparent track on
-   the top one so both thumbs stay independently draggable - no slider library needed), the
-   min-files stepper, and the 3-way/multiselect toggles. */
-.tagrank-dualrange { position: relative; height: 1.4rem; margin: 0.15rem 0; }
-.tagrank-dualrange input[type="range"] {
-  position: absolute; left: 0; right: 0; top: 0;
-  width: 100%; margin: 0; background: none; pointer-events: none;
-  -webkit-appearance: none; appearance: none;
-}
-.tagrank-dualrange input[type="range"]::-webkit-slider-runnable-track { background: var(--k-border); height: 4px; border-radius: 2px; }
-.tagrank-dualrange input[type="range"]::-moz-range-track { background: var(--k-border); height: 4px; border-radius: 2px; }
-.tagrank-dualrange input[type="range"]::-webkit-slider-thumb {
-  pointer-events: all; -webkit-appearance: none; appearance: none;
-  width: 18px; height: 18px; border-radius: 50%; background: var(--k-accent);
-  border: 2px solid var(--k-panel); cursor: pointer; margin-top: -7px;
-}
-.tagrank-dualrange input[type="range"]::-moz-range-thumb {
-  pointer-events: all; width: 18px; height: 18px; border-radius: 50%;
-  background: var(--k-accent); border: 2px solid var(--k-panel); cursor: pointer;
-}
-.tagrank-band-row { display: flex; align-items: center; gap: 0.6rem; }
-.tagrank-band-readout { font-size: 0.72rem; color: var(--k-text-dim-text); min-width: 3.4rem; text-align: center; }
-.tagrank-band-center input[type="range"] { flex: 1; accent-color: var(--k-accent-2); height: 18px; }
-
-.tagrank-band-group {
-  display: flex; flex-wrap: wrap; gap: 1rem; padding: 0.85rem 1rem;
-  border: 1px solid var(--k-border); border-radius: 0.75rem; background: var(--k-panel);
-}
-
+   the min-files stepper and the 3-way/multiselect toggles. */
 .tagrank-stepper { display: flex; align-items: center; gap: 0.3rem; }
 .tagrank-stepper-val { min-width: 3rem; text-align: center; font-size: 0.85rem; }
 .tagrank-stepper button { width: 1.6rem; height: 1.6rem; line-height: 1; padding: 0; font-size: 0.85rem; }

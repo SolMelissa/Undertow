@@ -78,7 +78,13 @@ def _start_process() -> tuple[subprocess.Popen | None, str | None]:
 # headroom, not just enough for the happy path. The original 20s deadline here was flush
 # against *normal* startup, not just slow ones - that's what surfaced to the user as
 # "Did not respond within 20 seconds" on every tab open.
-STARTUP_DEADLINE_SECONDS = 75
+#
+# TagRank's server now builds its whole tag/file index (tagrank/tag_index.py) eagerly on
+# startup, before it answers even /health - the per-request Hydrus round trips that used to be
+# spread across every /search-options call (which themselves needed up to 180s on a real
+# library, see tagrank_client.get_search_options's docstring) now all happen once, here, up
+# front. 75s was already generous for the old per-request cost alone; this needs more.
+STARTUP_DEADLINE_SECONDS = 240
 
 
 def start_server_async() -> str | None:
@@ -310,14 +316,12 @@ def get_tags() -> tuple[list | None, str | None]:
 
 def search_options_filtered(filters: dict) -> tuple[dict | None, str | None]:
     """Same {"top": [...], "random": [...], "bottom": [...]} shape as get_search_options(), but
-    computed over a Hydrus query built from `filters` instead of TagRank's default candidate
-    seed - backs the webui's TagRank DB Search (score/resolution/rating-count/date-added bands,
+    narrowed by every filter axis in `filters` (score/resolution/rating-count/date-added bands,
     namespace/archive toggles, file/tag service selection - see tagrank_picker.html's
-    tagrankGatherDbFilters()). NOT YET IMPLEMENTED on TagRank's side as of this writing - see
-    F:\\0DocsF\\0Docs\\AI\\Claude\\tagrank\\plans\\undertow-filtered-search-api.md for the
-    contract this call assumes (POST /search-options/filtered). Until that endpoint exists this
-    will fail with a 404 and the caller (webui.py's tagrank_search_db route) surfaces that as a
-    normal picker error rather than crashing."""
+    tagrankGatherDbFilters()). Backed by TagRank's in-memory tag_index (built once at server
+    startup, see tagrank/tag_index.py), so this is a fast in-process computation, not a fresh
+    Hydrus round trip per candidate tag - the 180s timeout here is just headroom, not the
+    expected case."""
     return _post("/search-options/filtered", json_body=filters, timeout=180)
 
 

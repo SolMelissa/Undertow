@@ -1743,12 +1743,10 @@ if HAVE_FLASK:
 
     @app.route("/tagrank/search-db", methods=["POST"])
     def tagrank_search_db():
-        """DB Search: re-runs the tag search server-side against TagRank's own Hydrus
-        connection using the full filter set from tagrank_picker.html's filter bar (score,
-        resolution, rating count, date added, namespace, archive status, file/tag service) -
-        never queries Hydrus directly from Undertow (see tagrank_client.search_options_filtered
-        docstring; this needs a TagRank API endpoint that doesn't exist yet, tracked in
-        tagrank/plans/undertow-filtered-search-api.md)."""
+        """DB Search: re-runs the tag search using the full filter set from tagrank_picker.html's
+        filter bar (score, resolution, rating count, date added, namespace, archive status,
+        file/tag service) against TagRank's own in-memory tag index - never queries Hydrus
+        directly from Undertow (see tagrank_client.search_options_filtered)."""
         try:
             filters = json.loads(request.form.get("filters") or "{}")
         except json.JSONDecodeError:
