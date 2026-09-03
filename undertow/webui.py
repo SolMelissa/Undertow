@@ -1743,21 +1743,24 @@ if HAVE_FLASK:
 
     @app.route("/tagrank/search-db", methods=["POST"])
     def tagrank_search_db():
-        """DB Search: re-runs the tag search using the full filter set from tagrank_picker.html's
-        filter bar (score, resolution, rating count, date added, namespace, archive status,
-        file/tag service) against TagRank's own in-memory tag index - never queries Hydrus
-        directly from Undertow (see tagrank_client.search_options_filtered)."""
+        """Live DB Search: fires on every filter-bar change (see tagrank_picker.html's
+        tagrankRunDbSearch, debounced for the text field) and re-renders just the tag-pill list
+        against TagRank's in-memory tag index - never queries Hydrus directly from Undertow (see
+        tagrank_client.search_options_filtered). Deliberately doesn't call _tagrank_picker_ctx()
+        here: that also fetches graphs and settings, neither of which change with a tag search,
+        and graphs in particular renders matplotlib figures server-side - paying for that on
+        every keystroke was most of what made this feel slow before the tag index existed."""
         try:
             filters = json.loads(request.form.get("filters") or "{}")
         except json.JSONDecodeError:
             filters = {}
         search_options, err = tagrank_client.search_options_filtered(filters)
-        ctx = _tagrank_picker_ctx()
         if err:
-            ctx["error"] = f"DB Search isn't available yet: {err}"
-        elif search_options:
-            ctx["search_options"] = _tagrank_merge_search_options(search_options)
-        return render_template("partials/girly/tagrank_inner.html", **ctx)
+            return render_template("partials/girly/tagrank_results.html", error=f"Search failed: {err}")
+        return render_template(
+            "partials/girly/tagrank_results.html",
+            search_options=_tagrank_merge_search_options(search_options),
+        )
 
     @app.route("/tagrank/launch", methods=["POST"])
     def tagrank_launch():

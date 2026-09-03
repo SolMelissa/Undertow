@@ -7,23 +7,7 @@
   </div>
 </div>
 
-{% macro pill_group(key, title, options) %}
-<p class="kawaii-section-title" style="font-size:1rem; margin-top:1rem;">{{ title|safe }}</p>
-<div id="tagrank-group-{{ key }}" style="display:flex; flex-wrap:wrap; gap:0.5rem;">
-  {% for opt in options %}
-  <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
-          style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
-          title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
-          hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
-          hx-vals='js:{tag: {{ opt.tag|tojson }}}'>
-    <span>{{ opt.tag }}</span>
-    <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
-  </button>
-  {% else %}
-  <span class="text-xs" style="color:var(--k-text-dim-text);">none yet</span>
-  {% endfor %}
-</div>
-{% endmacro %}
+{% import "partials/girly/tagrank_pill_macro.html" as pills %}
 
 {% macro segment(name, title, choices, default) %}
 <div class="tagrank-filter-field" style="min-width:auto;">
@@ -59,7 +43,7 @@
     <label class="tagrank-filter-field">
       <div class="tagrank-field-label"><span>Filter tag</span></div>
       <input type="text" id="tagrank-filter-text" class="kawaii-input" placeholder="tag contains&hellip;" autocomplete="off"
-             oninput="tagrankApplyFilters()" onkeydown="if(event.key==='Enter'){event.preventDefault();tagrankRunDbSearch();}"
+             oninput="tagrankDebouncedSearch()"
              style="font-size:0.8rem; padding:0.3rem 0.5rem;">
     </label>
 
@@ -75,7 +59,6 @@
     {{ segment("namespace", "Namespace", [("all","All"), ("namespaced","Namespaced"), ("unnamespaced","Unnamespaced")], "all") }}
     {{ segment("archive", "Archive status", [("all","All"), ("archived","Archived"), ("inbox","Inbox")], "all") }}
 
-    <button type="button" class="kawaii-btn kawaii-btn-primary" id="tagrank-search-btn" style="font-size:0.8rem; padding:0.4rem 0.8rem;" onclick="tagrankRunDbSearch()">&#128269; Search</button>
     <button type="button" class="kawaii-btn" style="font-size:0.75rem; padding:0.3rem 0.6rem;" onclick="tagrankClearFilters()">Clear</button>
     <span class="tagrank-search-status" id="tagrank-search-status"></span>
   </div>
@@ -95,7 +78,7 @@ function tagrankStep(which, dir) {
   if (which !== 'minfiles') return;
   tagrankMinFilesIdx = Math.max(0, Math.min(TAGRANK_MINFILES_STEPS.length - 1, tagrankMinFilesIdx + dir));
   document.getElementById('tagrank-minfiles-val').textContent = TAGRANK_MINFILES_STEPS[tagrankMinFilesIdx];
-  tagrankApplyFilters();
+  tagrankRunDbSearch();
 }
 
 // ---- 3-way segmented toggles (namespace / archive) ------------------------------------------
@@ -103,6 +86,7 @@ function tagrankSetSegment(name, value) {
   const el = document.getElementById(`tagrank-segment-${name}`);
   el.dataset.value = value;
   el.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === value));
+  tagrankRunDbSearch();
 }
 
 // ---- Service pickers (all vs multi-select pills) --------------------------------------------
@@ -111,9 +95,11 @@ function tagrankSetServiceMode(name, mode) {
   seg.dataset.value = mode;
   seg.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === mode));
   document.getElementById(`tagrank-service-panel-${name}`).classList.toggle('open', mode === 'select');
+  tagrankRunDbSearch();
 }
 function tagrankToggleServicePill(el, _name) {
   el.classList.toggle('selected');
+  tagrankRunDbSearch();
 }
 function tagrankSelectedServiceKeys(name) {
   const mode = document.getElementById(`tagrank-segment-${name}-mode`)?.dataset.value;
@@ -122,35 +108,33 @@ function tagrankSelectedServiceKeys(name) {
     .map((el) => el.dataset.key);
 }
 
-// ---- Live filtering (client-side, only over data already on the pills on screen) -----------
-function tagrankApplyFilters() {
-  const text = (document.getElementById('tagrank-filter-text')?.value || '').trim().toLowerCase();
-  const minFiles = TAGRANK_MINFILES_STEPS[tagrankMinFilesIdx] || 0;
-  document.querySelectorAll('.tagrank-pill').forEach((el) => {
-    const tag = el.dataset.tag || '';
-    const files = parseFloat(el.dataset.files);
-    let show = true;
-    if (text && !tag.includes(text)) show = false;
-    if (minFiles > 0 && !(files >= minFiles)) show = false;
-    el.style.display = show ? '' : 'none';
-  });
-}
-
 function tagrankClearFilters() {
   document.getElementById('tagrank-filter-text').value = '';
   tagrankMinFilesIdx = 0;
   document.getElementById('tagrank-minfiles-val').textContent = '0';
-  tagrankSetSegment('namespace', 'all');
-  tagrankSetSegment('archive', 'all');
-  tagrankSetServiceMode('file', 'all');
+  tagrankSetSegment('namespace', 'all');   // each already re-searches; harmless to do it 4x here,
+  tagrankSetSegment('archive', 'all');     // clearing all filters is not a hot path worth
+  tagrankSetServiceMode('file', 'all');    // special-casing.
   tagrankSetServiceMode('tag', 'all');
   document.querySelectorAll('.tagrank-service-pill.selected').forEach((el) => el.classList.remove('selected'));
-  tagrankApplyFilters();
+  tagrankRunDbSearch();
 }
 
-// ---- DB search: sends every filter to TagRank and re-renders with fresh server-side results,
-// computed from TagRank's in-memory tag index (tagrank/tag_index.py) rather than a live Hydrus
-// query per candidate tag - see tagrank_client.search_options_filtered.
+// ---- Live DB search: every filter change re-queries TagRank's in-memory tag index
+// (tagrank/tag_index.py) - no separate Search button, since that index makes a full re-search
+// fast enough to run on every keystroke. Text input is debounced so fast typing doesn't fire a
+// request per character; every other control (segments, service pills, min-files stepper) fires
+// immediately since those are already discrete clicks, not a stream of input events. Only the
+// pill list (#tagrank-results) is swapped, never the filter bar itself, so the field being typed
+// into keeps focus and cursor position across requests.
+let tagrankSearchDebounce = null;
+let tagrankSearchSeq = 0;
+
+function tagrankDebouncedSearch() {
+  clearTimeout(tagrankSearchDebounce);
+  tagrankSearchDebounce = setTimeout(tagrankRunDbSearch, 150);
+}
+
 function tagrankGatherDbFilters() {
   return {
     filter_tag: (document.getElementById('tagrank-filter-text')?.value || '').trim(),
@@ -163,26 +147,28 @@ function tagrankGatherDbFilters() {
 }
 
 function tagrankRunDbSearch() {
+  clearTimeout(tagrankSearchDebounce);
   const filters = tagrankGatherDbFilters();
-  const btn = document.getElementById('tagrank-search-btn');
   const status = document.getElementById('tagrank-search-status');
-  btn.disabled = true;
-  status.className = 'tagrank-search-status';
-  status.innerHTML = '<span class="tagrank-spinner"></span> Searching&hellip;';
-  // The swap replaces this whole panel (button included) on success, so there's no matching
-  // "done" reset here - only the failure path needs to restore the button by hand.
+  const seq = ++tagrankSearchSeq; // stale-response guard for the status text only - htmx already
+  // performs each response's pill swap as it lands, so an out-of-order reply (unlikely at this
+  // debounce interval against a fast in-memory search) could still briefly show stale pills
   htmx.ajax('POST', '/tagrank/search-db', {
-    target: '#tagrank-root', swap: 'innerHTML',
+    target: '#tagrank-results', swap: 'innerHTML',
     values: { filters: JSON.stringify(filters) },
+  }).then(() => {
+    if (seq === tagrankSearchSeq) status.textContent = '';
   }).catch(() => {
-    btn.disabled = false;
+    if (seq !== tagrankSearchSeq) return;
     status.className = 'tagrank-search-status tagrank-status-error';
     status.textContent = "Search request failed - check that TagRank's server is still running.";
   });
 }
 </script>
 
-{{ pill_group("all", "&#127991; Tags (sorted by rating)", search_options) }}
+<div id="tagrank-results">
+{{ pills.pill_group("all", "&#127991; Tags (sorted by rating)", search_options) }}
+</div>
 
 <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; margin-top:1.5rem;">
   <p class="kawaii-section-title" style="margin:0;">&#128202; Rating History</p>

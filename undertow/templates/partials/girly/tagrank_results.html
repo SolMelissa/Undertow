@@ -1,0 +1,11 @@
+{#- Swap target for every live DB Search request (see tagrank_picker.html's tagrankRunDbSearch) -
+    deliberately just the tag pills, not the filter bar/comparer/graphs around it, so retyping a
+    filter doesn't steal focus from the text field it's typed into. Kept intentionally light:
+    the route behind this never fetches graphs/settings (those don't change with a tag search),
+    which used to make every search pay for a full chart re-render on top of the actual query. #}
+{% import "partials/girly/tagrank_pill_macro.html" as pills %}
+{% if error %}
+<div class="kawaii-card" style="color:var(--k-danger-text);">{{ error }}</div>
+{% else %}
+{{ pills.pill_group("all", "&#127991; Tags (sorted by rating)", search_options) }}
+{% endif %}

@@ -2,6 +2,19 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.10
+- TagRank tab: DB Search is now live instead of a separate button. Every filter-bar change
+  (tag text debounced ~150ms, namespace/archive/service toggles and the min-files stepper
+  immediately) re-queries TagRank's in-memory tag index and swaps in just the tag-pill list
+  (`#tagrank-results`), leaving the filter bar itself untouched so the field being typed into
+  keeps focus and cursor position across requests. Split the pill-rendering macro out into its
+  own `tagrank_pill_macro.html` so both the full tab render and the new results-only search
+  response can share it.
+- The search route also stopped re-fetching the Rating History graphs and settings on every
+  search - those don't change with a tag search, and graphs in particular renders matplotlib
+  figures server-side, which was most of what made "DB Search" feel slow even after the
+  in-memory tag index landed.
+
 ## 1.13.9
 - Fixed the WebView2 app frame (`Undertow.exe`) getting permanently stuck on "web dashboard
   running at ... this console window will now hide" instead of loading the dashboard.

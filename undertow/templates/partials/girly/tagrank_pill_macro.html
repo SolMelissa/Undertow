@@ -1,0 +1,21 @@
+{#- Shared with tagrank_results.html (the live-search swap target) so both the initial full tab
+    render and every subsequent search response build pills the same way, without importing
+    tagrank_picker.html itself (that file has top-level markup/script outside any macro, which
+    Jinja would execute - and error on missing vars - the moment it's imported as a module). #}
+{% macro pill_group(key, title, options) %}
+<p class="kawaii-section-title" style="font-size:1rem; margin-top:1rem;">{{ title|safe }}</p>
+<div id="tagrank-group-{{ key }}" style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+  {% for opt in options %}
+  <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
+          style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
+          title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
+          hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
+          hx-vals='js:{tag: {{ opt.tag|tojson }}}'>
+    <span>{{ opt.tag }}</span>
+    <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
+  </button>
+  {% else %}
+  <span class="text-xs" style="color:var(--k-text-dim-text);">none yet</span>
+  {% endfor %}
+</div>
+{% endmacro %}
