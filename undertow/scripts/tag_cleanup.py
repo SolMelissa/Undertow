@@ -1321,6 +1321,17 @@ def prompt_secret(label: str, has_saved: bool) -> Optional[str]:
     return value or None
 
 
+def prompt_int(label: str, default: int, min_value: int = 0) -> int:
+    suffix = f" [{default}]"
+    while True:
+        raw = input(f"{label}{suffix}: ").strip()
+        if not raw:
+            return default
+        if raw.isdigit() and int(raw) >= min_value:
+            return int(raw)
+        print(f"  Enter a whole number >= {min_value}.")
+
+
 def prompt_yes_no(label: str, default: bool = True) -> bool:
     suffix = " [Y/n]" if default else " [y/N]"
     raw = input(f"{label}{suffix}: ").strip().lower()
@@ -1450,13 +1461,23 @@ def wizard_build_config(saved: dict) -> Config:
     source_namespace = prompt_text("Namespace holding the raw filename tags", default=saved.get("source_namespace", "dir"))
     drop_truncation = prompt_yes_no("Drop suspected truncated trailing tokens (short consonant-only remnants)?",
                                      default=saved.get("drop_suspected_truncation", True))
+    default_cfg = Config()
+    min_process_tag_length = prompt_int(
+        "Minimum full raw-tag length to bother parsing at all (shorter tags are left unchanged)",
+        default=saved.get("min_process_tag_length", default_cfg.min_process_tag_length), min_value=1)
+    min_token_len = prompt_int(
+        "Minimum length for an individual word to survive as its own tag (shorter words are dropped)",
+        default=saved.get("min_token_len", default_cfg.min_token_len), min_value=1)
 
     save_local_config({
         "source_namespace": source_namespace,
         "drop_suspected_truncation": drop_truncation,
+        "min_process_tag_length": min_process_tag_length,
+        "min_token_len": min_token_len,
     })
 
-    cfg = Config(source_namespace=source_namespace, drop_suspected_truncation=drop_truncation)
+    cfg = Config(source_namespace=source_namespace, drop_suspected_truncation=drop_truncation,
+                 min_process_tag_length=min_process_tag_length, min_token_len=min_token_len)
     cfg.target_tag_wildcards = [f"{source_namespace}:*"]
     return cfg
 

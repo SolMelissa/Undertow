@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.7
+- Tag Cleanup wizard (`scripts/tag_cleanup.py`) now asks for the two length thresholds that were
+  previously hardcoded on `Config`: the minimum full raw-tag length worth parsing at all
+  (`min_process_tag_length`, default 35) and the minimum length for an individual word to survive
+  as its own tag (`min_token_len`, default 2). Both are saved/reused across runs the same way the
+  existing namespace and truncation-drop prompts already are.
+
 ## 1.13.6
 - Fixed the Inbox Triage report (`scripts/inbox_triage_report.py`) never finishing on large
   libraries: `hydrus_client.get_file_metadata()` unconditionally requested full tag data
