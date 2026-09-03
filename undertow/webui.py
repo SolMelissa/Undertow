@@ -684,6 +684,67 @@ if HAVE_FLASK:
         lines, offset, running, returncode, partial = scripts_runner.read_since(name, since)
         return jsonify({"lines": lines, "offset": offset, "running": running, "returncode": returncode, "partial": partial})
 
+    # ------------------------------------------------- tag cleanup wizard word/filter lists
+
+    def _lists_to_text(lists: dict) -> dict:
+        """One word per line for the plain word sets; "a, b" per line for compound pairs."""
+        text = {key: "\n".join(lists[key]) for key, _title, _help in tag_cleanup_lists.LIST_FIELDS}
+        pairs_key, _title, _help = tag_cleanup_lists.COMPOUND_PAIRS_FIELD
+        text[pairs_key] = "\n".join(f"{a}, {b}" for a, b in lists[pairs_key])
+        return text
+
+    @app.route("/scripts/tag-cleanup-lists")
+    def tag_cleanup_lists_view():
+        return render_template(
+            "partials/tag_cleanup_lists_modal.html",
+            fields=tag_cleanup_lists.LIST_FIELDS,
+            pairs_field=tag_cleanup_lists.COMPOUND_PAIRS_FIELD,
+            text=_lists_to_text(tag_cleanup_lists.load_lists()),
+            message=None,
+        )
+
+    @app.route("/scripts/tag-cleanup-lists/save", methods=["POST"])
+    def tag_cleanup_lists_save():
+        form = request.form
+        lists: dict = {}
+        for key, _title, _help in tag_cleanup_lists.LIST_FIELDS:
+            words = [w.strip().lower() for w in (form.get(key) or "").splitlines()]
+            lists[key] = sorted({w for w in words if w})
+
+        pairs_key, _title, _help = tag_cleanup_lists.COMPOUND_PAIRS_FIELD
+        pairs = []
+        bad_lines = []
+        for line in (form.get(pairs_key) or "").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = [p.strip().lower() for p in line.replace(",", " ").split()]
+            if len(parts) != 2 or not all(parts):
+                bad_lines.append(line)
+                continue
+            pairs.append(parts)
+        lists[pairs_key] = pairs
+
+        if bad_lines:
+            return render_template(
+                "partials/tag_cleanup_lists_modal.html",
+                fields=tag_cleanup_lists.LIST_FIELDS,
+                pairs_field=tag_cleanup_lists.COMPOUND_PAIRS_FIELD,
+                text=_lists_to_text(tag_cleanup_lists.load_lists()),
+                message=f"Compound pairs must be exactly two words each - couldn't parse: {', '.join(bad_lines)}",
+                message_error=True,
+            )
+
+        tag_cleanup_lists.save_lists(lists)
+        return render_template(
+            "partials/tag_cleanup_lists_modal.html",
+            fields=tag_cleanup_lists.LIST_FIELDS,
+            pairs_field=tag_cleanup_lists.COMPOUND_PAIRS_FIELD,
+            text=_lists_to_text(lists),
+            message="Tag Cleanup lists saved - the next wizard run will use them.",
+            message_error=False,
+        )
+
     # ---------------------------------------------------------------- subscriptions: add
 
     @app.route("/subscriptions/quick-add", methods=["POST"])
