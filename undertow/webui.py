@@ -449,24 +449,26 @@ if HAVE_FLASK:
         result = version.check_for_update()
         return render_template(
             "partials/version_pill_inner.html", checked=True,
-            update_available=result["update_available"], error=result["error"],
+            update_available=result["update_available"],
+            restart_needed=result["restart_needed"], error=result["error"],
         )
 
     @app.route("/version/update", methods=["POST"])
     def version_update():
+        # Pull (a no-op if HEAD already matches origin/master - e.g. a background session
+        # pushed straight into this checkout, so there's nothing to fast-forward but the running
+        # process still needs to restart to pick it up) then restart the process in place. A
+        # browser page reload alone can't do this - see version.restart_process().
         result = version.apply_update()
         if not result["success"]:
             return render_template(
                 "partials/version_pill_inner.html", checked=True,
-                update_available=True, error=result["error"],
+                update_available=True, restart_needed=False, error=result["error"],
             )
-        # Fast-forwarded successfully - a full reload is the simplest way to pick up any
-        # template/static/Python changes that came in with the update, rather than trying to
-        # patch the running process's already-imported modules in place.
+        version.restart_process()
         resp = make_response(
-            render_template("partials/version_pill_inner.html", checked=False)
+            render_template("partials/version_pill_inner.html", checked=True, restarting=True)
         )
-        resp.headers["HX-Refresh"] = "true"
         return resp
 
     @app.route("/partials/changelog")

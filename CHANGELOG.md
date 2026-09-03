@@ -2,6 +2,20 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.1
+- Fixed the version pill never noticing code changes pushed straight into this checkout (the
+  normal case for background sessions - no separate worktree). `check_for_update()` used to only
+  compare disk HEAD against `origin/master`, which are already equal the instant such a push
+  lands, so the pill stayed stuck on "up to date" forever even though the running process was
+  still executing the old code from before the push. It now also tracks `_STARTUP_HEAD` (the
+  commit this process actually loaded at launch) and flags a new `restart_needed` state whenever
+  disk HEAD has moved past that, regardless of origin.
+- The pill's action is now a real fix for both cases: clicking it pulls (a safe no-op if nothing
+  needs pulling) then calls `version.restart_process()`, which re-execs `python -m undertow` in
+  place. Previously it only sent `HX-Refresh` to reload the browser tab, which can't force Python
+  to re-import already-loaded modules - a pulled code change never actually took effect without
+  someone manually restarting the app.
+
 ## 1.13.0
 - Added a "Tag Cleanup Lists" editor to the Scripts tab (Interactive Wizards group): the word
   lists that drive the Tag Cleanup Wizard's parser (function words, scene-description glue words,

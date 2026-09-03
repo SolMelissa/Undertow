@@ -9,17 +9,22 @@
   <span class="dot"></span>
   v{{ version_info.version }} &middot; {{ version_info.commit }}{% if version_info.dirty %}+{% endif %}
 </span>
+{% elif restarting %}
+<span class="kawaii-pill version-pill-content info" style="font-size:0.72rem; padding:0.2rem 0.65rem;">
+  <span class="tagrank-spinner" style="width:0.7rem; height:0.7rem;"></span>restarting&hellip;
+</span>
+<script>setTimeout(() => location.reload(), 3000);</script>
 {% elif error %}
 <span class="kawaii-pill version-pill-content warn" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
       title="{{ error }} &middot; click to retry"
       hx-post="/version/check" hx-target="#version-pill-wrapper" hx-swap="innerHTML" hx-indicator="#version-pill-wrapper">
   <span class="dot"></span>couldn't check &middot; retry
 </span>
-{% elif update_available %}
+{% elif update_available or restart_needed %}
 <span class="kawaii-pill version-pill-content bad" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
-      title="Click to pull the update and reload"
+      title="{% if update_available %}Click to pull the update and restart{% else %}Code on disk changed since this was launched &middot; click to restart{% endif %}"
       hx-post="/version/update" hx-target="#version-pill-wrapper" hx-swap="innerHTML" hx-indicator="#version-pill-wrapper">
-  <span class="dot"></span>&#11014; update available &middot; click to update
+  <span class="dot"></span>&#11014; {% if update_available %}update available{% else %}restart needed{% endif %} &middot; click to restart
 </span>
 {% else %}
 <span class="kawaii-pill version-pill-content ok" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
