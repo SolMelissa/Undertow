@@ -2,6 +2,20 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.5
+- Fixed two unhandled-exception crashes in the subscriptions UI from unvalidated numeric form
+  input: quick-add's "hours" field (`/subscriptions/quick-add`) and edit-subscription's
+  "max_files_initial"/"max_files_regular" fields (`/subscriptions/<id>/edit`) both called
+  `float()`/`int()` on raw form text with no `try`/`except`, unlike every sibling route that
+  parses the same kind of field - typing anything non-numeric (or pasting garbage) 500'd the
+  request instead of showing a friendly validation message.
+- Fixed a threading race in `tags.py`: `load_tags()` returned the live module-level cache dict
+  instead of a copy, and `set_tags_for`/`remove` then mutated that same dict in place before
+  writing it back. Since the web dashboard runs Flask `threaded=True`, one request iterating the
+  cached dict (e.g. the tag-filter dropdown, or the subscriptions table rendering each row's
+  tags) could race a concurrent edit/delete mutating it, raising `RuntimeError: dictionary
+  changed size during iteration` or handing back a half-mutated tag map.
+
 ## 1.13.4
 - Fixed Windows toast notifications being silently broken: the WM_DESTROY handler registered
   on the throwaway notification window returned `None` (a bare `lambda: win32gui.
