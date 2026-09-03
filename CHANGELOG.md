@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.3
+- Fixed the Tag Cleanup Lists editor's compound-pairs validation error discarding whatever the
+  user had just typed into every *other* field, not just the bad pairs line - the error path
+  re-rendered from the on-disk lists instead of echoing back the submitted form values, so fixing
+  one typo silently threw away unrelated edits.
+- Added the `wordfreq` pin to `pyproject.toml` (it was only in `requirements.txt`), keeping the
+  two dependency lists in sync.
+- Removed a stray `sh.exe.stackdump` crash dump that had ended up committed at the repo root.
+
 ## 1.13.2
 - Fixed `tag_cleanup_lists.py` incorrectly showing up as a runnable/killable script in the
   Scripts tab. It's a support module `webui.py` imports directly (not a subprocess script), but

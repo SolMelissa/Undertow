@@ -15,4 +15,4 @@ Entry point: `python -m undertow` (see __main__.py), or run.bat which activates 
 venv first if one exists next to this package.
 """
 
-__version__ = "1.13.2"
+__version__ = "1.13.3"

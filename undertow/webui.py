@@ -728,11 +728,15 @@ if HAVE_FLASK:
         lists[pairs_key] = pairs
 
         if bad_lines:
+            # Redisplay exactly what the user typed (not the on-disk lists) so fixing the one
+            # bad pairs line doesn't silently discard edits they made to every other field.
+            resubmitted_text = {key: form.get(key) or "" for key, _title, _help in tag_cleanup_lists.LIST_FIELDS}
+            resubmitted_text[pairs_key] = form.get(pairs_key) or ""
             return render_template(
                 "partials/tag_cleanup_lists_modal.html",
                 fields=tag_cleanup_lists.LIST_FIELDS,
                 pairs_field=tag_cleanup_lists.COMPOUND_PAIRS_FIELD,
-                text=_lists_to_text(tag_cleanup_lists.load_lists()),
+                text=resubmitted_text,
                 message=f"Compound pairs must be exactly two words each - couldn't parse: {', '.join(bad_lines)}",
                 message_error=True,
             )
