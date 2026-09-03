@@ -10,10 +10,40 @@
   v{{ version_info.version }} &middot; {{ version_info.commit }}{% if version_info.dirty %}+{% endif %}
 </span>
 {% elif restarting %}
-<span class="kawaii-pill version-pill-content info" style="font-size:0.72rem; padding:0.2rem 0.65rem;">
+<span id="version-restart-status" class="kawaii-pill version-pill-content info" style="font-size:0.72rem; padding:0.2rem 0.65rem;">
   <span class="tagrank-spinner" style="width:0.7rem; height:0.7rem;"></span>restarting&hellip;
 </span>
-<script>setTimeout(() => location.reload(), 3000);</script>
+<script>
+(function() {
+  // A restart re-execs the whole backend process - on Windows that's actually a brand new OS
+  // process replacing the old one (see version.restart_process()'s docstring), which has to
+  // redo the full startup sequence (Hydrus/hydownloader checks, subscription sync) before it's
+  // listening again. A single fixed-delay reload can't know how long that takes and, if it
+  // fires into the gap, lands on a dead connection-refused page with nothing left to retry it -
+  // exactly what used to make the app look like it "closed and never reopened". Poll a
+  // side-effect-free endpoint instead and only reload once something actually answers.
+  var deadline = Date.now() + 90000;
+  function ping() {
+    fetch("/version/ping", {cache: "no-store"}).then(function(r) {
+      if (r.ok) { location.reload(); } else { scheduleNext(); }
+    }).catch(scheduleNext);
+  }
+  function scheduleNext() {
+    if (Date.now() > deadline) {
+      var el = document.getElementById("version-restart-status");
+      if (el) {
+        el.outerHTML = '<span id="version-restart-status" class="kawaii-pill version-pill-content warn" ' +
+          'style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;" ' +
+          'title="The restarted backend still isn\'t answering - click to try loading it again" ' +
+          'onclick="location.reload()"><span class="dot"></span>taking longer than expected &middot; click to retry</span>';
+      }
+      return;
+    }
+    setTimeout(ping, 1000);
+  }
+  setTimeout(ping, 1000);
+})();
+</script>
 {% elif error %}
 <span class="kawaii-pill version-pill-content warn" style="font-size:0.72rem; padding:0.2rem 0.65rem; cursor:pointer;"
       title="{{ error }} &middot; click to retry"

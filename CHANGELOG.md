@@ -2,6 +2,36 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.1
+- Fixed the "restart"/update pill leaving Undertow permanently stuck, most visibly right after
+  clicking it: `version.restart_process()` re-execs the backend via `os.execv`, which on Windows
+  actually spawns a brand-new OS process and lets the old one exit - it's not a true in-place
+  restart, so the new process has to redo the whole startup sequence (Hydrus/hydownloader
+  checks, subscription sync) before it's listening again. The version pill's own JS used to just
+  blind-reload the page after a fixed 3 seconds; if that landed before the new process was
+  ready, it hit a dead connection-refused page with nothing left to retry it - "closes and never
+  reopens" in the WebView2 app frame. It now polls a new side-effect-free `/version/ping` route
+  every second (up to 90s) and only reloads once something actually answers, with a manual
+  retry pill if it genuinely times out.
+- Fixed 1.13.9's own port-pileup fix being wrong in the case that actually matters most: it
+  treated "the port is already bound" as "a healthy server is already running there" and skipped
+  starting a new backend entirely - which is backwards when the existing listener is dead. Live-
+  reproduced on this machine: a `python.exe` backend was force-killed, and Windows left its
+  listening socket permanently stuck in a `LISTEN`/`CLOSE_WAIT`-forever state with no owning
+  process at all (`Get-Process` found nothing, yet new connections kept getting silently
+  swallowed) - a state no process-level cleanup can fix, since there's no process left to signal
+  or kill, and one that can persist indefinitely. `run_webui()` now verifies actual HTTP
+  liveness (not just that the port is bound) before deferring to an existing server; if it's
+  bound but dead, it uses `psutil` to find and kill whatever process still owns it, and if that's
+  not possible (the kernel-orphan case above), it now falls back to the next free port instead
+  of staying wedged on one that can never bind again short of a reboot.
+- The WebView2 app frame (`Undertow.exe`, `launcher/Program.cs`) no longer hardcodes port 8765
+  for the whole app lifetime: it parses the real port the backend reports in its startup output
+  and polls/navigates to that instead, so the port-fallback above actually reaches the window
+  instead of the launcher polling a dead port forever. Verified end-to-end against the live
+  stuck-port repro above: the launcher correctly detected the fallback to 8766 and loaded the
+  dashboard normally.
+
 ## 1.14.0
 - TagRank comparer now spans the full window width (breaks out of the dashboard's centered
   1400px column) instead of being capped at 70vh, so comparison images render as large as the

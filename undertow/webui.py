@@ -471,6 +471,14 @@ if HAVE_FLASK:
         )
         return resp
 
+    @app.route("/version/ping")
+    def version_ping():
+        """Trivial, side-effect-free liveness probe - see version_pill_inner.html's restarting
+        branch. Deliberately not "/" itself: that route has real side effects (marking the
+        current version "seen") that a polling loop shouldn't repeat every second, and here we
+        only care whether *some* backend process is answering yet, not what it renders."""
+        return "", 204
+
     @app.route("/partials/changelog")
     def partial_changelog():
         return render_template("partials/changelog.html", sections=version.get_changelog())
@@ -2165,16 +2173,14 @@ def is_running() -> bool:
 
 
 def _port_already_bound(port: int) -> bool:
-    """True if some other process (an earlier launch's backend that never got killed, most
-    likely) already has this port bound. Werkzeug's dev server sets allow_reuse_address, which
-    on Windows lets a second process LISTEN on a port an earlier one is still actively serving
-    - no bind error, just multiple processes silently answering the same address, with the OS
-    routing each new connection to one of them essentially at random. A client (the WebView2
-    launcher, a browser tab) can then get load-balanced onto a stale/hung process from a
-    previous run and hang forever waiting for a reply that never comes, even though a perfectly
-    healthy server is also listening right there. Checking with our own plain (non-reuse)
-    socket bind first - which Windows *does* refuse if anything is already listening - catches
-    that before we'd otherwise add yet another process to the pile-up."""
+    """True if *something* already has this port bound - could be a healthy earlier launch's
+    backend, or a dead one (see _port_answers_http/_reclaim_dead_listener, which distinguish
+    those two cases). Checking with a plain (non-reuse) socket bind - which Windows refuses if
+    anything is already listening, dead or alive - is what actually detects that; Werkzeug's own
+    dev server sets allow_reuse_address, which on Windows lets a *second* process LISTEN on a
+    port an earlier one still holds with no bind error at all, silently piling up processes that
+    all answer the same address with the OS routing each new connection to one of them
+    essentially at random."""
     import socket
 
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -2185,6 +2191,61 @@ def _port_already_bound(port: int) -> bool:
     finally:
         probe.close()
     return False
+
+
+def _port_answers_http(port: int, timeout: float = 2.0) -> bool:
+    """True if an actual HTTP server answers on this port right now, not just that the port is
+    bound - see _reclaim_dead_listener's docstring for why that distinction is the whole point.
+    /version/ping is a trivial, side-effect-free route that exists purely for this."""
+    import urllib.error
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/version/ping", timeout=timeout)
+        return True
+    except (urllib.error.URLError, OSError, TimeoutError):
+        return False
+
+
+def _reclaim_dead_listener(port: int) -> None:
+    """Best-effort recovery from a dead listener: something has `port` bound (per
+    _port_already_bound) but nothing answers HTTP on it (per _port_answers_http) - a process
+    that died without closing its listening socket cleanly (crashed, force-killed, or a Windows
+    TCP-stack quirk observed live where the owning process had already fully exited yet the
+    socket stayed LISTEN and swallowed every new connection into CLOSE_WAIT forever, with no
+    owning process left to ever answer). An earlier version of this function's caller treated
+    "port is bound" as "someone healthy is already serving it" and skipped starting our own
+    server entirely - which is exactly backwards when the existing listener is dead: it left
+    the whole dashboard completely unreachable with a perfectly good backend sitting right there
+    refusing to bind. This finds whatever process (if any) really owns the port via psutil and
+    kills it, clearing the way for the real bind attempt that follows in run_webui() regardless
+    of whether this succeeds - if the port turns out to be a kernel-level orphan with no owning
+    process at all, there's nothing left to kill, but Werkzeug's own bind (allow_reuse_address)
+    still gets a chance to succeed anyway, and a real bind failure surfaces as a normal loud
+    exception in the log instead of the app silently doing nothing."""
+    import psutil
+
+    try:
+        conns = psutil.net_connections(kind="inet")
+    except (psutil.AccessDenied, OSError):
+        conns = []
+
+    pid = next((c.pid for c in conns
+                if c.pid and c.status == psutil.CONN_LISTEN
+                and c.laddr and c.laddr.port == port), None)
+    if pid is None:
+        print(f"  port {port} is stuck in a dead listening state with no owning process left "
+              "(a rare Windows TCP-stack artifact) - trying to bind over it anyway.")
+        return
+
+    try:
+        proc = psutil.Process(pid)
+        print(f"  port {port} is held by an unresponsive process (pid {pid}, started "
+              f"{datetime.fromtimestamp(proc.create_time()).strftime('%H:%M:%S')}) - terminating it.")
+        proc.kill()
+        proc.wait(timeout=5)
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired) as exc:
+        print(f"  couldn't clear the stuck process (pid {pid}): {exc} - trying to bind anyway.")
 
 
 def run_webui(port: int = 8765, open_browser: bool = True) -> int | None:
@@ -2204,15 +2265,29 @@ def run_webui(port: int = 8765, open_browser: bool = True) -> int | None:
         return _webui_state["port"]
 
     if _port_already_bound(port):
-        # Someone else (almost certainly an earlier launch's backend, still alive) is already
-        # serving this port - see _port_already_bound's docstring. Don't stack another server
-        # on top of it; just point the caller at what's already there.
-        print(f"  port {port} is already in use by another process - reusing it instead of "
-              "starting a second backend.")
-        _webui_state["port"] = port
-        if open_browser:
-            webbrowser.open(f"http://127.0.0.1:{port}")
-        return port
+        if _port_answers_http(port):
+            # A genuinely healthy earlier backend is already serving this port - don't stack
+            # another server on top of it, just point the caller at what's already there.
+            _webui_state["port"] = port
+            if open_browser:
+                webbrowser.open(f"http://127.0.0.1:{port}")
+            return port
+        _reclaim_dead_listener(port)
+        if _port_already_bound(port):
+            # Reclaiming didn't free it - most likely the kernel-orphan case
+            # _reclaim_dead_listener's docstring describes, where there's no owning process
+            # left to kill. Rather than stay permanently wedged on a port nothing can ever
+            # bind again (short of a reboot), fall back to the next few ports until one is
+            # actually free. menu.py prints whatever port this function returns, and the
+            # WebView2 launcher (launcher/Program.cs) parses that same line to find out which
+            # port to actually talk to - neither one assumes 8765 specifically.
+            for candidate in range(port + 1, port + 10):
+                if not _port_already_bound(candidate):
+                    print(f"  port {port} is still stuck - using port {candidate} instead.")
+                    port = candidate
+                    break
+            else:
+                print(f"  port {port} and the next 9 ports are all stuck - trying {port} anyway.")
 
     def _serve():
         # The dev server's request logger (werkzeug) writes a line per poll to stdout by

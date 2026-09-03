@@ -5,6 +5,7 @@
 // backend's /shutdown-full route, rather than just hiding the dashboard.
 using System.Diagnostics;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using Microsoft.Web.WebView2.WinForms;
 
 namespace UndertowLauncher;
@@ -25,6 +26,14 @@ internal sealed class BackendOutput
 
 internal static class Program
 {
+    // Default/fallback port - what the backend uses absent any trouble. It can talk itself out
+    // of this (see undertow/webui.py's run_webui) if the port is stuck in an unrecoverable dead
+    // state at the OS level (observed live: a listening socket whose owning process no longer
+    // exists, yet Windows kept it bound and swallowing every new connection forever - not
+    // something any process-level cleanup here or in Python can always fix). MainForm parses
+    // the real port the backend reports and polls/navigates to that instead, so this constant
+    // only matters for the "already running" fast-path check below, before any such fallback
+    // could be known about.
     private const int Port = 8765;
     private static readonly string DashboardUrl = $"http://127.0.0.1:{Port}/";
 
@@ -163,7 +172,10 @@ internal sealed class MainForm : Form
         ("web dashboard running at", 95),
     };
 
-    private readonly string _dashboardUrl;
+    // Not readonly: OnBackendLine can repoint this at whatever port the backend actually ends
+    // up serving on (see PortRe below) if it had to fall back off the default port.
+    private string _dashboardUrl;
+    private static readonly Regex PortRe = new(@"running at http://127\.0\.0\.1:(\d+)", RegexOptions.Compiled);
     private readonly Process? _backend;
     private readonly BackendOutput? _output;
     private readonly WebView2 _webView;
@@ -225,6 +237,10 @@ internal sealed class MainForm : Form
             string trimmed = line.Trim();
             if (trimmed.Length == 0)
                 return;
+
+            var portMatch = PortRe.Match(trimmed);
+            if (portMatch.Success)
+                _dashboardUrl = $"http://127.0.0.1:{portMatch.Groups[1].Value}/";
 
             foreach (var (match, percent) in Milestones)
             {
