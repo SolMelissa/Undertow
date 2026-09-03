@@ -5,12 +5,20 @@
 {% else %}
 {% for group, names in groups %}
 <div class="kawaii-card" style="margin-bottom:1rem;">
-  <p class="kawaii-section-title" style="margin-top:0;">
+  <p class="kawaii-section-title" style="margin-top:0; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+    <span>
     {% if group == 'Reports' %}&#128202;
     {% elif group == 'Housekeeping' %}&#129529;
     {% elif group == 'Interactive Wizards' %}&#10024;
     {% else %}&#9654;
     {% endif %} {{ group }}
+    </span>
+    {% if group == 'Interactive Wizards' %}
+    <button type="button" class="kawaii-btn" style="font-size:0.75rem; padding:0.3rem 0.6rem;"
+            hx-get="/scripts/tag-cleanup-lists" hx-target="#modal-content" hx-swap="innerHTML">
+      &#9998; Edit Tag Cleanup Lists
+    </button>
+    {% endif %}
   </p>
   <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:0.75rem;">
     {% for name in names %}

@@ -1,0 +1,35 @@
+<div class="flex flex-col gap-2">
+  <div class="text-lg font-bold text-[#39ff88] glow-title tracking-wide">TAG CLEANUP LISTS</div>
+  <p class="text-xs text-[#8aa0a8]">
+    One word per line. These feed the Tag Cleanup Wizard's parser directly - saved changes
+    apply the next time you run it (running wizards aren't affected mid-run).
+  </p>
+  <form hx-post="/scripts/tag-cleanup-lists/save" hx-target="#modal-content" hx-swap="innerHTML"
+        class="flex flex-col gap-3" style="max-height:70vh; overflow-y:auto;">
+    {% for key, title, help in fields %}
+    <label class="text-xs text-[#8aa0a8]">{{ title }}
+      <textarea name="{{ key }}" rows="5" spellcheck="false"
+                class="textarea textarea-sm textarea-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full font-mono"
+                >{{ text[key] }}</textarea>
+      <span class="block text-[#8aa0a8] opacity-80" style="font-size:0.7rem;">{{ help }}</span>
+    </label>
+    {% endfor %}
+
+    {% set pkey, ptitle, phelp = pairs_field %}
+    <label class="text-xs text-[#8aa0a8]">{{ ptitle }}
+      <textarea name="{{ pkey }}" rows="3" spellcheck="false" placeholder="first, timer"
+                class="textarea textarea-sm textarea-bordered bg-[#0b0d10] border-[#39ff8866] text-[#d8f6ff] w-full font-mono"
+                >{{ text[pkey] }}</textarea>
+      <span class="block text-[#8aa0a8] opacity-80" style="font-size:0.7rem;">{{ phelp }} One pair per line, as "word1, word2".</span>
+    </label>
+
+    {% if message %}
+    <div class="alert {{ 'alert-error' if message_error else 'alert-success' }} py-2 text-sm">{{ message }}</div>
+    {% endif %}
+
+    <div class="flex justify-end gap-2 mt-1">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('modal').close()">Close</button>
+      <button type="submit" class="btn btn-sm btn-primary">Save</button>
+    </div>
+  </form>
+</div>

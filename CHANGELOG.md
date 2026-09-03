@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.0
+- Added a "Tag Cleanup Lists" editor to the Scripts tab (Interactive Wizards group): the word
+  lists that drive the Tag Cleanup Wizard's parser (function words, scene-description glue words,
+  attribute words, group nouns, always-standalone words, and compound noun pairs like "first
+  timer") are now editable from the dashboard instead of only as hardcoded Python sets. Backed by
+  a new dependency-free `tag_cleanup_lists.py` module (JSON file at
+  `hydownloader-data/tag-cleanup-lists.json`, seeded from the previous hardcoded defaults) that
+  both `tag_cleanup.py`'s `Config` and the new `GET/POST /scripts/tag-cleanup-lists` routes read
+  from, so edits apply the next time the wizard runs with no code changes needed.
+
 ## 1.12.4
 - Disabled the browser's saved-history autocomplete dropdown on every text input across the
   dashboard (subscription/tag/search/API-key/script-input fields) by adding `autocomplete="off"`,
