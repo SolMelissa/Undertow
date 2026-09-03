@@ -65,6 +65,12 @@ except ImportError:
     print("This tool requires the 'rich' package: pip install rich", file=sys.stderr)
     sys.exit(1)
 
+try:
+    from . import tag_cleanup_lists
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import tag_cleanup_lists  # type: ignore
+
 
 # ---------------------------------------------------------------------------
 # Locally-stored settings (API URL/key, last-picked services, preferences)
@@ -129,40 +135,19 @@ class Config:
     primary_delimiter: str = " - "
     delimiters: list = field(default_factory=lambda: ["_", ",", "|", ";"])
     strip_leading_number_prefix: bool = True
-    function_words: set = field(default_factory=lambda: {
-        "a", "an", "the", "of", "and", "with", "in", "on", "for", "to", "at", "by", "from",
-        "after", "before", "up", "down", "into", "onto", "over", "under", "through",
-        "she", "he", "it", "they", "we", "her", "him", "them", "my", "your", "their",
-        "is", "are", "was", "were", "be", "been", "have", "has", "had", "do", "does",
-        "did", "can", "could", "will", "would", "shall", "should", "may", "might"})
-    corpus_glue_words: set = field(default_factory=lambda: {
-        "watches", "records", "picks", "pulls", "drifts", "rolls", "rains", "soaks",
-        "reads", "spots", "parts", "gives", "takes", "gets", "after", "then",
-        "rise", "delivers", "pours", "taps", "blows", "off", "them", "near", "during",
-        "while", "across", "as",
-        # Common scene-description verbs.
-        "tries", "poses", "shows", "strips", "rocks", "flaunt", "flaunts", "spreads",
-        "spreading", "plays", "joins", "enjoys", "rides", "teases", "wears", "grabs",
-        "loves", "wants", "rubs", "kisses", "strolls", "walks", "lingers", "sprints",
-        "climbs", "sits", "stands", "rests", "relax", "relaxes", "leans"})
-    attribute_lexicon: set = field(default_factory=lambda: {
-        # neutral generics ONLY: colors, sizes, ages, materials, qualities. Deliberately
-        # excludes any token in `always_split` below - reserved standalone words are
-        # removed from here so the merge path can never touch them.
-        "red", "green", "blue", "gray", "grey", "brown", "white", "black", "pale", "tan",
-        "small", "big", "large", "massive", "tall", "short", "long", "thin", "slim", "thick",
-        "wide", "young", "old", "quiet", "rustic", "fresh", "steep", "cool", "warm",
-        "soft", "rare", "full", "wet", "dry", "clean", "bright", "dark",
-        # Demographic/scene-descriptor adjectives. Hair-color words are deliberately
-        # excluded here - see always_split below.
-        "petite", "ebony", "american", "latina", "asian", "sexy", "hot", "chick",
-        "cougar", "milf", "curvy", "busty", "naughty",
-        "amateur", "real", "wild", "kinky", "angelic", "babe", "babes"})
+    # These five sets, plus compound_noun_pairs below, are user-editable - their actual
+    # working values live in tag_cleanup_lists.json (see tag_cleanup_lists.py), edited via
+    # the webui's "Tag Cleanup Lists" panel. The default_factory below always reflects
+    # whatever's on disk (falling back to tag_cleanup_lists.DEFAULT_LISTS on first run), so
+    # a fresh Config() picks up the user's current customizations automatically.
+    function_words: set = field(default_factory=lambda: set(tag_cleanup_lists.load_lists()["function_words"]))
+    corpus_glue_words: set = field(default_factory=lambda: set(tag_cleanup_lists.load_lists()["corpus_glue_words"]))
+    attribute_lexicon: set = field(default_factory=lambda: set(tag_cleanup_lists.load_lists()["attribute_lexicon"]))
     # Multi-person/group nouns that stay split from a preceding attribute
     # (e.g. "teen couple" -> "teen", "couple") since the demographic word is
     # itself a useful standalone tag when it describes a group, not a single
     # object or individual.
-    no_merge_target_nouns: set = field(default_factory=lambda: {"couple", "group", "pair", "family"})
+    no_merge_target_nouns: set = field(default_factory=lambda: set(tag_cleanup_lists.load_lists()["no_merge_target_nouns"]))
     # Tokens that always emit as their own tag: never absorbed into an attribute
     # phrase (leading or trailing), and act as a hard phrase-assembly boundary
     # so e.g. "teen first timer" splits at "teen" instead of gluing across it.
@@ -171,13 +156,13 @@ class Config:
     # following noun is correct), a hair color describes the performer and
     # shouldn't drag in whatever unrelated word happens to follow it (e.g.
     # "redhead deepthroat" merging into one tag).
-    always_split: set = field(default_factory=lambda: {
-        "teen", "brunette", "redhead", "blonde", "ginger"})
+    always_split: set = field(default_factory=lambda: set(tag_cleanup_lists.load_lists()["always_split"]))
     # Explicit two-word compounds where the second word is a "strong" noun that
     # should keep the pair together (e.g. "first timer") rather than falling
     # through to two standalone tags. Kept as an explicit allowlist rather than
     # generic noun-pair NLP, to stay high-precision.
-    compound_noun_pairs: set = field(default_factory=lambda: {("first", "timer")})
+    compound_noun_pairs: set = field(default_factory=lambda: {
+        tuple(pair) for pair in tag_cleanup_lists.load_lists()["compound_noun_pairs"]})
     # \d+ year(s) old -> a single grouped token, with the following adjective
     # (if any) continuing as its own tag rather than being absorbed.
     age_pattern_enabled: bool = True

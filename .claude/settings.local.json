@@ -22,5 +22,6 @@
       "WebSearch",
       "WebFetch(domain:hydrusnetwork.github.io)"
     ]
-  }
+  },
+  "outputStyle": "Explanatory"
 }

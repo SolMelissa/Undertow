@@ -36,6 +36,14 @@ from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# tag_cleanup_lists.py lives under undertow/scripts/, which isn't a package (no
+# __init__.py - see scripts_runner.py's docstring), so it's reached the same way that
+# module reaches undertow/config.py: an explicit sys.path insert. Deliberately NOT
+# importing tag_cleanup.py itself here - it hard-requires requests/wordfreq/rich and
+# sys.exit(1)s if they're missing, which would take the whole dashboard down with it.
+sys.path.insert(0, str(_PROJECT_ROOT / "undertow" / "scripts"))
+import tag_cleanup_lists  # type: ignore
+
 try:
     from flask import Flask, Response, jsonify, make_response, render_template, request
     HAVE_FLASK = True
