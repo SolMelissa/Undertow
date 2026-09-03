@@ -2,6 +2,12 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.2
+- Fixed `tag_cleanup_lists.py` incorrectly showing up as a runnable/killable script in the
+  Scripts tab. It's a support module `webui.py` imports directly (not a subprocess script), but
+  `list_scripts()` globbed every `.py` file under `scripts/` without distinguishing the two. Added
+  a `NOT_RUNNABLE` set to `scripts_runner.py` to exclude it explicitly.
+
 ## 1.13.1
 - Fixed the version pill never noticing code changes pushed straight into this checkout (the
   normal case for background sessions - no separate worktree). `check_for_update()` used to only

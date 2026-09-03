@@ -112,11 +112,21 @@ class ScriptRun:
 _runs: dict[str, ScriptRun] = {}
 
 
+# Files under scripts/ that are support/library modules, not runnable scripts - imported by
+# webui.py or other scripts rather than meant to be launched as a subprocess. They can't use
+# the leading-underscore convention (_common.py) because other code imports them by this
+# exact name (webui.py: `import tag_cleanup_lists`).
+NOT_RUNNABLE = {"tag_cleanup_lists"}
+
+
 def list_scripts() -> list[str]:
     """Names (without .py) of runnable scripts in undertow/scripts/, alphabetical."""
     if not SCRIPTS_DIR.exists():
         return []
-    return sorted(p.stem for p in SCRIPTS_DIR.glob("*.py") if p.is_file() and not p.stem.startswith("_"))
+    return sorted(
+        p.stem for p in SCRIPTS_DIR.glob("*.py")
+        if p.is_file() and not p.stem.startswith("_") and p.stem not in NOT_RUNNABLE
+    )
 
 
 def list_scripts_grouped() -> list[tuple[str, list[str]]]:
