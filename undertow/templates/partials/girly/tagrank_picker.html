@@ -172,56 +172,30 @@ function tagrankRunDbSearch() {
 
 <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; margin-top:1.5rem;">
   <p class="kawaii-section-title" style="margin:0;">&#128202; Rating History</p>
-  {% if graphs %}
-  <div style="display:flex; align-items:center; gap:0.6rem;">
-    <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:var(--k-text-dim-text);">
-      <input type="checkbox" id="tagrank-chart-live" onchange="tagrankChartSizeLiveToggled()"> Resize live
-    </label>
-    <span class="text-xs" style="color:var(--k-text-dim-text);">Chart size</span>
-    <input type="range" id="tagrank-chart-size" min="260" max="1000" step="10"
-           oninput="tagrankChartSizeInput()" onchange="tagrankChartSizeCommit()" style="width:140px;">
-    <span class="text-xs" id="tagrank-chart-size-val" style="color:var(--k-text-dim-text); min-width:3.5em;"></span>
+  <button type="button" class="kawaii-btn" id="tagrank-graphs-fetch-btn" onclick="tagrankFetchGraphs()">&#128202; Fetch graphs</button>
+</div>
+<div id="tagrank-graphs-container">
+  <div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
+    Not fetched yet - rendering these charts is server-side work TagRank only does on request now,
+    instead of on every tab open. Click "Fetch graphs" above.
   </div>
-  {% endif %}
 </div>
 <script>
-(function() {
-  const KEY = 'tagrank-chart-min-px';
-  const slider = document.getElementById('tagrank-chart-size');
-  const liveBox = document.getElementById('tagrank-chart-live');
-  if (!slider) return; // no graphs rendered - nothing to size
-  const grid = document.getElementById('tagrank-graphs-grid');
-  const saved = parseInt(localStorage.getItem(KEY) || '420', 10);
-  slider.value = saved;
-  document.getElementById('tagrank-chart-size-val').textContent = saved + 'px';
-  grid.style.setProperty('--tagrank-chart-min', saved + 'px');
-  liveBox.checked = localStorage.getItem('tagrank-chart-live') === '1';
-
-  window.tagrankChartSizeInput = function() {
-    document.getElementById('tagrank-chart-size-val').textContent = slider.value + 'px';
-    if (liveBox.checked) grid.style.setProperty('--tagrank-chart-min', slider.value + 'px');
-  };
-  window.tagrankChartSizeCommit = function() {
-    grid.style.setProperty('--tagrank-chart-min', slider.value + 'px');
-    localStorage.setItem(KEY, slider.value);
-  };
-  window.tagrankChartSizeLiveToggled = function() {
-    localStorage.setItem('tagrank-chart-live', liveBox.checked ? '1' : '0');
-    if (liveBox.checked) grid.style.setProperty('--tagrank-chart-min', slider.value + 'px');
-  };
-})();
+function tagrankFetchGraphs() {
+  const btn = document.getElementById('tagrank-graphs-fetch-btn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Fetching…';
+  htmx.ajax('GET', '/tagrank/graphs', { target: '#tagrank-graphs-container', swap: 'innerHTML' })
+    .then(() => {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      document.getElementById('tagrank-graphs-container').innerHTML =
+        '<div class="kawaii-card" style="color:var(--k-danger-text);">Couldn’t fetch graphs - check that TagRank’s server is still running.</div>';
+    });
+}
 </script>
-{% if graphs %}
-<div id="tagrank-graphs-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(var(--tagrank-chart-min, 420px), 1fr)); gap:1rem;">
-  {% for g in graphs %}
-  <div class="kawaii-card">
-    <p style="font-weight:600; margin-bottom:0.4rem;">{{ g.title }}</p>
-    <img src="data:image/png;base64,{{ g.png_base64 }}" style="width:100%; height:auto; border-radius:0.4rem;">
-  </div>
-  {% endfor %}
-</div>
-{% else %}
-<div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
-  No rating history yet - judge a few comparisons to populate these.
-</div>
-{% endif %}

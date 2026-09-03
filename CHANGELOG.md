@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.11
+- TagRank tab's Rating History charts are now fetched on demand via a "Fetch graphs" button
+  instead of always being rendered. Rendering them is real server-side work (TagRank builds
+  matplotlib figures and ships them as base64 PNGs) that used to happen unconditionally on
+  every tab open, every settings save, and every GUI-launch poll - regardless of whether the
+  charts were ever scrolled to. Split the graphs markup out into its own
+  `tagrank_graphs.html`, swapped into a `#tagrank-graphs-container` placeholder by the new
+  `/tagrank/graphs` route.
+
 ## 1.13.10
 - TagRank tab: DB Search is now live instead of a separate button. Every filter-bar change
   (tag text debounced ~150ms, namespace/archive/service toggles and the min-files stepper

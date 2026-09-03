@@ -1672,17 +1672,20 @@ if HAVE_FLASK:
 
     def _tagrank_picker_ctx() -> dict:
         """Assumes the server is already answering - callers must check/wait for that first
-        (see partial_tagrank/tagrank_server_poll below), so this never blocks on startup."""
+        (see partial_tagrank/tagrank_server_poll below), so this never blocks on startup.
+
+        Deliberately doesn't fetch Rating History graphs here - that's server-side matplotlib
+        rendering TagRank now only does on request (see the /tagrank/graphs route and its
+        "Fetch graphs" button in tagrank_picker.html), not on every tab open, DB Search, launch
+        poll, or settings save that happens to re-render this context."""
         search_options, so_err = tagrank_client.get_search_options()
-        graphs, g_err = tagrank_client.get_graphs()
         settings, settings_err = tagrank_client.get_settings()
         tag_services, file_services = _tagrank_service_options()
 
         return {
             "available": True,
-            "error": so_err or g_err,
+            "error": so_err,
             "search_options": _tagrank_merge_search_options(search_options),
-            "graphs": graphs,
             "settings": settings,
             "settings_error": settings_err,
             "tag_services": tag_services,
@@ -1747,9 +1750,7 @@ if HAVE_FLASK:
         tagrankRunDbSearch, debounced for the text field) and re-renders just the tag-pill list
         against TagRank's in-memory tag index - never queries Hydrus directly from Undertow (see
         tagrank_client.search_options_filtered). Deliberately doesn't call _tagrank_picker_ctx()
-        here: that also fetches graphs and settings, neither of which change with a tag search,
-        and graphs in particular renders matplotlib figures server-side - paying for that on
-        every keystroke was most of what made this feel slow before the tag index existed."""
+        here: that also fetches settings, which doesn't change with a tag search."""
         try:
             filters = json.loads(request.form.get("filters") or "{}")
         except json.JSONDecodeError:
@@ -1761,6 +1762,18 @@ if HAVE_FLASK:
             "partials/girly/tagrank_results.html",
             search_options=_tagrank_merge_search_options(search_options),
         )
+
+    @app.route("/tagrank/graphs")
+    def tagrank_graphs():
+        """On-demand Rating History charts (see the "Fetch graphs" button in
+        tagrank_picker.html) - rendering these means TagRank building matplotlib figures
+        server-side and shipping them as base64 PNGs, real work that used to happen
+        unconditionally every time this tab's context got rebuilt, regardless of whether
+        anyone was even looking at this section."""
+        graphs, err = tagrank_client.get_graphs()
+        if err:
+            return render_template("partials/girly/tagrank_graphs.html", error=f"Couldn't fetch graphs: {err}")
+        return render_template("partials/girly/tagrank_graphs.html", graphs=graphs)
 
     @app.route("/tagrank/launch", methods=["POST"])
     def tagrank_launch():
