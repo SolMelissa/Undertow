@@ -2,6 +2,27 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.0
+- TagRank comparer now spans the full window width (breaks out of the dashboard's centered
+  1400px column) instead of being capped at 70vh, so comparison images render as large as the
+  viewport allows.
+- Reached feature parity with TagRank's native comparison window in the embedded comparer and
+  tag pill list: badge pills on images (the picture's rarest badge, colored by difficulty tier),
+  per-tag badge-count stars, domain-colored tag text (grey for unnamespaced tags), TrueSkill
+  photo-score display per side, and a win-probability prediction bar. The score/badge data comes
+  from a new TagRank API endpoint (`/files/{id}/rating-details`) that doesn't exist yet - wired
+  up end-to-end and degrades gracefully (comparer still works, just without the score/badge
+  extras) until TagRank implements it; contract written to
+  `tagrank/plans/undertow-comparer-rating-details.md`. Win-probability itself is Undertow's own
+  logistic formula - no calibrated win-probability calculation exists in TagRank to port.
+- Fixed DB Search queuing successive requests as you type instead of replacing them: typing now
+  filters the already-displayed pool client-side immediately, waits 1500ms of no typing before
+  firing a real server re-search, and aborts any in-flight search outright (via
+  `AbortController`) the moment typing resumes, instead of racing it against a stale-response
+  counter.
+- Tag pill list and comparer tag rows now sort namespaced (`domain:tag`) tags before
+  unnamespaced ones, with a visual divider between the two groups.
+
 ## 1.13.12
 - Fixed TagRank DB Search's namespace toggle: it was checking whether *any* tag on a matching
   file had a namespace, instead of whether the candidate tag itself did, so "Namespaced" and

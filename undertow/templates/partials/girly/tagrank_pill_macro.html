@@ -4,18 +4,42 @@
     Jinja would execute - and error on missing vars - the moment it's imported as a module). #}
 {% macro pill_group(key, title, options) %}
 <p class="kawaii-section-title" style="font-size:1rem; margin-top:1rem;">{{ title|safe }}</p>
-<div id="tagrank-group-{{ key }}" style="display:flex; flex-wrap:wrap; gap:0.5rem;">
-  {% for opt in options %}
-  <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
-          style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
-          title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
-          hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
-          hx-vals='js:{tag: {{ opt.tag|tojson }}}'>
-    <span>{{ opt.tag }}</span>
-    <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
-  </button>
-  {% else %}
+{#- Namespaced tags before unnamespaced ones (options already arrive pre-sorted that way from
+    _tagrank_merge_search_options) - split into two flex groups with a divider between them so
+    the boundary reads visually, not just as a silent sort order. #}
+{% set namespaced = [] %}
+{% set unnamespaced = [] %}
+{% for opt in options %}
+  {% if ":" in opt.tag %}{{ namespaced.append(opt) or "" }}{% else %}{{ unnamespaced.append(opt) or "" }}{% endif %}
+{% endfor %}
+<div id="tagrank-group-{{ key }}">
+  <div class="tagrank-pill-group-namespaced" style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+    {% for opt in namespaced %}
+    <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
+            style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
+            title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
+            hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
+            hx-vals='js:{tag: {{ opt.tag|tojson }}}'>
+      <span style="color:{{ tagrank_domain_color(opt.tag) }}; font-weight:600;">{{ opt.tag }}</span>
+      <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
+    </button>
+    {% endfor %}
+  </div>
+  <div class="{{ 'tagrank-pill-group-unnamespaced' if namespaced else '' }}"
+       style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+    {% for opt in unnamespaced %}
+    <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
+            style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"
+            title="TrueSkill score {{ '%.2f'|format(opt.score) }}"
+            hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
+            hx-vals='js:{tag: {{ opt.tag|tojson }}}'>
+      <span style="color:var(--k-text-dim-text);">{{ opt.tag }}</span>
+      <span style="font-size:0.65rem; color:var(--k-text-dim-text);">{{ opt.file_count }} file{{ 's' if opt.file_count != 1 else '' }}</span>
+    </button>
+    {% endfor %}
+  </div>
+  {% if not namespaced and not unnamespaced %}
   <span class="text-xs" style="color:var(--k-text-dim-text);">none yet</span>
-  {% endfor %}
+  {% endif %}
 </div>
 {% endmacro %}

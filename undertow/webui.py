@@ -1649,12 +1649,30 @@ if HAVE_FLASK:
         t = max(0.0, min(1.0, (score - lo) / (hi - lo)))
         return f"hsl({t * 120:.0f}, 65%, 45%)"
 
+    _TAGRANK_DOMAIN_HUES = (350, 20, 45, 90, 160, 195, 225, 265, 300, 325)  # spaced around the wheel
+
+    def _tagrank_domain_color(tag: str) -> str:
+        """Stable color for a tag's namespace (the part before ':'), grey for unnamespaced tags -
+        no such palette exists in TagRank's native app (see the comparer-parity research), so
+        this hashes the namespace string to one of a fixed set of well-spaced hues rather than
+        inventing a growing lookup table that would need maintaining as new namespaces appear."""
+        if ":" not in tag:
+            return "var(--k-text-dim-text)"
+        domain = tag.split(":", 1)[0].strip().lower()
+        if not domain:
+            return "var(--k-text-dim-text)"
+        hue = _TAGRANK_DOMAIN_HUES[int(hashlib.md5(domain.encode("utf-8")).hexdigest(), 16) % len(_TAGRANK_DOMAIN_HUES)]
+        return f"hsl({hue}, 70%, 60%)"
+
+    app.jinja_env.globals["tagrank_domain_color"] = _tagrank_domain_color
+
     def _tagrank_merge_search_options(search_options: dict | None) -> list[dict]:
         """Flattens the API's top/random/bottom groups into one list, deduped by tag (a tag
         can land in more than one group on small libraries - keep the first copy seen, order
-        doesn't matter since we re-sort next), sorted by TrueSkill score (MMR) descending, and
-        colored red->green across that combined range. The three-way split used to be shown as
-        separate sections in the UI; now it's one block sorted purely by rating."""
+        doesn't matter since we re-sort next), sorted namespaced-tags-first then by TrueSkill
+        score (MMR) descending within each group, and colored red->green across the combined
+        score range. The three-way split used to be shown as separate sections in the UI; now
+        it's one block, grouped by namespace-vs-not then sorted purely by rating within that."""
         if not search_options:
             return []
         seen: set[str] = set()
@@ -1665,7 +1683,7 @@ if HAVE_FLASK:
                     continue
                 seen.add(opt["tag"])
                 merged.append(opt)
-        merged.sort(key=lambda opt: opt["score"], reverse=True)
+        merged.sort(key=lambda opt: (0 if ":" in opt["tag"] else 1, -opt["score"]))
         scores = [opt["score"] for opt in merged]
         lo, hi = (min(scores), max(scores)) if scores else (0.0, 0.0)
         return [{**opt, "color": _tagrank_score_color(opt["score"], lo, hi)} for opt in merged]
@@ -1816,17 +1834,65 @@ if HAVE_FLASK:
     _TAGRANK_COMPARE_START_TIMEOUT_SECONDS = 45
 
     def _tagrank_compare_side_ctx(side: dict | None) -> dict | None:
-        """One side of a pair as {file_id, hash, tags} for the comparer template, or None."""
+        """One side of a pair as {file_id, hash, tags, rating} for the comparer template, or
+        None. `rating` (photo score/confidence, rarest badge, per-tag badge counts) comes from
+        TagRank's /files/{id}/rating-details - not implemented on TagRank's side yet (see
+        tagrank/plans/undertow-comparer-rating-details.md), so this degrades to `rating: None`
+        on any error there rather than failing the whole comparer over a missing extra."""
         if not side:
             return None
         file_id = side.get("file_id")
+        file_hash = side.get("hash")
         meta_resp = hydrus_client.get_file_metadata([file_id]) if file_id is not None else None
         tags: list[str] = []
         if meta_resp is not None and meta_resp.success:
             entries = (meta_resp.data or {}).get("metadata") or []
             if entries:
                 tags = sorted(media.flatten_tags(entries[0]))
-        return {"file_id": file_id, "hash": side.get("hash"), "tags": tags}
+        # Namespaced-before-unnamespaced, same grouping as the main tag pill list (see
+        # _tagrank_merge_search_options) - `tags` was plain-alphabetically sorted() above, so
+        # this re-groups it without losing that alphabetical order within each group.
+        tags = sorted(tags, key=lambda t: (0 if ":" in t else 1, t))
+
+        rating = None
+        tag_ratings: dict[str, dict] = {}
+        if file_id is not None and file_hash:
+            details, err = tagrank_client.get_file_rating_details(file_id, file_hash, tags)
+            if not err and details:
+                rating = details
+                tag_ratings = {t["tag"]: t for t in rating.get("tags", [])}
+
+        tags_info = [
+            {
+                "tag": t,
+                "score": tag_ratings.get(t, {}).get("score"),
+                "confidence": tag_ratings.get(t, {}).get("confidence"),
+                "badge_count": tag_ratings.get(t, {}).get("badge_count", 0),
+            }
+            for t in tags
+        ]
+        return {"file_id": file_id, "hash": file_hash, "tags": tags, "tags_info": tags_info, "rating": rating}
+
+    def _tagrank_compare_win_probability(left: dict | None, right: dict | None) -> float | None:
+        """P(left wins) in [0, 1] from each side's photo_score + average tag score, via a
+        logistic (Elo-style) curve over the score gap - TagRank has no calibrated win-probability
+        formula of its own to port (its only related figure, RatingSystem.build_prediction_entry,
+        is an offline prediction-*confidence* heuristic logged for later accuracy analysis, not a
+        live probability - see the comparer-parity research), so this is Undertow's own formula.
+        None if either side's rating.py:38-39 scores aren't available yet."""
+        def combined(side: dict | None) -> float | None:
+            rating = (side or {}).get("rating")
+            if not rating or rating.get("photo_score") is None:
+                return None
+            tag_scores = [t["score"] for t in rating.get("tags", []) if t.get("score") is not None]
+            tag_avg = sum(tag_scores) / len(tag_scores) if tag_scores else 0.0
+            return rating["photo_score"] + tag_avg
+
+        left_combined, right_combined = combined(left), combined(right)
+        if left_combined is None or right_combined is None:
+            return None
+        # /25 keeps a "typical" ~10-20pt MMR gap from immediately saturating to ~0%/100%.
+        return 1.0 / (1.0 + math.exp(-(left_combined - right_combined) / 25.0))
 
     def _tagrank_compare_pair_ctx(session_id: str) -> dict:
         pair, err = tagrank_client.next_pair(session_id)
@@ -1835,10 +1901,13 @@ if HAVE_FLASK:
         if not pair or pair.get("done"):
             tagrank_client.end_session(session_id)
             return {"session_id": None, "done": True}
+        left = _tagrank_compare_side_ctx(pair.get("left"))
+        right = _tagrank_compare_side_ctx(pair.get("right"))
         return {
             "session_id": session_id,
-            "left": _tagrank_compare_side_ctx(pair.get("left")),
-            "right": _tagrank_compare_side_ctx(pair.get("right")),
+            "left": left,
+            "right": right,
+            "win_probability_left": _tagrank_compare_win_probability(left, right),
         }
 
     @app.route("/tagrank/compare/start", methods=["POST"])

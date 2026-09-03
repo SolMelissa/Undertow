@@ -371,6 +371,18 @@ def patch_settings(changes: dict) -> tuple[dict | None, str | None]:
     return _patch("/settings", {"changes": changes})
 
 
+def get_file_rating_details(file_id: int, file_hash: str, tags: list[str]) -> tuple[dict | None, str | None]:
+    """{"photo_score", "photo_confidence", "picture_badge", "tags": [{"tag","score",
+    "confidence","badge_count"}, ...]} for one comparer side - powers the in-tab comparer's
+    score/badge/win-probability display (see tagrank_comparer.html and webui.py's
+    _tagrank_compare_side_ctx). Not implemented on TagRank's side yet - see the contract at
+    F:\\0DocsF\\0Docs\\AI\\Claude\\tagrank\\plans\\undertow-comparer-rating-details.md. Callers
+    must treat a non-None error here as "feature not available yet", not a hard failure - the
+    comparer itself (image + tags + judging) works fine without this."""
+    params = [("hash", file_hash)] + [("tag", t) for t in tags]
+    return _get(f"/files/{file_id}/rating-details", params=params)
+
+
 def end_session(session_id: str) -> tuple[dict | None, str | None]:
     """Persists the session's judgments to disk - always call this on every exit path
     (finishing, cancelling, or erroring out of a session), never just abandon a session id."""

@@ -15,25 +15,58 @@
 </div>
 
 {% elif session_id and left and right %}
+{#- Full-bleed: escapes #girly-view's max-width:1400px (kawaii.css) so the comparison images
+    get the whole viewport width to stretch into, not just the dashboard's centered column. #}
 <div id="tagrank-comparer-focus" tabindex="0"
+     class="tagrank-comparer-fullbleed"
      style="outline:none; display:flex; flex-direction:column; gap:0.6rem;"
      onkeydown="tagrankComparerKeydown(event)">
   <p class="text-xs" style="text-align:center; color:var(--k-text-dim-text);">
     &#8592;/A left wins &middot; &#8594;/D right wins &middot; Backspace/R undo &middot; Esc stop
     <span id="tagrank-comparer-busy" style="display:none;"> &middot; <span class="tagrank-spinner"></span> recording&hellip;</span>
   </p>
+
+  {% if win_probability_left is not none %}
+  <div class="tagrank-prediction-bar" title="Predicted from photo + average tag TrueSkill score on each side">
+    <div class="tagrank-prediction-fill" style="width:{{ '%.1f'|format(win_probability_left * 100) }}%;"></div>
+    <span class="tagrank-prediction-label tagrank-prediction-label-left">{{ '%.0f'|format(win_probability_left * 100) }}%</span>
+    <span class="tagrank-prediction-label tagrank-prediction-label-right">{{ '%.0f'|format((1 - win_probability_left) * 100) }}%</span>
+  </div>
+  {% endif %}
+
   <div style="display:flex; gap:0.75rem;">
     {% for side, meta in (("left", left), ("right", right)) %}
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
-      <img src="/media/file/{{ meta.file_id }}" alt="{{ side }}" loading="eager"
-           style="width:100%; max-height:70vh; object-fit:contain; border-radius:0.5rem; background:#000; cursor:pointer;"
-           onclick="tagrankComparerChoice('{{ 'A' if side == 'left' else 'B' }}')">
-      <div style="display:flex; flex-wrap:wrap; gap:0.25rem; max-height:4.5em; overflow-y:auto;">
-        {% for tag in meta.tags[:24] %}
-        <span class="tagrank-service-pill" style="cursor:default;">{{ tag }}</span>
+      <div style="position:relative;">
+        <img src="/media/file/{{ meta.file_id }}" alt="{{ side }}" loading="eager"
+             style="width:100%; max-height:calc(100vh - 260px); min-height:320px; object-fit:contain; border-radius:0.5rem; background:#000; cursor:pointer; display:block;"
+             onclick="tagrankComparerChoice('{{ 'A' if side == 'left' else 'B' }}')">
+        {% if meta.rating and meta.rating.picture_badge %}
+        <span class="tagrank-badge-pill tagrank-badge-{{ meta.rating.picture_badge.difficulty }}"
+              style="position:absolute; top:0.5rem; {{ 'left' if side == 'left' else 'right' }}:0.5rem;"
+              title="{{ meta.rating.picture_badge.name }} ({{ meta.rating.picture_badge.difficulty }})">
+          {{ meta.rating.picture_badge.icon }} {{ meta.rating.picture_badge.name }}
+        </span>
+        {% endif %}
+      </div>
+
+      {% if meta.rating and meta.rating.photo_score is not none %}
+      <p class="text-xs" style="text-align:center; color:var(--k-text-dim-text); margin:0;">
+        Photo MMR <strong style="color:var(--k-text);">{{ '%.1f'|format(meta.rating.photo_score) }}</strong>
+        &middot; confidence {{ '%.0f'|format(meta.rating.photo_confidence or 0) }}%
+      </p>
+      {% endif %}
+
+      <div style="display:flex; flex-wrap:wrap; gap:0.25rem; max-height:5.5em; overflow-y:auto;">
+        {% for t in meta.tags_info[:24] %}
+        <span class="tagrank-service-pill tagrank-tag-pill{{ ' tagrank-tag-pill-unnamespaced' if ':' not in t.tag else '' }}"
+              style="cursor:default; color:{{ tagrank_domain_color(t.tag) }};"
+              {% if t.badge_count %}title="{{ t.badge_count }} badge{{ 's' if t.badge_count != 1 else '' }} on this tag"{% endif %}>
+          {{ t.tag }}{% if t.badge_count %} <span class="tagrank-badge-stars">{{ ('&#9733;' * ([t.badge_count, 5]|min))|safe }}</span>{% endif %}
+        </span>
         {% endfor %}
-        {% if meta.tags|length > 24 %}
-        <span class="text-xs" style="color:var(--k-text-dim-text);">+{{ meta.tags|length - 24 }} more</span>
+        {% if meta.tags_info|length > 24 %}
+        <span class="text-xs" style="color:var(--k-text-dim-text);">+{{ meta.tags_info|length - 24 }} more</span>
         {% endif %}
       </div>
     </div>

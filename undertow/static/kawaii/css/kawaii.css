@@ -152,6 +152,70 @@
 }
 @keyframes tagrank-spin { to { transform: rotate(360deg); } }
 
+/* Comparer: break out of #girly-view's centered max-width so images get the full viewport
+   width to stretch into, matching the native TagRank window's uncapped comparison layout. */
+.tagrank-comparer-fullbleed {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
+  padding: 0 1.25rem;
+  box-sizing: border-box;
+}
+
+/* Win-probability prediction bar - Undertow's own formula (no native equivalent), shown as a
+   two-tone gradient bar with the left/right percentages labeled at each end. */
+.tagrank-prediction-bar {
+  position: relative;
+  height: 1.4rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--k-accent-2);
+  max-width: 32rem;
+  margin: 0 auto;
+}
+.tagrank-prediction-fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--k-accent);
+}
+.tagrank-prediction-label {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 0.7rem; font-weight: 600; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.tagrank-prediction-label-left { left: 0.55rem; }
+.tagrank-prediction-label-right { right: 0.55rem; }
+
+/* Badge pill overlaid on a comparer image corner - one per picture (its rarest badge), colored
+   by difficulty tier the same way the native app's badge pills are (badges.py DIFFICULTY_COLORS). */
+.tagrank-badge-pill {
+  display: inline-block;
+  font-size: 0.68rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(90, 90, 100, 0.85);
+  color: #f0f0f5;
+  border: 1px solid rgba(255,255,255,0.25);
+  white-space: nowrap;
+}
+.tagrank-badge-common { background: rgba(90, 90, 100, 0.85); }
+.tagrank-badge-rare { background: rgba(45, 95, 200, 0.85); }
+.tagrank-badge-epic { background: rgba(140, 60, 200, 0.85); }
+.tagrank-badge-legendary { background: rgba(190, 150, 20, 0.9); border: 2px solid rgba(255,225,120,0.6); }
+
+/* Comparer tag pills: color-coded by namespace (grey for unnamespaced, see the
+   tagrank_domain_color() Jinja global), with badge-count stars on tags that hold any. */
+.tagrank-tag-pill { font-weight: 600; }
+.tagrank-tag-pill-unnamespaced { font-weight: 400; }
+.tagrank-badge-stars { color: #e8c94a; letter-spacing: -1px; }
+
+/* Namespaced-vs-unnamespaced grouping in the main tag pill list (tagrank_pill_macro.html) - a
+   slight gap plus a faint divider so the two groups read as visually separate, not just sorted. */
+.tagrank-pill-group-unnamespaced {
+  margin-top: 0.5rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--k-border);
+}
+
 .kawaii-btn-primary {
   background: linear-gradient(135deg, var(--k-accent), #ff3d94);
   border-color: transparent;

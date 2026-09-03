@@ -108,18 +108,34 @@ function tagrankSelectedServiceKeys(name) {
 }
 
 // ---- Live DB search: every filter change re-queries TagRank's in-memory tag index
-// (tagrank/tag_index.py) - no separate Search button, since that index makes a full re-search
-// fast enough to run on every keystroke. Text input is debounced so fast typing doesn't fire a
-// request per character; every other control (segments, service pills, min-files stepper) fires
-// immediately since those are already discrete clicks, not a stream of input events. Only the
-// pill list (#tagrank-results) is swapped, never the filter bar itself, so the field being typed
-// into keeps focus and cursor position across requests.
+// (tagrank/tag_index.py) - no separate Search button. Text input gets a two-stage response so
+// typing feels instant instead of queued: every keystroke immediately filters the *already
+// displayed* pills client-side (tagrankClientFilterPills), and only after 1500ms of no typing
+// does a real server re-search fire, to refill the pool from the full (unfiltered-by-substring)
+// server-side result set rather than just narrowing what's already on screen. If typing resumes
+// before that fires, the pending timer is cleared and any in-flight request is aborted outright
+// (via AbortController - a stale reply is never allowed to land and clobber newer typing), not
+// just raced against with a sequence counter. Every other control (segments, service pills,
+// min-files stepper) still searches immediately since those are discrete clicks, not a stream of
+// input events. Only #tagrank-results is swapped, never the filter bar itself, so the field being
+// typed into keeps focus and cursor position across requests.
+const TAGRANK_SEARCH_DEBOUNCE_MS = 1500;
 let tagrankSearchDebounce = null;
-let tagrankSearchSeq = 0;
+let tagrankSearchAbort = null;
+
+function tagrankClientFilterPills() {
+  const q = (document.getElementById('tagrank-filter-text')?.value || '').trim().toLowerCase();
+  document.querySelectorAll('#tagrank-results .tagrank-pill').forEach((pill) => {
+    const tag = pill.dataset.tag || '';
+    pill.style.display = (!q || tag.includes(q)) ? '' : 'none';
+  });
+}
 
 function tagrankDebouncedSearch() {
+  tagrankClientFilterPills();
   clearTimeout(tagrankSearchDebounce);
-  tagrankSearchDebounce = setTimeout(tagrankRunDbSearch, 150);
+  if (tagrankSearchAbort) tagrankSearchAbort.abort();
+  tagrankSearchDebounce = setTimeout(tagrankRunDbSearch, TAGRANK_SEARCH_DEBOUNCE_MS);
 }
 
 function tagrankGatherDbFilters() {
@@ -134,26 +150,36 @@ function tagrankGatherDbFilters() {
 
 function tagrankRunDbSearch() {
   clearTimeout(tagrankSearchDebounce);
+  if (tagrankSearchAbort) tagrankSearchAbort.abort(); // cancel any still-running request outright
+  const controller = new AbortController();
+  tagrankSearchAbort = controller;
+
   const filters = tagrankGatherDbFilters();
   const status = document.getElementById('tagrank-search-status');
   const spinner = document.getElementById('tagrank-search-spinner');
-  const seq = ++tagrankSearchSeq; // stale-response guard for the status text only - htmx already
-  // performs each response's pill swap as it lands, so an out-of-order reply (unlikely at this
-  // debounce interval against a fast in-memory search) could still briefly show stale pills
+  const results = document.getElementById('tagrank-results');
   spinner.style.display = '';
-  htmx.ajax('POST', '/tagrank/search-db', {
-    target: '#tagrank-results', swap: 'innerHTML',
-    values: { filters: JSON.stringify(filters) },
-  }).then(() => {
-    if (seq !== tagrankSearchSeq) return;
-    status.textContent = '';
-    spinner.style.display = 'none';
-  }).catch(() => {
-    if (seq !== tagrankSearchSeq) return;
-    status.className = 'tagrank-search-status tagrank-status-error';
-    status.textContent = "Search request failed - check that TagRank's server is still running.";
-    spinner.style.display = 'none';
-  });
+
+  const body = new URLSearchParams({ filters: JSON.stringify(filters) });
+  fetch('/tagrank/search-db', { method: 'POST', body, signal: controller.signal })
+    .then((resp) => resp.text())
+    .then((html) => {
+      if (controller.signal.aborted) return;
+      results.innerHTML = html;
+      htmx.process(results); // hydrate the swapped-in pills' hx-post handlers
+      status.className = 'tagrank-search-status';
+      status.textContent = '';
+      spinner.style.display = 'none';
+    })
+    .catch((e) => {
+      if (e.name === 'AbortError') return; // superseded by a newer keystroke/request - not an error
+      status.className = 'tagrank-search-status tagrank-status-error';
+      status.textContent = "Search request failed - check that TagRank's server is still running.";
+      spinner.style.display = 'none';
+    })
+    .finally(() => {
+      if (tagrankSearchAbort === controller) tagrankSearchAbort = null;
+    });
 }
 </script>
 
