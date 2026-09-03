@@ -27,6 +27,17 @@ _class_registered = False
 _class_lock = threading.Lock()
 
 
+def _on_destroy(hwnd, msg, wparam, lparam) -> int:
+    # Must return an int LRESULT, not PostQuitMessage's own return value (None) - pywin32
+    # can't marshal None as an LRESULT and raises a TypeError from inside the WNDPROC dispatch
+    # every time DestroyWindow() synchronously delivers WM_DESTROY here (i.e. every single
+    # toast, since send_windows_toast() destroys its throwaway window on every call). That
+    # crash was silent from the caller's perspective (it happens inside the win32 callback,
+    # not in send_windows_toast's own try/except) but broke every Windows toast notification.
+    win32gui.PostQuitMessage(0)
+    return 0
+
+
 def _ensure_window_class() -> None:
     global _class_registered
     with _class_lock:
@@ -35,7 +46,7 @@ def _ensure_window_class() -> None:
         wc = win32gui.WNDCLASS()
         wc.hInstance = win32api.GetModuleHandle(None)
         wc.lpszClassName = _WNDCLASS_NAME
-        wc.lpfnWndProc = {win32con.WM_DESTROY: lambda hwnd, msg, wparam, lparam: win32gui.PostQuitMessage(0)}
+        wc.lpfnWndProc = {win32con.WM_DESTROY: _on_destroy}
         try:
             win32gui.RegisterClass(wc)
         except win32gui.error:

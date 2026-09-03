@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.13.4
+- Fixed Windows toast notifications being silently broken: the WM_DESTROY handler registered
+  on the throwaway notification window returned `None` (a bare `lambda: win32gui.
+  PostQuitMessage(0)`, whose own return value is `None`) instead of an int LRESULT. pywin32
+  can't marshal `None` from a WNDPROC callback and raised a TypeError from inside the win32
+  dispatch on every single toast (`send_windows_toast()` destroys its window on every call, so
+  this fired every time) - invisible from the caller's side since it happened inside the
+  callback, not in `send_windows_toast`'s own try/except.
+
 ## 1.13.3
 - Fixed the Tag Cleanup Lists editor's compound-pairs validation error discarding whatever the
   user had just typed into every *other* field, not just the bad pairs line - the error path
