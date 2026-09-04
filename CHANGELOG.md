@@ -2,6 +2,22 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.7
+- BugFix: TagRank's comparison-GUI launcher (`tagrank_client.launch_gui`, wired to the
+  `/tagrank/launch` route) was pure fire-and-forget - no handle was ever kept, so every tag-pill
+  click spawned a brand-new PySide6 subprocess (each eagerly rebuilding its own Hydrus
+  tag/similarity index) on top of whatever comparison window was already running, with no
+  cleanup path at all. Repeated launches across a session accumulated untracked `python.exe`
+  processes, which is the likely source of Undertow's growing RAM footprint and stranded
+  processes left running after the dashboard closes. Now tracks the last-launched GUI process,
+  terminates (graceful, then kill) any still-running one before starting a new one, and reaps it
+  via `atexit` on Undertow's own shutdown, mirroring the existing pattern already used for
+  TagRank's headless API server. Investigated by first auditing every subprocess spawn site in
+  `undertow/` (daemon, Hydrus, systray, VeraCrypt, scripts_runner, TagRank server/GUI) - the
+  daemon/Hydrus/systray processes are intentionally *not* tied to a stored handle (they're
+  looked up fresh via `psutil` instead) so they survive an Undertow crash by design; TagRank's
+  GUI launcher was the one genuine untracked leak.
+
 ## 1.14.6
 - BugFix: TagRank comparer's win-probability gauge was pinned to ~0%/100% on nearly every real
   pair instead of showing a calibrated confidence. `photo_score` and each tag's `score` are both

@@ -27,6 +27,14 @@ except ImportError:
 _state: dict = {"proc": None}
 _lock = threading.Lock()
 
+# Tracks the most recently launched comparison-GUI subprocess (separate from _state["proc"],
+# which is the headless API server). launch_gui() used to be pure fire-and-forget - no handle
+# kept anywhere - so every tag-pill click spawned another PySide6 process on top of whatever
+# was already running, each eagerly rebuilding its own Hydrus tag/similarity index. Closing the
+# window normally lets the process exit on its own; this is only for the case where a new
+# launch supersedes an old, still-running one, and for reaping on Undertow's own shutdown.
+_gui_state: dict = {"proc": None}
+
 
 def is_available() -> bool:
     """Whether TagRank is even checked out on this machine - the tab degrades to a friendly
@@ -164,12 +172,18 @@ def launch_gui(tag: str | None = None, use_similarity: bool = False) -> tuple[bo
         args += ["--tag", tag]
     if not use_similarity:
         args.append("--no-similarity")
+
+    # A new launch supersedes any previous comparison window still running rather than piling
+    # on top of it - without this, repeated tag-pill clicks (or a retry after a slow load) each
+    # left the prior PySide6 process (and its already-built Hydrus index) running untracked.
+    _kill_gui_proc()
+
     try:
         config.TAGRANK_LAUNCH_STDOUT_LOG.parent.mkdir(parents=True, exist_ok=True)
         out = open(config.TAGRANK_LAUNCH_STDOUT_LOG, "w", encoding="utf-8")
         err = open(config.TAGRANK_LAUNCH_STDERR_LOG, "w", encoding="utf-8")
         try:
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 args,
                 cwd=str(config.TAGRANK_DIR),
                 creationflags=subprocess.CREATE_NO_WINDOW,
@@ -181,7 +195,27 @@ def launch_gui(tag: str | None = None, use_similarity: bool = False) -> tuple[bo
             err.close()
     except OSError as e:
         return False, str(e)
+    _gui_state["proc"] = proc
     return True, None
+
+
+def _kill_gui_proc() -> None:
+    """Best-effort termination of a previously launched comparison-GUI subprocess, if it's
+    still alive. Tries a graceful terminate() first (PySide6/Qt handles WM_CLOSE-equivalent
+    signals reasonably), then kill() if it hasn't exited shortly after."""
+    proc = _gui_state.get("proc")
+    if proc is None or proc.poll() is not None:
+        _gui_state["proc"] = None
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=5)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    _gui_state["proc"] = None
 
 
 def read_launch_log(max_lines: int = 40) -> str:
@@ -249,6 +283,7 @@ def stop_server() -> None:
 
 
 atexit.register(stop_server)
+atexit.register(_kill_gui_proc)
 
 
 # --------------------------------------------------------------------------------------
