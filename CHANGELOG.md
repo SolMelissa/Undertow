@@ -5,11 +5,13 @@ All notable changes to Undertow are tracked here, one section per version. Newes
 ## 1.14.9
 - BugFix: The real cause of the TagRank tab taking 30+ minutes to load (~1760 rated tags) was
   on TagRank's own side, not Undertow's - `tagrank/tag_index.py`'s `_build_index` ran one
-  `search_files()` Hydrus round trip per rated tag, fully serial. Fixed there (TagRank repo,
-  `Pool-Limiter` branch, commit 83de757): those searches now run concurrently (8 workers,
-  matching the worker count Undertow's own `tag_cleanup.py` already uses against this same
-  Hydrus Client API) with progress logged every 100 tags instead of the build going silent for
-  the whole run.
+  `search_files()` Hydrus round trip per rated tag, fully serial. A first pass (TagRank repo,
+  `Pool-Limiter` branch, commit 83de757) parallelized those searches across 8 workers, but that
+  was still O(rated tags) separate whole-library searches and stayed in the minutes range.
+  Superseded by commit 8340bb1: one `system:everything` search plus the existing chunked
+  `/get_files/file_metadata` fetch (which already returns each file's full tag list), inverted
+  locally into the tag -> file_ids mapping - O(1) search + O(library size / 1000) metadata
+  calls, independent of how many tags are rated. Seconds instead of minutes.
 - Patch: the console-log panes added in 1.14.8 (TagRank's starting/error screens) were capped
   at a fixed 220px and not resizable, too short to usefully read a real startup log or
   traceback. Bumped the default height to 420px (up to 80vh) and made them
