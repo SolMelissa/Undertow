@@ -2,6 +2,12 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.10
+- Patch: corrected the 1.14.9 changelog entry to point at TagRank's actual final fix
+  (`Pool-Limiter` commit 8340bb1, a whole-library-scan rewrite) instead of the intermediate
+  8-worker parallelization commit it originally cited, which was superseded before this entry
+  was even written. No Undertow code changed.
+
 ## 1.14.9
 - BugFix: The real cause of the TagRank tab taking 30+ minutes to load (~1760 rated tags) was
   on TagRank's own side, not Undertow's - `tagrank/tag_index.py`'s `_build_index` ran one
