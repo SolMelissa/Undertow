@@ -1655,7 +1655,7 @@ if HAVE_FLASK:
         if hi <= lo:
             return "hsl(170, 12%, 55%)"
         t = max(0.0, min(1.0, (score - lo) / (hi - lo)))
-        return f"hsl({t * 120:.0f}, 65%, 45%)"
+        return f"hsl({t * 120:.0f}, 70%, 58%)"
 
     _TAGRANK_DOMAIN_HUES = (350, 20, 45, 90, 160, 195, 225, 265, 300, 325)  # spaced around the wheel
 
@@ -1670,7 +1670,7 @@ if HAVE_FLASK:
         if not domain:
             return "var(--k-text-dim-text)"
         hue = _TAGRANK_DOMAIN_HUES[int(hashlib.md5(domain.encode("utf-8")).hexdigest(), 16) % len(_TAGRANK_DOMAIN_HUES)]
-        return f"hsl({hue}, 70%, 60%)"
+        return f"hsl({hue}, 75%, 72%)"
 
     app.jinja_env.globals["tagrank_domain_color"] = _tagrank_domain_color
 

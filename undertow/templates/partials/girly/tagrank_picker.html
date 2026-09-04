@@ -1,7 +1,7 @@
 {#- Embedded comparer: judging happens in this panel via TagRank's session API instead of a
     separate window (see webui.py's /tagrank/compare/* routes) - it never replaces the filter
     bar or pill list above/below it, only its own contents swap between idle/loading/pair/done. #}
-<div id="tagrank-comparer" class="kawaii-card" style="margin-bottom:0.85rem;">
+<div id="tagrank-comparer" class="kawaii-card" style="margin-bottom:0.85rem;" hidden>
   <div id="tagrank-comparer-body">
     {% include "partials/girly/tagrank_comparer.html" %}
   </div>
@@ -58,13 +58,11 @@
 
     {{ segment("namespace", "Namespace", [("all","All"), ("namespaced","Namespaced"), ("unnamespaced","Unnamespaced")], "all") }}
 
-    <span class="tagrank-spinner" id="tagrank-search-spinner" style="display:none;" aria-hidden="true"></span>
-    <span class="tagrank-search-status" id="tagrank-search-status"></span>
-  </div>
-
-  <div style="display:flex; flex-wrap:wrap; gap:1.5rem;">
     {{ service_picker("file", "File service", file_services) }}
     {{ service_picker("tag", "Tag service", tag_services) }}
+
+    <span class="tagrank-spinner" id="tagrank-search-spinner" style="display:none;" aria-hidden="true"></span>
+    <span class="tagrank-search-status" id="tagrank-search-status"></span>
   </div>
 </div>
 
@@ -191,12 +189,7 @@ function tagrankRunDbSearch() {
   <p class="kawaii-section-title" style="margin:0;">&#128202; Rating History</p>
   <button type="button" class="kawaii-btn" id="tagrank-graphs-fetch-btn" onclick="tagrankFetchGraphs()">&#128202; Fetch graphs</button>
 </div>
-<div id="tagrank-graphs-container">
-  <div class="kawaii-card" style="text-align:center; color:var(--k-text-dim-text);">
-    Not fetched yet - rendering these charts is server-side work TagRank only does on request now,
-    instead of on every tab open. Click "Fetch graphs" above.
-  </div>
-</div>
+<div id="tagrank-graphs-container"></div>
 <script>
 function tagrankFetchGraphs() {
   const btn = document.getElementById('tagrank-graphs-fetch-btn');

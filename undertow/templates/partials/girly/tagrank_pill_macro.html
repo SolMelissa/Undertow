@@ -13,6 +13,9 @@
   {% if ":" in opt.tag %}{{ namespaced.append(opt) or "" }}{% else %}{{ unnamespaced.append(opt) or "" }}{% endif %}
 {% endfor %}
 <div id="tagrank-group-{{ key }}">
+  {% if namespaced %}
+  <p class="tagrank-pill-group-label">Namespaced</p>
+  {% endif %}
   <div class="tagrank-pill-group-namespaced" style="display:flex; flex-wrap:wrap; gap:0.5rem;">
     {% for opt in namespaced %}
     <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
@@ -25,8 +28,10 @@
     </button>
     {% endfor %}
   </div>
-  <div class="{{ 'tagrank-pill-group-unnamespaced' if namespaced else '' }}"
-       style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+  {% if unnamespaced %}
+  <p class="tagrank-pill-group-label {{ 'tagrank-pill-group-unnamespaced' if namespaced else '' }}">Unnamespaced</p>
+  {% endif %}
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
     {% for opt in unnamespaced %}
     <button type="button" class="kawaii-pill tagrank-pill" data-tag="{{ opt.tag|lower }}" data-files="{{ opt.file_count }}" data-score="{{ opt.score }}"
             style="cursor:pointer; border:2px solid {{ opt.color }}; display:flex; flex-direction:column; align-items:center; line-height:1.2; padding:0.35rem 0.7rem;"

@@ -2,6 +2,17 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.2
+- TagRank tab polish pass: the embedded comparer card ("Click a tag pill above to start
+  comparing") now stays hidden until a pill is actually clicked, instead of sitting empty at
+  the top of the tab; the File service/Tag service pickers moved into the same row as
+  Filter tag/Min files/Namespace instead of a separate row below; the "sorted by rating" tag
+  pill list now labels its Namespaced/Unnamespaced groups instead of relying on a barely-visible
+  dashed divider, and both the score-color pill borders and namespace-hued tag text got lighter/
+  higher-contrast HSL values so they read against the dark girly theme; and the Rating History
+  section's "Not fetched yet" placeholder card is gone - just the "Fetch graphs" button until
+  it's clicked.
+
 ## 1.14.1
 - Fixed the "restart"/update pill leaving Undertow permanently stuck, most visibly right after
   clicking it: `version.restart_process()` re-execs the backend via `os.execv`, which on Windows

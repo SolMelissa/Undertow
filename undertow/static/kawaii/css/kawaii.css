@@ -209,9 +209,13 @@
 .tagrank-badge-stars { color: #e8c94a; letter-spacing: -1px; }
 
 /* Namespaced-vs-unnamespaced grouping in the main tag pill list (tagrank_pill_macro.html) - a
-   slight gap plus a faint divider so the two groups read as visually separate, not just sorted. */
+   light label plus a faint divider so the two groups read as visually separate, not just sorted. */
+.tagrank-pill-group-label {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--k-text-dim-text); margin: 0.5rem 0 0.35rem;
+}
 .tagrank-pill-group-unnamespaced {
-  margin-top: 0.5rem;
+  margin-top: 0.9rem;
   padding-top: 0.6rem;
   border-top: 1px dashed var(--k-border);
 }

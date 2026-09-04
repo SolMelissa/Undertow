@@ -7,12 +7,14 @@
   {{ error }}
   <p class="text-xs" style="margin-top:0.4rem; color:var(--k-text-dim-text);">Click a tag pill to try again.</p>
 </div>
+<script>document.getElementById('tagrank-comparer').hidden = false;</script>
 
 {% elif done %}
 <div style="text-align:center; padding:0.5rem 0;">
   <p>&#127881; Nothing left to compare in this pool.</p>
   <p class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.3rem;">Click another tag pill to start a new comparison pool.</p>
 </div>
+<script>document.getElementById('tagrank-comparer').hidden = false;</script>
 
 {% elif session_id and left and right %}
 {#- Full-bleed: escapes #girly-view's max-width:1400px (kawaii.css) so the comparison images
@@ -83,6 +85,7 @@
 <script>
 (function() {
   window.tagrankComparerBusy = false;
+  document.getElementById('tagrank-comparer').hidden = false;
   const focusEl = document.getElementById('tagrank-comparer-focus');
   if (focusEl) focusEl.focus({ preventScroll: true });
 
@@ -122,7 +125,5 @@
 </script>
 
 {% else %}
-<div style="text-align:center; color:var(--k-text-dim-text); padding:0.5rem 0;">
-  Click a tag pill above to start comparing.
-</div>
+<script>document.getElementById('tagrank-comparer').hidden = true;</script>
 {% endif %}
