@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.11
+- Patch: TagRank's tag-index build (`Pool-Limiter` commit 8340bb1, cited in 1.14.9/1.14.10) was
+  correct but wasteful on a large library: it fetched Hydrus metadata for every file in the
+  library (500k+ files on this install), most of which don't carry any rated tag. Superseded by
+  commit 31c99a0: batches candidate tags (256 per request, verified against the bundled Hydrus
+  client_api docs' documented OR-predicate syntax) into a handful of "any file carrying any of
+  these tags" searches, unions the results, then runs the existing chunked metadata fetch over
+  just that set - bounds the cost to files that could actually match a rated tag, not the whole
+  library. No Undertow code changed.
+
 ## 1.14.10
 - Patch: corrected the 1.14.9 changelog entry to point at TagRank's actual final fix
   (`Pool-Limiter` commit 8340bb1, a whole-library-scan rewrite) instead of the intermediate
