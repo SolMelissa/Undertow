@@ -156,7 +156,6 @@
    width to stretch into, matching the native TagRank window's uncapped comparison layout. */
 .tagrank-comparer-fullbleed {
   width: 100vw;
-  min-height: 100vh;
   position: relative;
   left: 50%;
   margin-left: -50vw;
@@ -164,6 +163,7 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  gap: 0.6rem;
 }
 
 /* Win-probability gauge - Undertow's own formula (no native equivalent), shown as a
