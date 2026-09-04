@@ -156,11 +156,14 @@
    width to stretch into, matching the native TagRank window's uncapped comparison layout. */
 .tagrank-comparer-fullbleed {
   width: 100vw;
+  min-height: 100vh;
   position: relative;
   left: 50%;
   margin-left: -50vw;
   padding: 0 1.25rem;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Win-probability gauge - Undertow's own formula (no native equivalent), shown as a
@@ -177,13 +180,13 @@
 .tagrank-gauge-labels .tagrank-prediction-label-left { color: var(--k-accent); }
 .tagrank-gauge-labels .tagrank-prediction-label-right { color: var(--k-accent-2); }
 
-/* Fixed-height comparer image pane - every pair gets the exact same vertical footprint
-   regardless of either picture's aspect ratio, with the image centered and scaled to fit
-   inside it, instead of the pane's own height following the image (which made consecutive
-   comparisons jump around vertically). */
+/* Flexible-height comparer image pane - expands to fill available vertical space in the
+   window, with the image centered and scaled to fit inside using object-fit: contain.
+   Min-height prevents it from collapsing below a reasonable viewing size. */
 .tagrank-comparer-image-pane {
   position: relative;
-  height: min(58vh, 620px);
+  min-height: 300px;
+  flex: 1;
   display: flex; align-items: center; justify-content: center;
   border-radius: 0.5rem; background: #000; overflow: hidden; cursor: pointer;
 }
