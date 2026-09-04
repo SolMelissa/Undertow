@@ -2,6 +2,10 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.15
+- Patch: Add TagRank hidden tags marker setup script to Scripts tab - one-time setup to import
+  the marker image into Hydrus and tag it with service:tagrank for use with sync_hidden_tags_to_marker.
+
 ## 1.14.14
 - Patch: Add TagRank utility scripts to the Scripts tab - dashboard demo, E2E test, and hidden
   tags sync-to-marker script. All three use adjusted imports to locate TagRank project modules.
