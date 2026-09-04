@@ -2,6 +2,15 @@
   "worktree": {
     "bgIsolation": "none"
   },
+  "permissions": {
+    "allow": [
+      "Bash",
+      "PowerShell",
+      "Read",
+      "Glob",
+      "Grep"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {

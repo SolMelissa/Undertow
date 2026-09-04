@@ -20,7 +20,8 @@
       "Bash(curl *)",
       "Bash(git push:*)",
       "WebSearch",
-      "WebFetch(domain:hydrusnetwork.github.io)"
+      "WebFetch(domain:hydrusnetwork.github.io)",
+      "Bash(python -m tagrank.setup_hidden_tags_marker)"
     ]
   },
   "outputStyle": "Explanatory"
