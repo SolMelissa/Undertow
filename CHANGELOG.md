@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.20
+- Patch/Enhancement: Fixed comparer tag pills still showing a border and large font (a CSS
+  specificity bug - `.kawaii-pill`'s own rule sat later in the stylesheet and won on source
+  order). Tags are now genuinely small and unbordered. Image corner badges now show the
+  picture's own held badges (not a tag-badge-count proxy), each with a hover tooltip naming
+  it. Tag pill tooltips list the actual badges a tag holds. Added an MMR breakdown (avg tag /
+  image / combined total) flanking the comparer's win-probability gauge. Requires TagRank
+  Pool-Limiter commit bf26a8d or later (extended /rating-details response).
+
 ## 1.14.19
 - Enhancement: TagRank comparer images now expand to fill the available window height, 
   maximizing viewing area. Also improved tag pill styling (smaller, unbordered, more compact)
