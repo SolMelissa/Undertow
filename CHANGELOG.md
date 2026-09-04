@@ -2,6 +2,11 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.18
+- Enhancement: TagRank server now starts silently in the background when Undertow opens,
+  instead of on-demand when you first open the TagRank tab. This means it's ready and waiting
+  when you switch to the tab after doing other things, eliminating the startup delay.
+
 ## 1.14.17
 - Patch: Fixed missing `is_filtered_tag` import in tagrank/rating.py. The function was being
   called on multiple lines but never imported, causing NameError when clicking tag pills in the UI.
