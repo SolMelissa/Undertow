@@ -2,6 +2,20 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.9
+- BugFix: The real cause of the TagRank tab taking 30+ minutes to load (~1760 rated tags) was
+  on TagRank's own side, not Undertow's - `tagrank/tag_index.py`'s `_build_index` ran one
+  `search_files()` Hydrus round trip per rated tag, fully serial. Fixed there (TagRank repo,
+  `Pool-Limiter` branch, commit 83de757): those searches now run concurrently (8 workers,
+  matching the worker count Undertow's own `tag_cleanup.py` already uses against this same
+  Hydrus Client API) with progress logged every 100 tags instead of the build going silent for
+  the whole run.
+- Patch: the console-log panes added in 1.14.8 (TagRank's starting/error screens) were capped
+  at a fixed 220px and not resizable, too short to usefully read a real startup log or
+  traceback. Bumped the default height to 420px (up to 80vh) and made them
+  vertically resizable (`resize:vertical`) across all three TagRank console views
+  (`tagrank_inner.html`, `tagrank_server_starting.html`, `tagrank_starting.html`).
+
 ## 1.14.8
 - BugFix: TagRank's headless API server subprocess (`main.py --serve`, `tagrank_client._start_process`)
   sent its stdout/stderr straight to `DEVNULL`, so a startup failure (missing dependency, the
