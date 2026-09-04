@@ -1847,8 +1847,8 @@ if HAVE_FLASK:
 
     def _tagrank_compare_side_ctx(side: dict | None) -> dict | None:
         """One side of a pair as {file_id, hash, tags, rating} for the comparer template, or
-        None. `rating` (photo score/confidence, rarest badge, per-tag badge counts) comes from
-        TagRank's /files/{id}/rating-details - not implemented on TagRank's side yet (see
+        None. `rating` (photo/avg-tag/total score, all held picture badges, per-tag badge lists)
+        comes from TagRank's /files/{id}/rating-details (see
         tagrank/plans/undertow-comparer-rating-details.md), so this degrades to `rating: None`
         on any error there rather than failing the whole comparer over a missing extra."""
         if not side:
@@ -1880,6 +1880,7 @@ if HAVE_FLASK:
                 "score": tag_ratings.get(t, {}).get("score"),
                 "confidence": tag_ratings.get(t, {}).get("confidence"),
                 "badge_count": tag_ratings.get(t, {}).get("badge_count", 0),
+                "badges": tag_ratings.get(t, {}).get("badges", []),
             }
             for t in tags
         ]

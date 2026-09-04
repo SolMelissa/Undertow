@@ -29,29 +29,50 @@
   </p>
 
   {% if win_probability_left is not none %}
-  {#- Speedometer-style gauge: needle points toward whichever side TagRank's photo+tag
-      TrueSkill scores favor, deflecting further from center the more confident the
-      prediction is. angle=0 is straight up (toss-up); -90 is full-left, +90 is full-right. #}
-  {% set gauge_angle = ((0.5 - win_probability_left) * 180) | round(1) %}
-  <div class="tagrank-gauge-wrap" title="Predicted from photo + average tag TrueSkill score on each side">
-    <svg viewBox="0 0 200 112" class="tagrank-gauge">
-      <defs>
-        <linearGradient id="tagrank-gauge-grad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="var(--k-accent)"/>
-          <stop offset="50%" stop-color="var(--k-text-dim-text)"/>
-          <stop offset="100%" stop-color="var(--k-accent-2)"/>
-        </linearGradient>
-      </defs>
-      <path d="M 14 100 A 86 86 0 0 1 186 100" fill="none" stroke="url(#tagrank-gauge-grad)" stroke-width="10" stroke-linecap="round"/>
-      <g transform="rotate({{ gauge_angle }} 100 100)">
-        <polygon points="95,100 105,100 100,22" fill="var(--k-text)"/>
-      </g>
-      <circle cx="100" cy="100" r="7" fill="var(--k-text)"/>
-    </svg>
-    <div class="tagrank-gauge-labels">
-      <span class="tagrank-prediction-label-left">&#8592; {{ '%.0f'|format(win_probability_left * 100) }}%</span>
-      <span class="tagrank-prediction-label-right">{{ '%.0f'|format((1 - win_probability_left) * 100) }}% &#8594;</span>
+  <div style="display:flex; align-items:center; justify-content:center; gap:1.25rem;">
+    {#- MMR breakdown, left side: avg tag / image / combined total TrueSkill scores - same
+        numbers the win-probability gauge itself is computed from, just made visible instead
+        of only feeding an opaque needle deflection. #}
+    {% if left and left.rating %}
+    <div class="tagrank-mmr-block" style="text-align:right;">
+      <p>Tag avg <strong>{{ '%.1f'|format(left.rating.avg_tag_score) if left.rating.avg_tag_score is not none else '—' }}</strong></p>
+      <p>Image <strong>{{ '%.1f'|format(left.rating.photo_score) if left.rating.photo_score is not none else '—' }}</strong></p>
+      <p class="tagrank-mmr-total">Total <strong>{{ '%.1f'|format(left.rating.total_score) if left.rating.total_score is not none else '—' }}</strong></p>
     </div>
+    {% endif %}
+
+    {#- Speedometer-style gauge: needle points toward whichever side TagRank's photo+tag
+        TrueSkill scores favor, deflecting further from center the more confident the
+        prediction is. angle=0 is straight up (toss-up); -90 is full-left, +90 is full-right. #}
+    {% set gauge_angle = ((0.5 - win_probability_left) * 180) | round(1) %}
+    <div class="tagrank-gauge-wrap" title="Predicted from photo + average tag TrueSkill score on each side">
+      <svg viewBox="0 0 200 112" class="tagrank-gauge">
+        <defs>
+          <linearGradient id="tagrank-gauge-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--k-accent)"/>
+            <stop offset="50%" stop-color="var(--k-text-dim-text)"/>
+            <stop offset="100%" stop-color="var(--k-accent-2)"/>
+          </linearGradient>
+        </defs>
+        <path d="M 14 100 A 86 86 0 0 1 186 100" fill="none" stroke="url(#tagrank-gauge-grad)" stroke-width="10" stroke-linecap="round"/>
+        <g transform="rotate({{ gauge_angle }} 100 100)">
+          <polygon points="95,100 105,100 100,22" fill="var(--k-text)"/>
+        </g>
+        <circle cx="100" cy="100" r="7" fill="var(--k-text)"/>
+      </svg>
+      <div class="tagrank-gauge-labels">
+        <span class="tagrank-prediction-label-left">&#8592; {{ '%.0f'|format(win_probability_left * 100) }}%</span>
+        <span class="tagrank-prediction-label-right">{{ '%.0f'|format((1 - win_probability_left) * 100) }}% &#8594;</span>
+      </div>
+    </div>
+
+    {% if right and right.rating %}
+    <div class="tagrank-mmr-block" style="text-align:left;">
+      <p>Tag avg <strong>{{ '%.1f'|format(right.rating.avg_tag_score) if right.rating.avg_tag_score is not none else '—' }}</strong></p>
+      <p>Image <strong>{{ '%.1f'|format(right.rating.photo_score) if right.rating.photo_score is not none else '—' }}</strong></p>
+      <p class="tagrank-mmr-total">Total <strong>{{ '%.1f'|format(right.rating.total_score) if right.rating.total_score is not none else '—' }}</strong></p>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -66,7 +87,7 @@
         <button type="button" class="kawaii-pill tagrank-tag-pill{{ ' tagrank-tag-pill-unnamespaced' if ':' not in t.tag else '' }}"
                 style="cursor:pointer; color:{{ tagrank_domain_color(t.tag) }};"
                 data-badge-count="{{ t.badge_count }}"
-                title="{% if t.badge_count %}{{ t.badge_count }} badge{{ 's' if t.badge_count != 1 else '' }} ⭐ — {% endif %}click to compare this tag"
+                title="{% if t.badges %}{% for b in t.badges %}{{ b.icon }} {{ b.name }}{{ ', ' if not loop.last else '' }}{% endfor %} — {% endif %}click to compare this tag"
                 hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
                 hx-vals='js:{tag: {{ t.tag|tojson }}}'>
           {{ t.tag }}{% if t.badge_count %} <span class="tagrank-badge-stars">{{ ('★' * ([t.badge_count, 5]|min))|safe }}</span>{% endif %}
@@ -79,22 +100,17 @@
 
       <div class="tagrank-comparer-image-pane" onclick="tagrankComparerChoice('{{ 'A' if side == 'left' else 'B' }}')">
         <img src="/media/file/{{ meta.file_id }}" alt="{{ side }}" loading="eager">
-        {#- Badge overlays in the corner: picture badge first (large), then tag badge count (small) -#}
-        {% if meta.rating and meta.rating.picture_badge %}
-        <span class="tagrank-badge-pill tagrank-badge-{{ meta.rating.picture_badge.difficulty }}"
-              style="position:absolute; top:0.5rem; {{ 'left' if side == 'left' else 'right' }}:0.5rem;"
-              title="{{ meta.rating.picture_badge.name }} ({{ meta.rating.picture_badge.difficulty }})">
-          {{ meta.rating.picture_badge.icon }} {{ meta.rating.picture_badge.name }}
-        </span>
-        {% endif %}
-        {#- Show badge count from tags as a small indicator badge -#}
-        {% set badge_count = meta.tags_info|map(attribute='badge_count')|sum %}
-        {% if badge_count %}
-        <span class="tagrank-badge-count-overlay"
-              title="{{ badge_count }} badge{{ 's' if badge_count != 1 else '' }} on this image's tags"
-              style="position:absolute; {{ 'bottom' if meta.rating and meta.rating.picture_badge else 'top' }}:0.5rem; {{ 'left' if side == 'left' else 'right' }}:0.5rem;">
-          ★ {{ badge_count }}
-        </span>
+        {#- Every badge this picture itself holds (not tag badges) as small icon chips in the
+            corner - each icon carries its own tooltip with the badge's name and difficulty. #}
+        {% if meta.rating and meta.rating.picture_badges %}
+        <div class="tagrank-badge-icons-overlay" style="{{ 'left' if side == 'left' else 'right' }}:0.5rem;">
+          {% for b in meta.rating.picture_badges[:8] %}
+          <span class="tagrank-badge-icon-chip tagrank-badge-{{ b.difficulty }}" title="{{ b.name }} ({{ b.difficulty }})">{{ b.icon }}</span>
+          {% endfor %}
+          {% if meta.rating.picture_badges|length > 8 %}
+          <span class="tagrank-badge-icon-chip" title="{{ meta.rating.picture_badges[8:]|map(attribute='name')|join(', ') }}">+{{ meta.rating.picture_badges|length - 8 }}</span>
+          {% endif %}
+        </div>
         {% endif %}
       </div>
 

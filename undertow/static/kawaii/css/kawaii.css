@@ -195,54 +195,63 @@
   object-fit: contain; display: block;
 }
 
-/* Badge pill overlaid on a comparer image corner - one per picture (its rarest badge), colored
-   by difficulty tier the same way the native app's badge pills are (badges.py DIFFICULTY_COLORS).
-   Sized up from a plain inline label since a rarest-badge callout is a headline stat here, not
-   a footnote - it should read at a glance, same as the MMR score line under the image. */
-.tagrank-badge-pill {
-  display: inline-block;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
+/* Every badge a picture holds, overlaid as small icon chips stacked in the image's top corner
+   (see tagrank_comparer.html) - colored by difficulty tier the same way the native app's badge
+   pills are. Each chip is its own hover target (own title=), unlike the old single-pill/count
+   overlay this replaced, so the tooltip on any one icon names just that badge. */
+.tagrank-badge-icons-overlay {
+  position: absolute;
+  top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+}
+.tagrank-badge-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
   background: rgba(90, 90, 100, 0.85);
-  color: #f0f0f5;
   border: 1px solid rgba(255,255,255,0.25);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  cursor: default;
 }
 .tagrank-badge-common { background: rgba(90, 90, 100, 0.85); }
 .tagrank-badge-rare { background: rgba(45, 95, 200, 0.85); }
 .tagrank-badge-epic { background: rgba(140, 60, 200, 0.85); }
 .tagrank-badge-legendary { background: rgba(190, 150, 20, 0.9); border: 2px solid rgba(255,225,120,0.6); }
 
-/* Small badge count indicator overlaid on image corner, stacked with picture badge if present */
-.tagrank-badge-count-overlay {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.25rem 0.4rem;
-  background: rgba(232, 201, 74, 0.9);
-  color: #333;
-  border-radius: 4px;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-}
+/* MMR breakdown flanking the win-probability gauge (tagrank_comparer.html) - avg tag / image /
+   combined total TrueSkill scores, the same numbers the gauge's needle angle is derived from. */
+.tagrank-mmr-block { font-size: 0.72rem; color: var(--k-text-dim-text); line-height: 1.4; }
+.tagrank-mmr-block p { margin: 0; }
+.tagrank-mmr-block strong { color: var(--k-text); }
+.tagrank-mmr-total { color: var(--k-text); }
+.tagrank-mmr-total strong { color: var(--k-accent-text); }
 
 /* Comparer tag pills: color-coded by namespace (grey for unnamespaced, see the
    tagrank_domain_color() Jinja global), with badge-count stars on tags that hold any.
    Made compact (smaller font, no border, minimal padding) so many tags fit in the container,
-   but still fully clickable and show badge info on hover. */
-.tagrank-tag-pill {
+   but still fully clickable and show badge info on hover.
+   Selector note: doubled up as .kawaii-pill.tagrank-tag-pill (specificity 0,2,0) rather than
+   plain .tagrank-tag-pill (0,1,0) - .kawaii-pill's own border/padding/font-size rule sits later
+   in this file, so equal specificity would let it win on source order alone and silently
+   restore the border + larger size this rule is trying to override. */
+.kawaii-pill.tagrank-tag-pill {
   font-weight: 600;
-  font-size: 0.7rem;
-  padding: 0.15rem 0.5rem;
+  font-size: 0.62rem;
+  line-height: 1.1;
+  padding: 0.08rem 0.4rem;
   border: none;
   background: transparent;
   cursor: pointer;
   transition: opacity 100ms ease;
 }
-.tagrank-tag-pill:hover { opacity: 0.7; }
+.kawaii-pill.tagrank-tag-pill:hover { opacity: 0.7; }
 .tagrank-tag-pill-unnamespaced { font-weight: 400; }
 .tagrank-badge-stars {
   color: #e8c94a;
