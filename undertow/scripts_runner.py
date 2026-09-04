@@ -85,9 +85,24 @@ SCRIPT_META: dict[str, dict[str, str]] = {
         "desc": "Build the performer-name cache Tag Cleanup's name detection reads.",
         "group": "Interactive Wizards",
     },
+    "sync_hidden_tags_to_marker": {
+        "icon": "🔗", "label": "Sync TagRank Hidden Tags",
+        "desc": "Sync hidden tags from TagRank config to the Hydrus marker file.",
+        "group": "TagRank Integration",
+    },
+    "tagrank_demo_fix": {
+        "icon": "📊", "label": "TagRank Dashboard Demo",
+        "desc": "Demo showing TagRank dashboard with 4 charts (empty and with data).",
+        "group": "TagRank Integration",
+    },
+    "tagrank_test_dashboard": {
+        "icon": "🧪", "label": "TagRank Dashboard E2E Test",
+        "desc": "End-to-end test for TagRank session summary dashboard with sample data.",
+        "group": "TagRank Integration",
+    },
 }
 
-GROUP_ORDER = ["Reports", "Housekeeping", "Interactive Wizards", "Other"]
+GROUP_ORDER = ["Reports", "Housekeeping", "Interactive Wizards", "TagRank Integration", "Other"]
 
 
 def meta_for(name: str) -> dict[str, str]:
