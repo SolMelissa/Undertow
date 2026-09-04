@@ -2,6 +2,22 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.6
+- BugFix: TagRank comparer's win-probability gauge was pinned to ~0%/100% on nearly every real
+  pair instead of showing a calibrated confidence. `photo_score` and each tag's `score` are both
+  TrueSkill's raw (mu - 3*sigma) scaled ×100 by TagRank's own `MMR_SCALE` (see `tagrank/rating.py`
+  and the rating-details contract), but `_tagrank_compare_win_probability`'s logistic divisor of
+  25 was calibrated for the *unscaled* number - so a "typical" raw-TrueSkill gap of 10-20 was
+  actually landing as 1000-2000 and instantly saturating the curve. Found and fixed by actually
+  driving a live comparison session end-to-end and inspecting the real gauge output (55%/45%,
+  48%/52%, 31%/69% on live pairs afterward, instead of every pair reading ~0%/100%).
+- Verified end-to-end against a live Undertow + TagRank + Hydrus session (not just template
+  dry-runs): confirmed TagRank's badge store (`data/badges.json`) already holds 145 real earned
+  picture badges, confirmed `GET /files/{id}/rating-details` resolves one correctly (rarest
+  badge + icon/difficulty), and confirmed the comparer actually renders that badge as a pill
+  over the correct image when that exact file lands in a live pair - this had never been
+  confirmed with real data before, only with synthetic Jinja renders.
+
 ## 1.14.5
 - BugFix: Tag Cleanup wizard's tag-service pickers (source/dest) offered "all known tags" as a
   choice, but Hydrus's `add_tags` API always 400s trying to add/delete tags on that virtual

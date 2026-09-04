@@ -1899,8 +1899,18 @@ if HAVE_FLASK:
         left_combined, right_combined = combined(left), combined(right)
         if left_combined is None or right_combined is None:
             return None
-        # /25 keeps a "typical" ~10-20pt MMR gap from immediately saturating to ~0%/100%.
-        return 1.0 / (1.0 + math.exp(-(left_combined - right_combined) / 25.0))
+        # photo_score and tag score are both TrueSkill's raw (mu - 3*sigma) scaled by TagRank's
+        # own MMR_SCALE=100 (see tagrank/rating.py - Undertow's rating-details contract asks for
+        # trueskill_number_from_rating() specifically so this stays comparable to photo_score),
+        # so a "typical" ~10-20pt raw-TrueSkill gap actually shows up here as ~1000-2000. Scaling
+        # the gap back down by that same 100 before the /25 logistic divisor is what keeps this
+        # curve calibrated to raw-TrueSkill-sized gaps instead of saturating to ~0%/100% on
+        # nearly every real pair (a previous version of this formula divided the *scaled* gap by
+        # 25 directly, which is 100x too aggressive).
+        _MMR_SCALE = 100.0
+        gap = (left_combined - right_combined) / _MMR_SCALE
+        exponent = max(-50.0, min(50.0, -gap / 25.0))  # clamp: math.exp on an extreme gap is still meaningless past ~0%/100%
+        return 1.0 / (1.0 + math.exp(exponent))
 
     def _tagrank_compare_pair_ctx(session_id: str) -> dict:
         pair, err = tagrank_client.next_pair(session_id)
