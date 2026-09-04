@@ -2,6 +2,10 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.17
+- Patch: Fixed missing `is_filtered_tag` import in tagrank/rating.py. The function was being
+  called on multiple lines but never imported, causing NameError when clicking tag pills in the UI.
+
 ## 1.14.16
 - Patch: Fixed TagRank hidden tags marker setup script - was searching inbox for the imported
   file instead of using the file hash returned by the import API. Also fixed missing
