@@ -2,6 +2,17 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.13
+- Patch: TagRank's new file cache (1.14.12) was only saved once, after every new file's Hydrus
+  metadata had been fetched - so killing the process mid-build (a crash, a forced daemon
+  restart, closing the TagRank tab mid-build) lost that entire run's progress and forced the
+  next build to redo the whole fetch from scratch. Fixed (`Pool-Limiter` commit f48cabf): the
+  cache now checkpoints every 5000 newly-fetched files, so an interruption only costs the
+  unsaved tail, verified with a simulated interrupted-then-resumed build. Also made the cache
+  write atomic (temp file + rename) - now that saves happen far more often, an interruption
+  during the write itself could otherwise have corrupted the cache and lost every earlier
+  successful run's data too. No Undertow code changed.
+
 ## 1.14.12
 - Significant: On the real 500k-file library this was tested against, nearly every file carries
   at least one rated tag, so 1.14.11's OR-batched search (`Pool-Limiter` commit 31c99a0) still
