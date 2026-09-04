@@ -2,6 +2,27 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.4
+- TagRank comparer redesign: per-image tags moved above the picture and are now clickable
+  (hx-post `/tagrank/compare/start`, same as the main "sorted by rating" pill list) instead of
+  static text below it; the win-probability display is now a speedometer-style SVG gauge whose
+  needle deflects left/right toward the favored side (further from center = more confident)
+  instead of a two-tone bar; comparison images now sit in a fixed-height, centered pane
+  (`.tagrank-comparer-image-pane`) so vertical space stays consistent between pairs regardless
+  of either picture's aspect ratio, instead of the pane's height following the image; and the
+  Filter tag/Min files/Namespace/service-picker panel is now full-bleed (same trick the
+  comparer's images already used) so its background lines up with the full-viewport-width
+  images below instead of stopping short at the dashboard's centered column.
+- Picture/tag badges are now real end to end: implemented TagRank's `GET
+  /files/{file_id}/rating-details` (see `tagrank/plans/undertow-comparer-rating-details.md`),
+  which Undertow's comparer was already wired against but always got null back from since the
+  route never existed server-side - the rarest-badge pill on each image and the per-tag badge
+  stars now reflect real earned badges instead of always being empty.
+- The idle "Click a tag pill above to start comparing" comparer card stays hidden (not just
+  emptied) until a pill is actually clicked or a result/error comes back - if this is still
+  visible after updating, do a full app restart (the version pill's Restart, or relaunching
+  Undertow), not just a page refresh, since the backend template logic changed.
+
 ## 1.14.3
 - BugFix: Tag Cleanup wizard's file-domain picker offered "all known files" as a searchable
   option, but Hydrus's `search_files` API always 400s on that virtual combined domain (it's not

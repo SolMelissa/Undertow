@@ -375,10 +375,13 @@ def get_file_rating_details(file_id: int, file_hash: str, tags: list[str]) -> tu
     """{"photo_score", "photo_confidence", "picture_badge", "tags": [{"tag","score",
     "confidence","badge_count"}, ...]} for one comparer side - powers the in-tab comparer's
     score/badge/win-probability display (see tagrank_comparer.html and webui.py's
-    _tagrank_compare_side_ctx). Not implemented on TagRank's side yet - see the contract at
-    F:\\0DocsF\\0Docs\\AI\\Claude\\tagrank\\plans\\undertow-comparer-rating-details.md. Callers
-    must treat a non-None error here as "feature not available yet", not a hard failure - the
-    comparer itself (image + tags + judging) works fine without this."""
+    _tagrank_compare_side_ctx). Implemented server-side by TagRank's GET
+    /files/{file_id}/rating-details (see the contract at
+    F:\\0DocsF\\0Docs\\AI\\Claude\\tagrank\\plans\\undertow-comparer-rating-details.md and its
+    implementation in tagrank/server.py + tagrank/service.py:get_rating_details). Callers should
+    still treat a non-None error here as "feature not available" rather than a hard failure -
+    e.g. an older TagRank build without this route, or Hydrus briefly unreachable - since the
+    comparer itself (image + tags + judging) works fine without this extra."""
     params = [("hash", file_hash)] + [("tag", t) for t in tags]
     return _get(f"/files/{file_id}/rating-details", params=params)
 

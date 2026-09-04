@@ -29,20 +29,55 @@
   </p>
 
   {% if win_probability_left is not none %}
-  <div class="tagrank-prediction-bar" title="Predicted from photo + average tag TrueSkill score on each side">
-    <div class="tagrank-prediction-fill" style="width:{{ '%.1f'|format(win_probability_left * 100) }}%;"></div>
-    <span class="tagrank-prediction-label tagrank-prediction-label-left">{{ '%.0f'|format(win_probability_left * 100) }}%</span>
-    <span class="tagrank-prediction-label tagrank-prediction-label-right">{{ '%.0f'|format((1 - win_probability_left) * 100) }}%</span>
+  {#- Speedometer-style gauge: needle points toward whichever side TagRank's photo+tag
+      TrueSkill scores favor, deflecting further from center the more confident the
+      prediction is. angle=0 is straight up (toss-up); -90 is full-left, +90 is full-right. #}
+  {% set gauge_angle = ((0.5 - win_probability_left) * 180) | round(1) %}
+  <div class="tagrank-gauge-wrap" title="Predicted from photo + average tag TrueSkill score on each side">
+    <svg viewBox="0 0 200 112" class="tagrank-gauge">
+      <defs>
+        <linearGradient id="tagrank-gauge-grad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="var(--k-accent)"/>
+          <stop offset="50%" stop-color="var(--k-text-dim-text)"/>
+          <stop offset="100%" stop-color="var(--k-accent-2)"/>
+        </linearGradient>
+      </defs>
+      <path d="M 14 100 A 86 86 0 0 1 186 100" fill="none" stroke="url(#tagrank-gauge-grad)" stroke-width="10" stroke-linecap="round"/>
+      <g transform="rotate({{ gauge_angle }} 100 100)">
+        <polygon points="95,100 105,100 100,22" fill="var(--k-text)"/>
+      </g>
+      <circle cx="100" cy="100" r="7" fill="var(--k-text)"/>
+    </svg>
+    <div class="tagrank-gauge-labels">
+      <span class="tagrank-prediction-label-left">&#8592; {{ '%.0f'|format(win_probability_left * 100) }}%</span>
+      <span class="tagrank-prediction-label-right">{{ '%.0f'|format((1 - win_probability_left) * 100) }}% &#8594;</span>
+    </div>
   </div>
   {% endif %}
 
   <div style="display:flex; gap:0.75rem;">
     {% for side, meta in (("left", left), ("right", right)) %}
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
-      <div style="position:relative;">
-        <img src="/media/file/{{ meta.file_id }}" alt="{{ side }}" loading="eager"
-             style="width:100%; max-height:calc(100vh - 260px); min-height:320px; object-fit:contain; border-radius:0.5rem; background:#000; cursor:pointer; display:block;"
-             onclick="tagrankComparerChoice('{{ 'A' if side == 'left' else 'B' }}')">
+      {#- Tags live above the image and are clickable, exactly like the main "sorted by
+          rating" pill list below the comparer - clicking one abandons this pair and starts
+          a fresh comparison pool around that tag. #}
+      <div style="display:flex; flex-wrap:wrap; gap:0.25rem; justify-content:center; max-height:5.5em; overflow-y:auto;">
+        {% for t in meta.tags_info[:24] %}
+        <button type="button" class="kawaii-pill tagrank-tag-pill{{ ' tagrank-tag-pill-unnamespaced' if ':' not in t.tag else '' }}"
+                style="cursor:pointer; color:{{ tagrank_domain_color(t.tag) }};"
+                title="{% if t.badge_count %}{{ t.badge_count }} badge{{ 's' if t.badge_count != 1 else '' }} on this tag - {% endif %}click to start comparing around this tag"
+                hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
+                hx-vals='js:{tag: {{ t.tag|tojson }}}'>
+          {{ t.tag }}{% if t.badge_count %} <span class="tagrank-badge-stars">{{ ('&#9733;' * ([t.badge_count, 5]|min))|safe }}</span>{% endif %}
+        </button>
+        {% endfor %}
+        {% if meta.tags_info|length > 24 %}
+        <span class="text-xs" style="color:var(--k-text-dim-text);">+{{ meta.tags_info|length - 24 }} more</span>
+        {% endif %}
+      </div>
+
+      <div class="tagrank-comparer-image-pane" onclick="tagrankComparerChoice('{{ 'A' if side == 'left' else 'B' }}')">
+        <img src="/media/file/{{ meta.file_id }}" alt="{{ side }}" loading="eager">
         {% if meta.rating and meta.rating.picture_badge %}
         <span class="tagrank-badge-pill tagrank-badge-{{ meta.rating.picture_badge.difficulty }}"
               style="position:absolute; top:0.5rem; {{ 'left' if side == 'left' else 'right' }}:0.5rem;"
@@ -58,19 +93,6 @@
         &middot; confidence {{ '%.0f'|format(meta.rating.photo_confidence or 0) }}%
       </p>
       {% endif %}
-
-      <div style="display:flex; flex-wrap:wrap; gap:0.25rem; max-height:5.5em; overflow-y:auto;">
-        {% for t in meta.tags_info[:24] %}
-        <span class="tagrank-service-pill tagrank-tag-pill{{ ' tagrank-tag-pill-unnamespaced' if ':' not in t.tag else '' }}"
-              style="cursor:default; color:{{ tagrank_domain_color(t.tag) }};"
-              {% if t.badge_count %}title="{{ t.badge_count }} badge{{ 's' if t.badge_count != 1 else '' }} on this tag"{% endif %}>
-          {{ t.tag }}{% if t.badge_count %} <span class="tagrank-badge-stars">{{ ('&#9733;' * ([t.badge_count, 5]|min))|safe }}</span>{% endif %}
-        </span>
-        {% endfor %}
-        {% if meta.tags_info|length > 24 %}
-        <span class="text-xs" style="color:var(--k-text-dim-text);">+{{ meta.tags_info|length - 24 }} more</span>
-        {% endif %}
-      </div>
     </div>
     {% endfor %}
   </div>

@@ -163,38 +163,49 @@
   box-sizing: border-box;
 }
 
-/* Win-probability prediction bar - Undertow's own formula (no native equivalent), shown as a
-   two-tone gradient bar with the left/right percentages labeled at each end. */
-.tagrank-prediction-bar {
+/* Win-probability gauge - Undertow's own formula (no native equivalent), shown as a
+   speedometer-style dial whose needle deflects toward whichever side TagRank's photo+tag
+   TrueSkill scores favor, further from center the more confident the prediction is (see
+   `gauge_angle` in tagrank_comparer.html: 0deg = straight up/toss-up, ±90deg = full left/right). */
+.tagrank-gauge-wrap { max-width: 20rem; margin: 0 auto; text-align: center; }
+.tagrank-gauge { width: 100%; height: auto; display: block; }
+.tagrank-gauge-labels {
+  display: flex; justify-content: space-between;
+  font-size: 0.72rem; font-weight: 600; color: var(--k-text-dim-text);
+  margin-top: -0.35rem; padding: 0 0.5rem;
+}
+.tagrank-gauge-labels .tagrank-prediction-label-left { color: var(--k-accent); }
+.tagrank-gauge-labels .tagrank-prediction-label-right { color: var(--k-accent-2); }
+
+/* Fixed-height comparer image pane - every pair gets the exact same vertical footprint
+   regardless of either picture's aspect ratio, with the image centered and scaled to fit
+   inside it, instead of the pane's own height following the image (which made consecutive
+   comparisons jump around vertically). */
+.tagrank-comparer-image-pane {
   position: relative;
-  height: 1.4rem;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--k-accent-2);
-  max-width: 32rem;
-  margin: 0 auto;
+  height: min(58vh, 620px);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 0.5rem; background: #000; overflow: hidden; cursor: pointer;
 }
-.tagrank-prediction-fill {
-  position: absolute; inset: 0 auto 0 0;
-  background: var(--k-accent);
+.tagrank-comparer-image-pane img {
+  max-width: 100%; max-height: 100%; width: auto; height: auto;
+  object-fit: contain; display: block;
 }
-.tagrank-prediction-label {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  font-size: 0.7rem; font-weight: 600; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-}
-.tagrank-prediction-label-left { left: 0.55rem; }
-.tagrank-prediction-label-right { right: 0.55rem; }
 
 /* Badge pill overlaid on a comparer image corner - one per picture (its rarest badge), colored
-   by difficulty tier the same way the native app's badge pills are (badges.py DIFFICULTY_COLORS). */
+   by difficulty tier the same way the native app's badge pills are (badges.py DIFFICULTY_COLORS).
+   Sized up from a plain inline label since a rarest-badge callout is a headline stat here, not
+   a footnote - it should read at a glance, same as the MMR score line under the image. */
 .tagrank-badge-pill {
   display: inline-block;
-  font-size: 0.68rem;
-  padding: 0.2rem 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
   border-radius: 999px;
   background: rgba(90, 90, 100, 0.85);
   color: #f0f0f5;
   border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
   white-space: nowrap;
 }
 .tagrank-badge-common { background: rgba(90, 90, 100, 0.85); }

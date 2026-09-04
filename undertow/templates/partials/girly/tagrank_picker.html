@@ -38,7 +38,11 @@
 </div>
 {% endmacro %}
 
-<div class="kawaii-card" style="display:flex; flex-direction:column; gap:0.85rem; margin-bottom:0.5rem;">
+{#- Full-bleed background, same trick the comparer's images use (tagrank-comparer-fullbleed) -
+    so this panel's edges line up with the full-viewport-width comparison images below instead
+    of stopping short at #girly-view's centered 1400px column and looking misaligned/overlapped
+    against them. #}
+<div class="kawaii-card tagrank-comparer-fullbleed" style="display:flex; flex-direction:column; gap:0.85rem; margin-bottom:0.5rem; border-radius:0;">
   <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
     <label class="tagrank-filter-field">
       <div class="tagrank-field-label"><span>Filter tag</span></div>
