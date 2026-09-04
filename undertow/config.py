@@ -31,6 +31,13 @@ DAEMON_LAUNCH_STDERR_LOG = LOGS_DIR / "daemon-launch-stderr.log"
 TAGRANK_LAUNCH_STDOUT_LOG = LOGS_DIR / "tagrank-launch-stdout.log"
 TAGRANK_LAUNCH_STDERR_LOG = LOGS_DIR / "tagrank-launch-stderr.log"
 
+# Same idea for TagRank's headless API server subprocess (`main.py --serve`) - it used to
+# discard stdout/stderr to DEVNULL entirely, so a startup failure (missing dependency, port
+# already bound, a stack trace) left no trace anywhere and the tab just showed a generic
+# "didn't come up in time" message with nothing to diagnose it from.
+TAGRANK_SERVER_STDOUT_LOG = LOGS_DIR / "tagrank-server-stdout.log"
+TAGRANK_SERVER_STDERR_LOG = LOGS_DIR / "tagrank-server-stderr.log"
+
 # hydownloader's own main log - records subscription checks, downloads, and errors as they
 # happen. Used by logtail.py for the "what's it actually doing right now" live feed.
 DAEMON_LOG_FILE = LOGS_DIR / "daemon.txt"

@@ -14,6 +14,9 @@
     <button type="button" class="kawaii-btn" hx-get="/partials/tagrank" hx-target="#tagrank-root" hx-swap="innerHTML">&#128260; Refresh</button>
   </div>
 </div>
+{% if console_log %}
+<pre class="kawaii-card" style="margin-top:0.75rem; text-align:left; font-size:0.72rem; max-height:220px; overflow-y:auto; white-space:pre-wrap; word-break:break-word;">{{ console_log }}</pre>
+{% endif %}
 
 {% else %}
 {% include "partials/girly/tagrank_picker.html" %}

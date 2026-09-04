@@ -9,3 +9,6 @@
     First response can take a while if it has a lot of rating history to load.
   </p>
 </div>
+{% if console_log %}
+<pre class="kawaii-card" style="margin-top:0.75rem; text-align:left; font-size:0.72rem; max-height:220px; overflow-y:auto; white-space:pre-wrap; word-break:break-word;">{{ console_log }}</pre>
+{% endif %}

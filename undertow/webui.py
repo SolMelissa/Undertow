@@ -1736,7 +1736,7 @@ if HAVE_FLASK:
         err = tagrank_client.start_server_async()
         if err:
             return render_template("partials/girly/tagrank_inner.html", available=True, error=err)
-        return render_template("partials/girly/tagrank_server_starting.html", started=time.time())
+        return render_template("partials/girly/tagrank_server_starting.html", started=time.time(), console_log=tagrank_client.read_server_log())
 
     @app.route("/tagrank/server-poll")
     def tagrank_server_poll():
@@ -1753,8 +1753,12 @@ if HAVE_FLASK:
             return render_template(
                 "partials/girly/tagrank_inner.html", available=True,
                 error="TagRank's API didn't come up in time - check that it's checked out and its venv is set up.",
+                console_log=tagrank_client.read_server_log(),
             )
-        return render_template("partials/girly/tagrank_server_starting.html", started=started, polling=True)
+        return render_template(
+            "partials/girly/tagrank_server_starting.html", started=started, polling=True,
+            console_log=tagrank_client.read_server_log(),
+        )
 
     @app.route("/tagrank/services", methods=["POST"])
     def tagrank_services():

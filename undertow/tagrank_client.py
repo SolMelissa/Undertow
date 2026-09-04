@@ -68,17 +68,38 @@ def _start_process() -> tuple[subprocess.Popen | None, str | None]:
         return None, "TagRank isn't checked out at the configured path."
     python_exe = config.find_tagrank_python() or "python"
     try:
-        proc = subprocess.Popen(
-            [str(python_exe), str(main_py), "--serve", "--port", str(config.TAGRANK_PORT)],
-            cwd=str(config.TAGRANK_DIR),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+        config.TAGRANK_SERVER_STDOUT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        out = open(config.TAGRANK_SERVER_STDOUT_LOG, "w", encoding="utf-8")
+        err = open(config.TAGRANK_SERVER_STDERR_LOG, "w", encoding="utf-8")
+        try:
+            proc = subprocess.Popen(
+                [str(python_exe), str(main_py), "--serve", "--port", str(config.TAGRANK_PORT)],
+                cwd=str(config.TAGRANK_DIR),
+                stdout=out,
+                stderr=err,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        finally:
+            out.close()
+            err.close()
     except OSError as e:
         return None, f"Couldn't launch TagRank: {e}"
     _state["proc"] = proc
     return proc, None
+
+
+def read_server_log(max_lines: int = 40) -> str:
+    """Tails the captured stdout+stderr of the most recent API-server launch - shown alongside
+    a "didn't come up in time" error so a real startup failure (missing dependency, port
+    already bound, an unhandled exception) is visible instead of indistinguishable from a slow
+    but healthy startup. Best-effort - returns "" if nothing's been captured yet."""
+    lines: list[str] = []
+    for path in (config.TAGRANK_SERVER_STDOUT_LOG, config.TAGRANK_SERVER_STDERR_LOG):
+        try:
+            lines += path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            pass
+    return "\n".join(lines[-max_lines:])
 
 
 # Measured live: a modest rating history alone can take ~15-20s just to answer its first

@@ -2,6 +2,20 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.8
+- BugFix: TagRank's headless API server subprocess (`main.py --serve`, `tagrank_client._start_process`)
+  sent its stdout/stderr straight to `DEVNULL`, so a startup failure (missing dependency, the
+  8420 port already bound, an unhandled exception) left zero diagnostic trace anywhere -
+  Undertow's own UI just showed a generic "TagRank's API didn't come up in time" message
+  forever, indistinguishable from "the tab is simply broken." Investigated by tracing the whole
+  tab-open flow end to end (header pill status, the `hx-trigger="load"` wiring shared by every
+  tab in `index.html`, the `/partials/tagrank` -> `/tagrank/server-poll` startup poll loop) and
+  confirming none of those were at fault - the gap was purely a missing log. Now captures the
+  server subprocess's stdout/stderr to `tagrank-server-stdout.log`/`tagrank-server-stderr.log`
+  (mirroring the GUI launcher's existing `tagrank-launch-*.log` pattern) and tails them inline
+  on both the "Starting TagRank's API..." screen and the eventual timeout error, so a real
+  startup failure is visible instead of silent.
+
 ## 1.14.7
 - BugFix: TagRank's comparison-GUI launcher (`tagrank_client.launch_gui`, wired to the
   `/tagrank/launch` route) was pure fire-and-forget - no handle was ever kept, so every tag-pill
