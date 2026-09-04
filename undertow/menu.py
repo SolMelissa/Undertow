@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import threading
 
-from . import services, subscriptions
+from . import services, subscriptions, tagrank_client
 from .watchdog import Watchdog
 
 _shutdown_lock = threading.Lock()
@@ -86,6 +86,14 @@ def main() -> None:
     watchdog = Watchdog()
     watchdog.start()
     _install_exit_handlers()
+
+    print()
+    print("Starting TagRank server in the background...")
+    err = tagrank_client.start_server_async()
+    if err:
+        print(f"  Warning: couldn't start TagRank server: {err}")
+    else:
+        print("  TagRank server starting (will be ready when you open the tab)...")
 
     print()
     print("Ready - starting the web dashboard...")
