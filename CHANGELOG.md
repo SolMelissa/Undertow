@@ -2,6 +2,11 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.19
+- Enhancement: TagRank comparer images now expand to fill the available window height, 
+  maximizing viewing area. Also improved tag pill styling (smaller, unbordered, more compact)
+  and added badge count indicators as overlays on image corners.
+
 ## 1.14.18
 - Enhancement: TagRank server now starts silently in the background when Undertow opens,
   instead of on-demand when you first open the TagRank tab. This means it's ready and waiting
