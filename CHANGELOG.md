@@ -2,6 +2,19 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.12
+- Significant: On the real 500k-file library this was tested against, nearly every file carries
+  at least one rated tag, so 1.14.11's OR-batched search (`Pool-Limiter` commit 31c99a0) still
+  resolved to almost the whole library - it didn't actually bound the per-file Hydrus metadata
+  fetch cost. Fixed properly this time (`Pool-Limiter` commit 73fa367): TagRank now caches
+  per-file metadata to `data/tag_index_file_cache.json` between runs, keyed by file_id, so a
+  build only fetches metadata from Hydrus for files not already cached - typically just what's
+  been imported since the last run - instead of paying the full per-file cost on every startup.
+  `refresh_index()` gained an explicit cache-bypass path for when Hydrus-side re-tagging is
+  known to have made cached data stale. Also caught and fixed a real regression from 1.14.11:
+  its own test suite had silently broken (the OR-predicate shape change wasn't covered by a
+  test run before pushing) and has now been fixed and verified green. No Undertow code changed.
+
 ## 1.14.11
 - Patch: TagRank's tag-index build (`Pool-Limiter` commit 8340bb1, cited in 1.14.9/1.14.10) was
   correct but wasteful on a large library: it fetched Hydrus metadata for every file in the
