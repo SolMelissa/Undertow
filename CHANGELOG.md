@@ -2,6 +2,11 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.16
+- Patch: Fixed TagRank hidden tags marker setup script - was searching inbox for the imported
+  file instead of using the file hash returned by the import API. Also fixed missing
+  `is_filtered_tag` import in tagrank/pool.py that crashed the TagRank server on startup.
+
 ## 1.14.15
 - Patch: Add TagRank hidden tags marker setup script to Scripts tab - one-time setup to import
   the marker image into Hydrus and tag it with service:tagrank for use with sync_hidden_tags_to_marker.

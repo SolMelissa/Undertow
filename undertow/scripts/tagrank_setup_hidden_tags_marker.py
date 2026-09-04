@@ -3,6 +3,7 @@
 
 import logging
 import sys
+import time
 from pathlib import Path
 
 tagrank_path = Path(__file__).resolve().parent.parent.parent.parent / "tagrank"
@@ -44,59 +45,37 @@ def main():
 
     logger.info(f"Importing marker image from {asset_path}...")
     try:
-        client.add_file(str(asset_path), delete_after_successful_import=False)
+        result = client.add_file(str(asset_path), delete_after_successful_import=False)
+        logger.info(f"Import call returned: {result}")
     except Exception as e:
         logger.error(f"Import failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         sys.exit(1)
 
-    logger.info("Fetching newly-imported file...")
     try:
-        resp = client.search_files(tags=["system:inbox"], return_file_ids=True)
-        file_ids = resp.get("file_ids") or []
-        if not file_ids:
-            logger.error("Could not find imported file")
-            sys.exit(1)
-
-        metadata_resp = client.get_file_metadata(file_ids=file_ids[-10:])
-        marker_file = None
-        for info in (metadata_resp.get("metadata") or []):
-            if info.get("width") == 500 and info.get("height") == 350:
-                if marker_file is None or info.get("file_id", 0) > marker_file.get("file_id", 0):
-                    marker_file = info
-
-        if not marker_file:
-            logger.error("Could not identify marker image in inbox")
-            sys.exit(1)
-
-        file_hash = marker_file.get("file_hash")
+        file_hash = result.get("hash")
         if not file_hash:
-            logger.error("Imported file has no hash")
+            logger.error("Import call did not return a file hash")
             sys.exit(1)
-
-        logger.info(f"Found marker file: {file_hash}")
+        logger.info(f"Found marker file hash from import: {file_hash}")
     except Exception as e:
-        logger.error(f"Could not find imported file: {e}")
+        logger.error(f"Could not extract hash from import result: {e}")
         sys.exit(1)
 
     logger.info("Tagging marker file...")
-    try:
-        tag_service_key = key("TAG_SERVICE_KEY", "").strip()
-        if not tag_service_key or tag_service_key == "FILL_ME_IN":
-            tag_service_key = None
-
-        if tag_service_key:
+    tag_service_key = key("TAG_SERVICE_KEY", "").strip()
+    if tag_service_key and tag_service_key != "FILL_ME_IN":
+        try:
             client.add_tags(
                 hashes=[file_hash],
                 service_keys_to_tags={tag_service_key: ["service:tagrank", "service:undertow"]}
             )
-        else:
-            client.add_tags(
-                hashes=[file_hash],
-                service_keys_to_tags={"": ["service:tagrank", "service:undertow"]}
-            )
-        logger.info("✓ Tagged with service:tagrank and service:undertow")
-    except Exception as e:
-        logger.warning(f"Could not tag marker file: {e}")
+            logger.info("✓ Tagged with service:tagrank and service:undertow")
+        except Exception as e:
+            logger.warning(f"Could not tag marker file: {e}")
+    else:
+        logger.info("Skipping tagging (TAG_SERVICE_KEY not configured in config/KEYS)")
 
     try:
         note_text = (
