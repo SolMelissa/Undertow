@@ -213,11 +213,40 @@
 .tagrank-badge-epic { background: rgba(140, 60, 200, 0.85); }
 .tagrank-badge-legendary { background: rgba(190, 150, 20, 0.9); border: 2px solid rgba(255,225,120,0.6); }
 
+/* Small badge count indicator overlaid on image corner, stacked with picture badge if present */
+.tagrank-badge-count-overlay {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.25rem 0.4rem;
+  background: rgba(232, 201, 74, 0.9);
+  color: #333;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
 /* Comparer tag pills: color-coded by namespace (grey for unnamespaced, see the
-   tagrank_domain_color() Jinja global), with badge-count stars on tags that hold any. */
-.tagrank-tag-pill { font-weight: 600; }
+   tagrank_domain_color() Jinja global), with badge-count stars on tags that hold any.
+   Made compact (smaller font, no border, minimal padding) so many tags fit in the container,
+   but still fully clickable and show badge info on hover. */
+.tagrank-tag-pill {
+  font-weight: 600;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 100ms ease;
+}
+.tagrank-tag-pill:hover { opacity: 0.7; }
 .tagrank-tag-pill-unnamespaced { font-weight: 400; }
-.tagrank-badge-stars { color: #e8c94a; letter-spacing: -1px; }
+.tagrank-badge-stars {
+  color: #e8c94a;
+  letter-spacing: -1px;
+  font-size: 0.6rem;
+  margin-left: 0.15rem;
+}
 
 /* Namespaced-vs-unnamespaced grouping in the main tag pill list (tagrank_pill_macro.html) - a
    light label plus a faint divider so the two groups read as visually separate, not just sorted. */

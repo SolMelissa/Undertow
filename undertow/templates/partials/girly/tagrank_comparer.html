@@ -65,10 +65,11 @@
         {% for t in meta.tags_info[:24] %}
         <button type="button" class="kawaii-pill tagrank-tag-pill{{ ' tagrank-tag-pill-unnamespaced' if ':' not in t.tag else '' }}"
                 style="cursor:pointer; color:{{ tagrank_domain_color(t.tag) }};"
-                title="{% if t.badge_count %}{{ t.badge_count }} badge{{ 's' if t.badge_count != 1 else '' }} on this tag - {% endif %}click to start comparing around this tag"
+                data-badge-count="{{ t.badge_count }}"
+                title="{% if t.badge_count %}{{ t.badge_count }} badge{{ 's' if t.badge_count != 1 else '' }} ⭐ — {% endif %}click to compare this tag"
                 hx-post="/tagrank/compare/start" hx-target="#tagrank-comparer-body" hx-swap="innerHTML"
                 hx-vals='js:{tag: {{ t.tag|tojson }}}'>
-          {{ t.tag }}{% if t.badge_count %} <span class="tagrank-badge-stars">{{ ('&#9733;' * ([t.badge_count, 5]|min))|safe }}</span>{% endif %}
+          {{ t.tag }}{% if t.badge_count %} <span class="tagrank-badge-stars">{{ ('★' * ([t.badge_count, 5]|min))|safe }}</span>{% endif %}
         </button>
         {% endfor %}
         {% if meta.tags_info|length > 24 %}
@@ -78,11 +79,21 @@
 
       <div class="tagrank-comparer-image-pane" onclick="tagrankComparerChoice('{{ 'A' if side == 'left' else 'B' }}')">
         <img src="/media/file/{{ meta.file_id }}" alt="{{ side }}" loading="eager">
+        {#- Badge overlays in the corner: picture badge first (large), then tag badge count (small) -#}
         {% if meta.rating and meta.rating.picture_badge %}
         <span class="tagrank-badge-pill tagrank-badge-{{ meta.rating.picture_badge.difficulty }}"
               style="position:absolute; top:0.5rem; {{ 'left' if side == 'left' else 'right' }}:0.5rem;"
               title="{{ meta.rating.picture_badge.name }} ({{ meta.rating.picture_badge.difficulty }})">
           {{ meta.rating.picture_badge.icon }} {{ meta.rating.picture_badge.name }}
+        </span>
+        {% endif %}
+        {#- Show badge count from tags as a small indicator badge -#}
+        {% set badge_count = meta.tags_info|map(attribute='badge_count')|sum %}
+        {% if badge_count %}
+        <span class="tagrank-badge-count-overlay"
+              title="{{ badge_count }} badge{{ 's' if badge_count != 1 else '' }} on this image's tags"
+              style="position:absolute; {{ 'bottom' if meta.rating and meta.rating.picture_badge else 'top' }}:0.5rem; {{ 'left' if side == 'left' else 'right' }}:0.5rem;">
+          ★ {{ badge_count }}
         </span>
         {% endif %}
       </div>
