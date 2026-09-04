@@ -717,7 +717,10 @@ class HydrusClient:
         )
 
     def list_file_services(self) -> List[Tuple[str, str, str]]:
-        return [s for s in self.list_services() if "file" in s[2].lower()]
+        # "all known files" is a virtual combined domain - Hydrus's search_files endpoint
+        # rejects it outright with a 400 (it's not a concrete, searchable file domain, unlike
+        # "all local files"/"all my files"/real import services), so don't offer it as a choice.
+        return [s for s in self.list_services() if "file" in s[2].lower() and s[0] != "all known files"]
 
     def list_tag_services(self) -> List[Tuple[str, str, str]]:
         return [s for s in self.list_services() if "tag" in s[2].lower()]

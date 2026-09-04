@@ -2,6 +2,12 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.3
+- BugFix: Tag Cleanup wizard's file-domain picker offered "all known files" as a searchable
+  option, but Hydrus's `search_files` API always 400s on that virtual combined domain (it's not
+  a real, searchable file service like "all local files"/"my files"). Excluded it from the
+  picker so the wizard's search no longer fails with "Could not reach Hydrus... 400 Client Error".
+
 ## 1.14.2
 - TagRank tab polish pass: the embedded comparer card ("Click a tag pill above to start
   comparing") now stays hidden until a pill is actually clicked, instead of sitting empty at
