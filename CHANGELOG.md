@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.5
+- BugFix: Tag Cleanup wizard's tag-service pickers (source/dest) offered "all known tags" as a
+  choice, but Hydrus's `add_tags` API always 400s trying to add/delete tags on that virtual
+  combined domain (same underlying issue as 1.14.3's file-domain fix, just on the tag-service
+  side). Excluded it from the picker so the wizard's apply step no longer fails every batch with
+  "Submitted changes for 0/N file(s)".
+
 ## 1.14.4
 - TagRank comparer redesign: per-image tags moved above the picture and are now clickable
   (hx-post `/tagrank/compare/start`, same as the main "sorted by rating" pill list) instead of

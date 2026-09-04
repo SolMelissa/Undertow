@@ -723,7 +723,10 @@ class HydrusClient:
         return [s for s in self.list_services() if "file" in s[2].lower() and s[0] != "all known files"]
 
     def list_tag_services(self) -> List[Tuple[str, str, str]]:
-        return [s for s in self.list_services() if "tag" in s[2].lower()]
+        # "all known tags" is a virtual combined domain, same story as "all known files" above -
+        # Hydrus's add_tags endpoint 400s if you try to add/delete tags on it directly, since it
+        # isn't a real, writable tag service (unlike "my tags"/a real PTR/other real services).
+        return [s for s in self.list_services() if "tag" in s[2].lower() and s[0] != "all known tags"]
 
     def search_files(self, tags: List[str], file_service_key: str) -> List[int]:
         params = {
