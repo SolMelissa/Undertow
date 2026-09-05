@@ -14,6 +14,7 @@ route here returns a Jinja2-rendered template fragment straight from undertow/te
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -1930,8 +1931,16 @@ if HAVE_FLASK:
             tagrank_client.end_session(session_id)
             _tagrank_session_tags.pop(session_id, None)
             return {"session_id": None, "done": True}
-        left = _tagrank_compare_side_ctx(pair.get("left"))
-        right = _tagrank_compare_side_ctx(pair.get("right"))
+        # Each side is 2 sequential Hydrus round trips (Undertow's own metadata fetch, then
+        # TagRank's rating-details call, which does its own metadata fetch internally) - fully
+        # independent of the other side, so running them concurrently overlaps that I/O instead
+        # of paying for it twice. Threads (not async) because both calls below are blocking
+        # `requests` calls that release the GIL while waiting on the network.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool_executor:
+            left_future = pool_executor.submit(_tagrank_compare_side_ctx, pair.get("left"))
+            right_future = pool_executor.submit(_tagrank_compare_side_ctx, pair.get("right"))
+            left = left_future.result()
+            right = right_future.result()
         return {
             "session_id": session_id,
             "left": left,
