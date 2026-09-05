@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.21
+- Enhancement: TagRank's spawned processes (the headless API server and the comparison-GUI
+  window) now show up in Task Manager as "Undertow - TagRank.exe" instead of a bare "python.exe"
+  indistinguishable from every other Python process on the machine. A renamed copy of the venv's
+  python.exe is created automatically alongside the original (same folder, so venv resolution
+  still works) the first time either subprocess launches.
+
 ## 1.14.20
 - Patch/Enhancement: Fixed comparer tag pills still showing a border and large font (a CSS
   specificity bug - `.kawaii-pill`'s own rule sat later in the stylesheet and won on source
