@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.24
+- Enhancement: The background write-queue for Hydrus rating writes (TagRank Pool-Limiter
+  8d0c433) only deferred the *write* side of judging a pair - the *read* side building the next
+  pair (2 sequential Hydrus round trips per side, done one side after the other) was untouched
+  and turned out to be the bigger cost. Left/right are now fetched concurrently via a
+  ThreadPoolExecutor, roughly halving that wait.
+
 ## 1.14.23
 - BugFix: The comparer pane was sized with `min-height`, so the gauge/MMR row plus full-size
   images could exceed one screen's height and push the gauge out of view above the images.
