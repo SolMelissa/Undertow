@@ -154,8 +154,9 @@
 
 /* Comparer: break out of #girly-view's centered max-width so images get the full viewport
    width to stretch into, matching the native TagRank window's uncapped comparison layout.
-   min-height gives the flex column somewhere to actually grow into - without it the card
-   shrinks to fit its content and the image panes' flex:1 has no spare space to expand. */
+   A capped `height` (not `min-height`) makes the whole pane - gauge, MMR readout and images
+   together - fit within one screen instead of the images growing until the pane is taller
+   than the viewport and the gauge scrolls out of view above them. */
 .tagrank-comparer-fullbleed {
   width: 100vw;
   position: relative;
@@ -166,7 +167,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  min-height: calc(100vh - 260px);
+  height: calc(100vh - 220px);
 }
 
 /* Filter bar: shrinks to fit its own controls and centers above the tag results, instead of
@@ -191,12 +192,15 @@
 .tagrank-gauge-labels .tagrank-prediction-label-left { color: var(--k-accent); }
 .tagrank-gauge-labels .tagrank-prediction-label-right { color: var(--k-accent-2); }
 
-/* Flexible-height comparer image pane - expands to fill available vertical space in the
-   window, with the image centered and scaled to fit inside using object-fit: contain.
-   Min-height prevents it from collapsing below a reasonable viewing size. */
+/* Flexible-height comparer image pane - fills whatever vertical space is left over inside
+   .tagrank-comparer-fullbleed's capped height (after the tag row, gauge/MMR row and button
+   row), with the image centered and scaled to fit inside using object-fit: contain. min-height:0
+   (overriding flex's default auto) lets it shrink below the image's natural size instead of
+   overflowing the fixed-height pane on shorter screens; the 120px floor only stops it collapsing
+   to nothing. */
 .tagrank-comparer-image-pane {
   position: relative;
-  min-height: 300px;
+  min-height: 120px;
   flex: 1;
   display: flex; align-items: center; justify-content: center;
   border-radius: 0.5rem; background: #000; overflow: hidden; cursor: pointer;

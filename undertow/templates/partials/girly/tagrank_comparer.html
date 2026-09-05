@@ -80,9 +80,9 @@
   </div>
   {% endif %}
 
-  <div style="flex:1; display:flex; gap:0.75rem;">
+  <div style="flex:1; min-height:0; display:flex; gap:0.75rem;">
     {% for side, meta in (("left", left), ("right", right)) %}
-    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:0.4rem;">
+    <div style="flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; gap:0.4rem;">
       {#- Tags live above the image and are clickable, exactly like the main "sorted by
           rating" pill list below the comparer - clicking one abandons this pair and starts
           a fresh comparison pool around that tag. #}

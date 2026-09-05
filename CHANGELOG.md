@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.23
+- BugFix: The comparer pane was sized with `min-height`, so the gauge/MMR row plus full-size
+  images could exceed one screen's height and push the gauge out of view above the images.
+  Switched to a capped `height: calc(100vh - 220px)` on the pane itself (not the images) and
+  let the image panes shrink (`min-height:0` down the flex chain, image-pane floor dropped from
+  300px to 120px) so the whole comparison - gauge and both images - fits on screen together.
+
 ## 1.14.22
 - Patch: Reworked the TagRank comparer's layout. The comparer card (not just its inner content)
   now carries the full-bleed breakout, so its border spans the same viewport width the images
