@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.22
+- Patch: Reworked the TagRank comparer's layout. The comparer card (not just its inner content)
+  now carries the full-bleed breakout, so its border spans the same viewport width the images
+  stretch into; the filter bar above it no longer shares that width and instead shrinks to fit
+  its own controls, centered above the tag results. Gave the comparer card a real height so its
+  image panes' `flex: 1` finally has room to expand into (previously the card just shrank to
+  fit its content and images stayed at their natural size). The tag a comparison pool was built
+  around is now shown as a label above the win-probability gauge, and the MMR breakdown flanking
+  the gauge is larger.
+
 ## 1.14.21
 - Enhancement: TagRank's spawned processes (the headless API server and the comparison-GUI
   window) now show up in Task Manager as "Undertow - TagRank.exe" instead of a bare "python.exe"

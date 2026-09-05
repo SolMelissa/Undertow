@@ -17,16 +17,20 @@
 <script>document.getElementById('tagrank-comparer').hidden = false;</script>
 
 {% elif session_id and left and right %}
-{#- Full-bleed: escapes #girly-view's max-width:1400px (kawaii.css) so the comparison images
-    get the whole viewport width to stretch into, not just the dashboard's centered column. #}
+{#- The full-bleed breakout itself now lives on the #tagrank-comparer card (tagrank_picker.html)
+    so its border spans the same width the images stretch into - this inner div just supplies
+    the vertical flex layout and keyboard focus target. #}
 <div id="tagrank-comparer-focus" tabindex="0"
-     class="tagrank-comparer-fullbleed"
-     style="outline:none; display:flex; flex-direction:column; gap:0.6rem;"
+     style="outline:none; display:flex; flex-direction:column; gap:0.6rem; flex:1; min-height:0;"
      onkeydown="tagrankComparerKeydown(event)">
   <p class="text-xs" style="text-align:center; color:var(--k-text-dim-text);">
     &#8592;/A left wins &middot; &#8594;/D right wins &middot; Backspace/R undo &middot; Esc stop
     <span id="tagrank-comparer-busy" style="display:none;"> &middot; <span class="tagrank-spinner"></span> recording&hellip;</span>
   </p>
+
+  {% if focus_tag %}
+  <p class="tagrank-focus-tag-label">{{ focus_tag }}</p>
+  {% endif %}
 
   {% if win_probability_left is not none %}
   <div style="display:flex; align-items:center; justify-content:center; gap:1.25rem;">

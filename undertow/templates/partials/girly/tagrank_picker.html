@@ -1,8 +1,11 @@
 {#- Embedded comparer: judging happens in this panel via TagRank's session API instead of a
     separate window (see webui.py's /tagrank/compare/* routes) - it never replaces the filter
-    bar or pill list above/below it, only its own contents swap between idle/loading/pair/done. #}
-<div id="tagrank-comparer" class="kawaii-card" style="margin-bottom:0.85rem;" hidden>
-  <div id="tagrank-comparer-body">
+    bar or pill list above/below it, only its own contents swap between idle/loading/pair/done.
+    Full-bleed: this card's own border/background escape #girly-view's centered max-width
+    (kawaii.css) so they line up with the full-viewport-width comparison images inside it,
+    instead of the images breaking out past a border that stayed at the centered column width. #}
+<div id="tagrank-comparer" class="kawaii-card tagrank-comparer-fullbleed" style="margin-bottom:0.85rem; border-radius:0;" hidden>
+  <div id="tagrank-comparer-body" style="flex:1; min-height:0; display:flex; flex-direction:column;">
     {% include "partials/girly/tagrank_comparer.html" %}
   </div>
 </div>
@@ -38,11 +41,10 @@
 </div>
 {% endmacro %}
 
-{#- Full-bleed background, same trick the comparer's images use (tagrank-comparer-fullbleed) -
-    so this panel's edges line up with the full-viewport-width comparison images below instead
-    of stopping short at #girly-view's centered 1400px column and looking misaligned/overlapped
-    against them. #}
-<div class="kawaii-card tagrank-comparer-fullbleed" style="display:flex; flex-direction:column; gap:0.85rem; margin-bottom:0.5rem; border-radius:0;">
+{#- Shrunk to fit its own controls and centered above the tag results, rather than stretching
+    to the comparer's full-bleed width - the filter bar isn't visually part of that comparison
+    surface, so it shouldn't share its border width. #}
+<div class="kawaii-card tagrank-filter-bar" style="display:flex; flex-direction:column; gap:0.85rem; margin-bottom:0.5rem;">
   <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
     <label class="tagrank-filter-field">
       <div class="tagrank-field-label"><span>Filter tag</span></div>

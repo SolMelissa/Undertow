@@ -1844,6 +1844,10 @@ if HAVE_FLASK:
     # per the "never navigate away from filter/tags/comparer" requirement.
 
     _TAGRANK_COMPARE_START_TIMEOUT_SECONDS = 45
+    # The comparer panel only ever gets a session_id back from TagRank's session API - it never
+    # hands back the tag the pool was built around - so Undertow tracks that mapping itself here
+    # to show it as a label above the win-probability gauge.
+    _tagrank_session_tags: dict[str, str] = {}
 
     def _tagrank_compare_side_ctx(side: dict | None) -> dict | None:
         """One side of a pair as {file_id, hash, tags, rating} for the comparer template, or
@@ -1918,11 +1922,13 @@ if HAVE_FLASK:
         return 1.0 / (1.0 + math.exp(exponent))
 
     def _tagrank_compare_pair_ctx(session_id: str) -> dict:
+        focus_tag = _tagrank_session_tags.get(session_id, "")
         pair, err = tagrank_client.next_pair(session_id)
         if err:
             return {"session_id": session_id, "error": err}
         if not pair or pair.get("done"):
             tagrank_client.end_session(session_id)
+            _tagrank_session_tags.pop(session_id, None)
             return {"session_id": None, "done": True}
         left = _tagrank_compare_side_ctx(pair.get("left"))
         right = _tagrank_compare_side_ctx(pair.get("right"))
@@ -1931,6 +1937,7 @@ if HAVE_FLASK:
             "left": left,
             "right": right,
             "win_probability_left": _tagrank_compare_win_probability(left, right),
+            "focus_tag": focus_tag,
         }
 
     @app.route("/tagrank/compare/start", methods=["POST"])
@@ -1955,6 +1962,7 @@ if HAVE_FLASK:
             return render_template("partials/girly/tagrank_comparer.html", error=f"Couldn't start comparing: {err}")
         status = (job or {}).get("status")
         if status == "ready":
+            _tagrank_session_tags[job["session_id"]] = tag
             return render_template("partials/girly/tagrank_comparer.html", **_tagrank_compare_pair_ctx(job["session_id"]))
         if status == "error":
             return render_template("partials/girly/tagrank_comparer.html", error=(job or {}).get("error") or "TagRank couldn't build a pool for that tag.")
@@ -1984,6 +1992,7 @@ if HAVE_FLASK:
         session_id = (request.form.get("session_id") or "").strip()
         if session_id:
             tagrank_client.end_session(session_id)
+            _tagrank_session_tags.pop(session_id, None)
         return render_template("partials/girly/tagrank_comparer.html")
 
     # ---------------------------------------------------------------- API keys

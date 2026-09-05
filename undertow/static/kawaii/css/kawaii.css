@@ -153,17 +153,28 @@
 @keyframes tagrank-spin { to { transform: rotate(360deg); } }
 
 /* Comparer: break out of #girly-view's centered max-width so images get the full viewport
-   width to stretch into, matching the native TagRank window's uncapped comparison layout. */
+   width to stretch into, matching the native TagRank window's uncapped comparison layout.
+   min-height gives the flex column somewhere to actually grow into - without it the card
+   shrinks to fit its content and the image panes' flex:1 has no spare space to expand. */
 .tagrank-comparer-fullbleed {
   width: 100vw;
   position: relative;
   left: 50%;
   margin-left: -50vw;
-  padding: 0 1.25rem;
+  padding: 1.25rem;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  min-height: calc(100vh - 260px);
+}
+
+/* Filter bar: shrinks to fit its own controls and centers above the tag results, instead of
+   spanning the comparer's full-bleed width (that width belongs to the comparison surface). */
+.tagrank-filter-bar {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 0.5rem;
 }
 
 /* Win-probability gauge - Undertow's own formula (no native equivalent), shown as a
@@ -227,11 +238,22 @@
 
 /* MMR breakdown flanking the win-probability gauge (tagrank_comparer.html) - avg tag / image /
    combined total TrueSkill scores, the same numbers the gauge's needle angle is derived from. */
-.tagrank-mmr-block { font-size: 0.72rem; color: var(--k-text-dim-text); line-height: 1.4; }
+.tagrank-mmr-block { font-size: 0.95rem; color: var(--k-text-dim-text); line-height: 1.5; }
 .tagrank-mmr-block p { margin: 0; }
 .tagrank-mmr-block strong { color: var(--k-text); }
 .tagrank-mmr-total { color: var(--k-text); }
 .tagrank-mmr-total strong { color: var(--k-accent-text); }
+
+/* Focus tag: the tag the current comparison pool was built around, shown prominently above the
+   win-probability gauge (tagrank_comparer.html) so it's clear at a glance what's being judged. */
+.tagrank-focus-tag-label {
+  text-align: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--k-accent-text);
+  margin: 0;
+}
 
 /* Comparer tag pills: color-coded by namespace (grey for unnamespaced, see the
    tagrank_domain_color() Jinja global), with badge-count stars on tags that hold any.
