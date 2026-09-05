@@ -6,6 +6,7 @@ Launch-HydrusPipeline.ps1 ($InstallRoot, $HydrusDir, etc).
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 INSTALL_ROOT = Path(os.environ["USERPROFILE"]) / "HydrusPipeline"
@@ -99,6 +100,33 @@ def find_tagrank_python() -> Path | None:
     if venv_python.exists():
         return venv_python
     return None
+
+
+TAGRANK_RENAMED_PYTHON_NAME = "Undertow - TagRank.exe"
+
+
+def find_tagrank_renamed_python() -> Path | None:
+    """A friendlier-named copy of the TagRank venv's python.exe, so Task Manager shows
+    "Undertow - TagRank.exe" for the subprocess instead of a bare "python.exe" indistinguishable
+    from every other Python process on the machine (including Undertow's own, and any other
+    venv's). Copied into the *same* .venv/Scripts folder as the original rather than out to some
+    other directory: CPython's venv resolution walks up from the running executable's own
+    directory looking for pyvenv.cfg (one level up from Scripts) to find the venv's real
+    site-packages - copying it anywhere else would silently lose that and fall back to a bare/
+    global Python with none of TagRank's installed dependencies.
+
+    Recreated whenever missing or a different size than the source (venv recreated/upgraded),
+    otherwise reused as-is. Returns None if there's no venv python.exe to copy from."""
+    venv_python = find_tagrank_python()
+    if venv_python is None:
+        return None
+    renamed = venv_python.parent / TAGRANK_RENAMED_PYTHON_NAME
+    try:
+        if not renamed.exists() or renamed.stat().st_size != venv_python.stat().st_size:
+            shutil.copy2(venv_python, renamed)
+    except OSError:
+        return venv_python  # fall back to the original name if the copy failed
+    return renamed
 
 
 def find_tagrank_main() -> Path | None:

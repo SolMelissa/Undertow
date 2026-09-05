@@ -66,7 +66,10 @@ def _start_process() -> tuple[subprocess.Popen | None, str | None]:
     main_py = config.find_tagrank_main()
     if main_py is None:
         return None, "TagRank isn't checked out at the configured path."
-    python_exe = config.find_tagrank_python() or "python"
+    # Renamed copy so Task Manager shows "Undertow - TagRank.exe" instead of an indistinguishable
+    # bare "python.exe" - see config.find_tagrank_renamed_python for why it has to be a same-
+    # folder copy rather than a plain rename/move elsewhere.
+    python_exe = config.find_tagrank_renamed_python() or config.find_tagrank_python() or "python"
     try:
         config.TAGRANK_SERVER_STDOUT_LOG.parent.mkdir(parents=True, exist_ok=True)
         out = open(config.TAGRANK_SERVER_STDOUT_LOG, "w", encoding="utf-8")
@@ -187,7 +190,7 @@ def launch_gui(tag: str | None = None, use_similarity: bool = False) -> tuple[bo
     main_py = config.find_tagrank_main()
     if main_py is None:
         return False, "TagRank isn't checked out at the configured path."
-    python_exe = config.find_tagrank_python() or "python"
+    python_exe = config.find_tagrank_renamed_python() or config.find_tagrank_python() or "python"
     args = [str(python_exe), str(main_py)]
     if tag:
         args += ["--tag", tag]
