@@ -80,6 +80,11 @@ SCRIPT_META: dict[str, dict[str, str]] = {
         "desc": "Interactive filename-tag splitter/cleaner, with preview before writing.",
         "group": "Interactive Wizards",
     },
+    "tag_cleanup_x": {
+        "icon": "🧪", "label": "Tag Cleanup X",
+        "desc": "Next-gen tag splitter/cleaner - where new cleanup features land (tag_cleanup is frozen).",
+        "group": "Interactive Wizards",
+    },
     "performer_gazetteer": {
         "icon": "\U0001f575️", "label": "Performer Gazetteer",
         "desc": "Build the performer-name cache Tag Cleanup's name detection reads.",

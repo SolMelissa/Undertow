@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.25
+- Significant: Added `scripts/tag_cleanup_x.py` ("Tag Cleanup X"), a fork of `tag_cleanup.py`
+  that is now the place all new tag-cleanup work lands. `tag_cleanup.py` itself is frozen
+  read-only as a known-good fallback and must not be edited. X starts as a byte-identical copy
+  apart from its state files: its own `tag-cleanup-x-config.json` (seeded once from the original
+  script's config so the API URL/key and service picks don't need retyping, then never written
+  back), `tag-cleanup-x-*.html` reports and `tag-cleanup-x-last-preview.txt` log. The editable
+  word lists (`tag_cleanup_lists.py`) and the performer-gazetteer cache stay shared between the
+  two. Registered in the dashboard's script list as "Tag Cleanup X".
+
 ## 1.14.24
 - Enhancement: The background write-queue for Hydrus rating writes (TagRank Pool-Limiter
   8d0c433) only deferred the *write* side of judging a pair - the *read* side building the next
