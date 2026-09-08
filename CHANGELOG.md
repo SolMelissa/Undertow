@@ -2,6 +2,17 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.26
+- Significant: Split `tag_cleanup_x.py` into four focused modules plus self-test fixtures:
+  `tag_cleanup_x_engine.py` (text parsing only), `tag_cleanup_x_hydrus.py` (Hydrus API client),
+  `tag_cleanup_x_render.py` (console/log rendering + progress + user prompts), and
+  `tag_cleanup_x_selftest.py` (fixtures and regression tests). Removed HTML report output;
+  all console output is now mirrored to a timestamped log file with `[HH:MM:SS]` prefixes.
+  Fixed two move-induced path breakages from the earlier `Tag Cleanup X/` subfolder move:
+  the dynamic import fallback, the JSON gazetteer cache path, and the sys.path levels for
+  `from undertow import config`. Progress reporting now uses a 5-second cadence instead of
+  0.5 seconds, and can be passed a callback for long-running batch operations.
+
 ## 1.14.25
 - Significant: Added `scripts/tag_cleanup_x.py` ("Tag Cleanup X"), a fork of `tag_cleanup.py`
   that is now the place all new tag-cleanup work lands. `tag_cleanup.py` itself is frozen

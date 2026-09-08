@@ -26,7 +26,7 @@ from typing import Dict, List
 
 def _default_lists_config_path() -> Path:
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
         from undertow import config as _undertow_config  # type: ignore
         return _undertow_config.DATA_DIR / "tag-cleanup-lists.json"
     except Exception:
