@@ -26,8 +26,10 @@ The Textual console TUI and the dashboard's old hacker/terminal theme have also 
 as unneeded overhead — `undertow/webui.py`'s dashboard (girly/kawaii theme only) is the sole
 interface now.
 
-The setup script and the docs live at the repo root (no `legacy/`/`scripts/`/`docs/`
-subfolders — except a `legacy/` folder holding old guide docs, not code).
+The setup script and the docs live at the repo root (no `legacy/`/`scripts/` subfolders —
+except a `legacy/` folder holding old guide docs, not code). Two exceptions live under
+`docs/`: implementation plans go in `docs/plans/incomplete/` while the work is outstanding,
+and move to `docs/plans/complete/` once it ships.
 
 For the full legacy→active file mapping, the per-module breakdown of `undertow/` (menu.py,
 webui.py, services.py, subscriptions.py, watchdog.py, alerts.py, settings.py, tags.py,
