@@ -2,6 +2,24 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.0
+- Significant: Added the first-party "Tag Cleanup" GUI tab, replacing the need to drive Tag
+  Cleanup X's interactive CLI wizard through the Scripts tab's terminal for day-to-day use.
+  New `undertow/tag_cleanup_web.py` imports `tag_cleanup_x`'s `Config`/engine/`_build_plan`
+  logic directly (no subprocess) so the form gets a live namespace checklist (derived from a
+  wide `search_tags` sample - Hydrus has no dedicated "list namespaces" endpoint), delimiter
+  checkboxes + custom text with an auto-synced (editable) split-regex field via
+  `build_split_regex()`, a random-sample dry-run preview (`/tag-cleanup/preview`, reusing the
+  same `DRY_RUN_SAMPLE_SIZE`/`_build_plan` the wizard's own dry run uses), and an
+  "Apply to full library" action that runs as a background thread job
+  (`start_apply`/`read_apply_output`, one job at a time, same offset-cursor polling convention
+  as `scripts_runner.py`'s subprocess terminal) instead of blocking the request. All Hydrus I/O
+  goes through the webui's own `hydrus_client.py` (the stored API key), not the standalone
+  script's separate client. New routes: `GET /partials/tag-cleanup`, `GET /tag-cleanup/regex`,
+  `POST /tag-cleanup/preview`, `POST /tag-cleanup/apply`, `GET /tag-cleanup/output`. New
+  template `templates/partials/girly/tag_cleanup_panel.html`; wired into `index.html`'s tab bar
+  next to Tag Relations.
+
 ## 1.15.0
 - Significant: Tag Cleanup X's engine and CLI wizard now support multi-namespace processing in
   one pass (e.g. `dir` + `filename` together), an "include unnamespaced tags" toggle, and an

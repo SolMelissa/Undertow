@@ -32,7 +32,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-from . import api_client, api_keys, config, hydrus_client, logtail, media, scripts_runner, services, settings, subscriptions, tags, tagrank_client, version, watchdog
+from . import api_client, api_keys, config, hydrus_client, logtail, media, scripts_runner, services, settings, subscriptions, tag_cleanup_web, tags, tagrank_client, version, watchdog
 from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -1614,6 +1614,104 @@ if HAVE_FLASK:
     @app.route("/partials/tag-namespaces")
     def partial_tag_namespaces():
         return render_template("partials/girly/tag_namespaces_panel.html", **_tag_namespaces_ctx(request.args.get("namespace", "").strip()))
+
+    # ---------------------------------------------------------------- Tag Cleanup
+    # A dedicated GUI form for tag_cleanup_x's filename-tag splitter, instead of driving its
+    # interactive CLI wizard through the generic Scripts tab terminal. See tag_cleanup_web.py
+    # for the reused engine/plan-building logic and the background apply-job mechanism.
+
+    _TAG_CLEANUP_DEFAULT_DELIMITERS = ["-", "_", ",", "|", ";"]
+
+    def _tag_cleanup_ctx(form: dict | None = None, preview_lines=None, preview_sample=None,
+                          preview_total=None, preview_error=None, message: str = None, error: bool = False) -> dict:
+        form = form or {}
+        namespaces, ns_err = tag_cleanup_web.list_known_namespaces()
+        tag_services_resp = hydrus_client.get_services()
+        tag_services: list[dict] = []
+        if tag_services_resp.success:
+            for key, svc in ((tag_services_resp.data or {}).get("services", {})).items():
+                if svc.get("type") == 5:  # local tag service
+                    tag_services.append({"key": key, "name": svc.get("name", key)})
+        default_tag_key, _ = hydrus_client.get_local_tag_service_key()
+
+        selected_namespaces = form.get("namespace") or ["dir"]
+        selected_delimiters = form.get("delimiter") or list(_TAG_CLEANUP_DEFAULT_DELIMITERS)
+        custom_delimiters = form.get("custom_delimiters", "")
+        split_regex = form.get("split_regex")
+        if split_regex is None:
+            split_regex = tag_cleanup_web.build_split_regex(selected_delimiters)
+
+        return {
+            "tc_namespaces": namespaces, "tc_namespaces_error": ns_err,
+            "tc_tag_services": tag_services, "tc_source_key": form.get("source_key") or default_tag_key,
+            "tc_dest_key": form.get("dest_key") or default_tag_key,
+            "tc_selected_namespaces": selected_namespaces, "tc_unnamespaced": form.get("unnamespaced") == "on",
+            "tc_default_delimiters": _TAG_CLEANUP_DEFAULT_DELIMITERS, "tc_selected_delimiters": selected_delimiters,
+            "tc_custom_delimiters": custom_delimiters, "tc_split_regex": split_regex,
+            "tc_drop_truncation": form.get("drop_truncation", "on") == "on",
+            "tc_min_process_tag_length": form.get("min_process_tag_length") or 35,
+            "tc_min_token_len": form.get("min_token_len") or 2,
+            "tc_preview_lines": preview_lines, "tc_preview_sample": preview_sample,
+            "tc_preview_total": preview_total, "tc_preview_error": preview_error,
+            "tc_message": message, "tc_error": error, "tc_apply_running": tag_cleanup_web.is_apply_running(),
+        }
+
+    @app.route("/partials/tag-cleanup")
+    def partial_tag_cleanup():
+        return render_template("partials/girly/tag_cleanup_panel.html", **_tag_cleanup_ctx())
+
+    @app.route("/tag-cleanup/regex")
+    def tag_cleanup_regex():
+        delimiters = request.args.getlist("delimiter") + [
+            d.strip() for d in (request.args.get("custom_delimiters") or "").split(",") if d.strip()
+        ]
+        return tag_cleanup_web.build_split_regex(delimiters)
+
+    def _form_dict(form) -> dict:
+        return {
+            "namespace": form.getlist("namespace"), "unnamespaced": form.get("unnamespaced", ""),
+            "source_key": form.get("source_key", ""), "dest_key": form.get("dest_key", ""),
+            "delimiter": form.getlist("delimiter"), "custom_delimiters": form.get("custom_delimiters", ""),
+            "split_regex": form.get("split_regex", ""), "drop_truncation": form.get("drop_truncation", ""),
+            "min_process_tag_length": form.get("min_process_tag_length", ""),
+            "min_token_len": form.get("min_token_len", ""),
+        }
+
+    @app.route("/tag-cleanup/preview", methods=["POST"])
+    def tag_cleanup_preview():
+        form_dict = _form_dict(request.form)
+        source_key = (request.form.get("source_key") or "").strip()
+        if not source_key:
+            return render_template("partials/girly/tag_cleanup_panel.html",
+                                    **_tag_cleanup_ctx(form_dict, message="Pick a tag service first.", error=True))
+        cfg = tag_cleanup_web.build_config_from_form(request.form)
+        lines, sample_size, total, err = tag_cleanup_web.dry_run_preview(cfg, source_key)
+        return render_template(
+            "partials/girly/tag_cleanup_panel.html",
+            **_tag_cleanup_ctx(form_dict, preview_lines=lines, preview_sample=sample_size,
+                                preview_total=total, preview_error=err),
+        )
+
+    @app.route("/tag-cleanup/apply", methods=["POST"])
+    def tag_cleanup_apply():
+        form_dict = _form_dict(request.form)
+        source_key = (request.form.get("source_key") or "").strip()
+        dest_key = (request.form.get("dest_key") or "").strip() or source_key
+        if not source_key:
+            return render_template("partials/girly/tag_cleanup_panel.html",
+                                    **_tag_cleanup_ctx(form_dict, message="Pick a tag service first.", error=True))
+        cfg = tag_cleanup_web.build_config_from_form(request.form)
+        started = tag_cleanup_web.start_apply(cfg, source_key, dest_key)
+        message = "Started applying in the background - watch the log below." if started else \
+            "An apply job is already running."
+        return render_template("partials/girly/tag_cleanup_panel.html",
+                                **_tag_cleanup_ctx(form_dict, message=message, error=not started))
+
+    @app.route("/tag-cleanup/output")
+    def tag_cleanup_output():
+        since = request.args.get("since", type=int)
+        lines, offset, running = tag_cleanup_web.read_apply_output(since)
+        return jsonify({"lines": lines, "offset": offset, "running": running})
 
     # ---------------------------------------------------------------- TagRank
     # Picker (pills + summary graphs) drives TagRank's own headless API as a subprocess (see

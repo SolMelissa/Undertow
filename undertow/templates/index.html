@@ -137,6 +137,7 @@
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'media' }" @click="girlyTab = 'media'">&#128444; Media</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'metrics' }" @click="girlyTab = 'metrics'">&#128202; Status</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'tags' }" @click="girlyTab = 'tags'">&#127991; Tag Relations</button>
+      <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'tagcleanup' }" @click="girlyTab = 'tagcleanup'">&#129533; Tag Cleanup</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'tagrank' }" @click="girlyTab = 'tagrank'">&#127942; TagRank</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'scripts' }" @click="girlyTab = 'scripts'">&#128187; Scripts</button>
       <button type="button" class="kawaii-tab-btn" :class="{ active: girlyTab === 'changelog' }" @click="girlyTab = 'changelog'">&#128220; Changelog</button>
@@ -249,6 +250,13 @@
         loading&hellip;
       </div>
     </div><!-- /girlyTab === 'tags' -->
+
+    <div x-show="girlyTab === 'tagcleanup'" x-cloak>
+      <p class="kawaii-section-title">&#129533; Tag Cleanup</p>
+      <div id="girly-tag-cleanup-tab" hx-get="/partials/tag-cleanup" hx-trigger="load" hx-swap="innerHTML">
+        loading&hellip;
+      </div>
+    </div><!-- /girlyTab === 'tagcleanup' -->
 
     <div x-show="girlyTab === 'tagrank'" x-cloak>
       <p class="kawaii-section-title">&#127942; TagRank</p>

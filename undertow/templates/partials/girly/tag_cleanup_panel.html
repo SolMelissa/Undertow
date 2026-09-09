@@ -1,0 +1,177 @@
+<div class="kawaii-card" id="girly-tag-cleanup-panel">
+  <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
+    Splits bulk-imported "filename tags" (e.g. <code>dir:sunset hike - teen couple watches full moon rise</code>)
+    into well-formed individual tags. Pick which namespace(s) hold the raw filename tags, how to
+    split them, then preview a random sample before applying to the whole library. Same engine as
+    the Scripts tab's Tag Cleanup X wizard, just with a form instead of a terminal.
+  </p>
+
+  <form id="tag-cleanup-form">
+    <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+      <div style="flex:1; min-width:16rem;">
+        <p style="font-weight:600; margin:0 0 0.4rem;">Source namespace(s)</p>
+        {% if tc_namespaces_error %}
+        <p class="text-xs" style="color:var(--k-danger-text);">{{ tc_namespaces_error }}</p>
+        {% endif %}
+        <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; max-height:8rem; overflow-y:auto;">
+          {% for ns in tc_namespaces %}
+          <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
+            <input type="checkbox" name="namespace" value="{{ ns }}" class="tc-regex-input" {% if ns in tc_selected_namespaces %}checked{% endif %}>
+            {{ ns }}
+          </label>
+          {% else %}
+          <span class="text-xs" style="color:var(--k-text-dim-text);">no namespaces found - is Hydrus connected?</span>
+          {% endfor %}
+        </div>
+        <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
+          <input type="checkbox" name="unnamespaced" {% if tc_unnamespaced %}checked{% endif %}>
+          Also include unnamespaced tags
+        </label>
+      </div>
+
+      <div style="flex:1; min-width:16rem;">
+        <p style="font-weight:600; margin:0 0 0.4rem;">Split on</p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem;">
+          {% for d in tc_default_delimiters %}
+          <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
+            <input type="checkbox" name="delimiter" value="{{ d }}" class="tc-regex-input" {% if d in tc_selected_delimiters %}checked{% endif %}>
+            <code>{{ d }}</code>
+          </label>
+          {% endfor %}
+        </div>
+        <input type="text" name="custom_delimiters" value="{{ tc_custom_delimiters }}" placeholder="other chars, comma-separated&hellip;"
+               autocomplete="off" class="kawaii-input tc-regex-input" style="margin-top:0.5rem; width:100%;">
+        <p style="font-weight:600; margin:0.75rem 0 0.3rem;">Split regex (auto-filled, editable)</p>
+        <input type="text" name="split_regex" id="tc-split-regex" value="{{ tc_split_regex }}" autocomplete="off"
+               class="kawaii-input" style="width:100%; font-family:'Consolas','Courier New',monospace; font-size:0.8rem;">
+      </div>
+    </div>
+
+    <div style="display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:1rem;">
+      <div style="flex:1; min-width:14rem;">
+        <p style="font-weight:600; margin:0 0 0.4rem;">Tag services</p>
+        <label class="text-xs">Read raw tags from
+          <select name="source_key" class="kawaii-input" style="width:100%; margin-top:0.2rem;">
+            {% for svc in tc_tag_services %}
+            <option value="{{ svc.key }}" {% if svc.key == tc_source_key %}selected{% endif %}>{{ svc.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="text-xs" style="display:block; margin-top:0.5rem;">Write cleaned tags to
+          <select name="dest_key" class="kawaii-input" style="width:100%; margin-top:0.2rem;">
+            {% for svc in tc_tag_services %}
+            <option value="{{ svc.key }}" {% if svc.key == tc_dest_key %}selected{% endif %}>{{ svc.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <div style="flex:1; min-width:14rem;">
+        <p style="font-weight:600; margin:0 0 0.4rem;">Thresholds</p>
+        <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
+          <input type="checkbox" name="drop_truncation" {% if tc_drop_truncation %}checked{% endif %}>
+          Drop suspected truncated trailing tokens
+        </label>
+        <label class="text-xs" style="display:block; margin-top:0.5rem;">Min raw-tag length to parse
+          <input type="number" name="min_process_tag_length" value="{{ tc_min_process_tag_length }}" min="1"
+                 class="kawaii-input" style="width:100%; margin-top:0.2rem;">
+        </label>
+        <label class="text-xs" style="display:block; margin-top:0.5rem;">Min word length to keep
+          <input type="number" name="min_token_len" value="{{ tc_min_token_len }}" min="1"
+                 class="kawaii-input" style="width:100%; margin-top:0.2rem;">
+        </label>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:0.6rem; margin-top:1rem; flex-wrap:wrap;">
+      <button type="button" class="kawaii-btn kawaii-btn-primary"
+              hx-post="/tag-cleanup/preview" hx-include="#tag-cleanup-form" hx-target="#girly-tag-cleanup-panel" hx-swap="outerHTML">
+        Preview sample
+      </button>
+      <button type="button" class="kawaii-btn kawaii-btn-danger" {% if tc_apply_running %}disabled{% endif %}
+              hx-post="/tag-cleanup/apply" hx-include="#tag-cleanup-form" hx-target="#girly-tag-cleanup-panel" hx-swap="outerHTML"
+              hx-confirm="Apply this cleanup to the whole matching library? This runs in the background and can't be bulk-undone.">
+        Apply to full library
+      </button>
+    </div>
+  </form>
+
+  {% if tc_message %}
+  <div class="kawaii-empty" style="color: {{ 'var(--k-danger-text)' if tc_error else 'var(--k-accent-2-text)' }}; text-align:left; margin-top:0.75rem;">{{ tc_message }}</div>
+  {% endif %}
+
+  {% if tc_preview_error %}
+  <div class="text-xs" style="color:var(--k-danger-text); margin-top:0.75rem;">{{ tc_preview_error }}</div>
+  {% elif tc_preview_lines is not none %}
+  <p class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.75rem;">
+    Sampled {{ tc_preview_sample }} of {{ tc_preview_total }} matching file(s):
+  </p>
+  <pre style="margin:0.4rem 0 0; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-family:'Consolas','Courier New',monospace; font-size:12px; background:#0d0f12; color:#c9f7c9; border-radius:8px; padding:0.75rem;">{{ tc_preview_lines | join('\n') }}</pre>
+  {% endif %}
+
+  <div id="tag-cleanup-apply-log" style="{% if not tc_apply_running %}display:none;{% endif %} margin-top:0.75rem;">
+    <p class="text-xs" style="color:var(--k-text-dim-text); margin:0 0 0.3rem;">Apply progress:</p>
+    <pre id="tag-cleanup-apply-term" style="margin:0; max-height:300px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-family:'Consolas','Courier New',monospace; font-size:12px; background:#0d0f12; color:#c9f7c9; border-radius:8px; padding:0.75rem;"></pre>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Auto-refresh the split regex box from the checked namespace/delimiter checkboxes -
+  // matches build_split_regex() server-side so the field stays in sync without a full form
+  // submit, but only while the user hasn't hand-edited it (a manual edit opts out of auto-sync
+  // until the next full panel re-render, same convention as the wizard's own editable default).
+  var form = document.getElementById('tag-cleanup-form');
+  if (!form) return;
+  var regexBox = document.getElementById('tc-split-regex');
+  var userEdited = false;
+  regexBox.addEventListener('input', function () { userEdited = true; });
+
+  var debounceTimer = null;
+  form.querySelectorAll('.tc-regex-input').forEach(function (el) {
+    el.addEventListener(el.type === 'text' ? 'input' : 'change', function () {
+      if (userEdited) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function () {
+        var params = new URLSearchParams();
+        form.querySelectorAll('input[name="delimiter"]:checked').forEach(function (el) { params.append('delimiter', el.value); });
+        var custom = form.querySelector('input[name="custom_delimiters"]').value;
+        if (custom) params.append('custom_delimiters', custom);
+        fetch('/tag-cleanup/regex?' + params.toString()).then(function (r) { return r.text(); }).then(function (text) {
+          regexBox.value = text;
+        });
+      }, 250);
+    });
+  });
+
+  // Apply-progress polling, same offset-cursor pattern as the Scripts tab's terminal.
+  if (window.tagCleanupApplyPoll) clearTimeout(window.tagCleanupApplyPoll);
+  var running = {{ 'true' if tc_apply_running else 'false' }};
+  if (running) {
+    document.getElementById('tag-cleanup-apply-log').style.display = '';
+  }
+  var offset = null;
+  var text = '';
+  function poll() {
+    var url = offset === null ? '/tag-cleanup/output' : '/tag-cleanup/output?since=' + offset;
+    fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      offset = d.offset;
+      if (d.lines && d.lines.length) {
+        text += d.lines.join('\n') + '\n';
+        var term = document.getElementById('tag-cleanup-apply-term');
+        if (term) {
+          document.getElementById('tag-cleanup-apply-log').style.display = '';
+          term.textContent = text;
+          term.scrollTop = term.scrollHeight;
+        }
+      }
+      if (d.running) {
+        window.tagCleanupApplyPoll = setTimeout(poll, 800);
+      }
+    }).catch(function () {
+      window.tagCleanupApplyPoll = setTimeout(poll, 1500);
+    });
+  }
+  poll();
+})();
+</script>
