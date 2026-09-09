@@ -2,6 +2,17 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.2
+- BugFix: The real cause of the Tag Cleanup tab's read timeouts (1.16.1's longer timeout was
+  only a band-aid): its panel used plain `hx-trigger="load"`, which - like every other tab's
+  panel in `index.html` - fires the instant the element exists in the DOM. Alpine's `x-show`
+  only toggles CSS `display` on inactive tabs, it doesn't remove them, so the tab's expensive
+  whole-tag-store `search_tags("*")` namespace scan was firing on *every* dashboard launch
+  regardless of which tab the user actually opened, contending with itself/other startup calls
+  for Hydrus DB time. The panel now loads lazily on a `tagCleanupTabOpen` event (fired once,
+  from a new branch in `index.html`'s tab `x-effect`, same convention as the Metrics tab's
+  `metricsTabOpen`) instead of unconditionally at page load.
+
 ## 1.16.1
 - BugFix: The Tag Cleanup tab's live namespace list was hitting `hydrus_client.invoke_hydrus_api`'s
   default 8s HTTP timeout on real libraries - `search_tags("*")` (a bare wildcard, matching the

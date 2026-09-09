@@ -101,7 +101,7 @@
        The dashboard's one and only layout - hero, stat-card grid, labelled chart, friendly
        subscriptions list and activity feed - built from templates/partials/girly/*.html. -->
   <div id="girly-view" x-data="{ girlyTab: 'home' }"
-       x-effect="window.girlyTab = girlyTab; if (girlyTab === 'metrics') { htmx.trigger(document.body, 'metricsTabOpen'); if (window.refreshLog) refreshLog(); }">
+       x-effect="window.girlyTab = girlyTab; if (girlyTab === 'metrics') { htmx.trigger(document.body, 'metricsTabOpen'); if (window.refreshLog) refreshLog(); } if (girlyTab === 'tagcleanup') { htmx.trigger(document.body, 'tagCleanupTabOpen'); }">
 
     <div class="kawaii-blob-bg"><span></span><span></span><span></span></div>
 
@@ -253,7 +253,13 @@
 
     <div x-show="girlyTab === 'tagcleanup'" x-cloak>
       <p class="kawaii-section-title">&#129533; Tag Cleanup</p>
-      <div id="girly-tag-cleanup-tab" hx-get="/partials/tag-cleanup" hx-trigger="load" hx-swap="innerHTML">
+      <!-- Loaded lazily, once, only when this tab is actually opened (not on every dashboard
+           launch) - its namespace checklist does an expensive whole-tag-store search_tags("*")
+           scan, and plain hx-trigger="load" fires immediately for every tab's hidden panel
+           regardless of which one is visible (Alpine's x-show only toggles CSS display, it
+           doesn't remove the element from the DOM). See tagCleanupTabOpen in the x-effect above. -->
+      <div id="girly-tag-cleanup-tab" hx-get="/partials/tag-cleanup"
+           hx-trigger="tagCleanupTabOpen from:body once" hx-swap="innerHTML">
         loading&hellip;
       </div>
     </div><!-- /girlyTab === 'tagcleanup' -->
