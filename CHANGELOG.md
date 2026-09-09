@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.10
+- BugFix: `performer_gazetteer.py`'s API-key prompt (`console.Renderer.secret`) used
+  `getpass.getpass()` unconditionally, which on Windows reads from the console via `msvcrt`
+  and completely bypasses stdin - when launched as a piped subprocess with no real console
+  attached (e.g. from the webui's Scripts tab), that read could never be satisfied and hung
+  forever right after answering the preceding "Fetch performers from ThePornDB/StashDB?"
+  yes/no prompt, making it look like the "Y" input wasn't being accepted. Now falls back to
+  a plain (echoed) `input()` whenever stdin isn't an interactive tty.
+
 ## 1.16.9
 - BugFix: `fetch_tags_by_file`'s `get_file_metadata(include_tags=True)` call was still using the
   30s `_SEARCH_TIMEOUT` shared with the cheaper `search_files` call, and was timing out even for

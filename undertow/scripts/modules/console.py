@@ -68,10 +68,20 @@ class Renderer:
             self.out("  A value is required.")
 
     def secret(self, label: str, has_saved: bool) -> Optional[str]:
-        """Prompt for a secret (password/API key). Never logs the value."""
+        """Prompt for a secret (password/API key). Never logs the value.
+
+        On Windows, getpass.getpass() reads directly from the console (CONIN$) via msvcrt,
+        bypassing stdin entirely - when this process is a piped subprocess with no real
+        console attached (e.g. launched from the webui's Scripts tab), that read can never
+        be satisfied and just hangs forever. Fall back to a plain (echoed) input() whenever
+        stdin isn't an interactive tty, since there's no real terminal to mask input on
+        anyway in that case."""
         hint = " (leave blank to keep the saved key)" if has_saved else ""
         self._log_line(f"{label}{hint}")
-        value = getpass.getpass(f"{label}{hint}: ").strip()
+        if sys.stdin.isatty():
+            value = getpass.getpass(f"{label}{hint}: ").strip()
+        else:
+            value = input(f"{label}{hint}: ").strip()
         value = "".join(ch for ch in value if ch.isprintable())
         if value:
             self._log_line("  → (api key entered)")
