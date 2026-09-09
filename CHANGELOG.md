@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.32
+- Patch: Split `scripts/performer_gazetteer.py` the same way `tag_cleanup_x.py` was split
+  earlier: all its logic (ThePornDB/StashDB fetching, gazetteer building/saving, the wizard
+  prompts) moved verbatim into a new `scripts/tag_cleanup/tag_cleanup_x_gazetteer.py`, since
+  none of it is generic enough for `scripts/modules/` - it's all specific to building the
+  cache `tag_cleanup_x.py`'s name detection reads. `scripts/performer_gazetteer.py` is now a
+  thin launcher: adds `modules/` and `tag_cleanup/` to `sys.path` and calls
+  `tag_cleanup_x_gazetteer.main()`, so the dashboard's Scripts tab (which only discovers
+  `scripts/*.py` directly) can still find and launch it.
+
 ## 1.14.31
 - BugFix: Committed the removal of `disk_usage_report.py`, `duplicate_tag_finder.py`,
   `empty_folder_sweep.py`, `hydrus_health_check.py`, `inbox_triage_report.py`,
