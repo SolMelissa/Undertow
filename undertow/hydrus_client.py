@@ -226,17 +226,21 @@ def get_file_metadata(file_ids: list[int], include_tags: bool = True) -> ApiResu
     return invoke_hydrus_api("/get_files/file_metadata", params=params)
 
 
-def search_tags(query: str, tag_service_key: str | None = None) -> ApiResult:
+def search_tags(query: str, tag_service_key: str | None = None, timeout: float = 8) -> ApiResult:
     """Tag autocomplete with counts - the mechanism behind the Media tab's suggestion pool. Counts
     are whole-tag-domain (or whatever `tag_service_key` scopes to), NOT narrowed by any active
     search - confirmed live that /add_tags/search_tags has no parameter for that (see module
     docstring above). Still useful for "what tags exist / are common", just not "what tags would
     actually narrow my current results", which would need a much more expensive per-candidate
-    search_files call to compute and isn't done here."""
+    search_files call to compute and isn't done here.
+
+    `timeout` defaults to invoke_hydrus_api's own 8s but a bare wildcard query ("*", matching
+    the whole tag store rather than a typed prefix) can take much longer on a large library -
+    callers doing that should pass a higher value explicitly."""
     params: dict = {"search": query}
     if tag_service_key:
         params["tag_service_key"] = tag_service_key
-    return invoke_hydrus_api("/add_tags/search_tags", params=params)
+    return invoke_hydrus_api("/add_tags/search_tags", params=params, timeout=timeout)
 
 
 def get_services() -> ApiResult:

@@ -38,8 +38,11 @@ DRY_RUN_SAMPLE_SIZE = tag_cleanup_x.DRY_RUN_SAMPLE_SIZE
 def list_known_namespaces(limit: int = 500) -> tuple[list[str], Optional[str]]:
     """Live namespace list for the form's checkboxes. Hydrus has no dedicated "list namespaces"
     endpoint, so - the same workaround the tag-namespace browse panel uses - this pulls a wide
-    tag sample via search_tags and takes the unique prefixes before ':'."""
-    resp = hydrus_client.search_tags("*")
+    tag sample via search_tags and takes the unique prefixes before ':'. A bare "*" query (all
+    tags in the store, not a typed prefix) can be slow on a large library, well past the
+    default 8s HTTP timeout - give it more room; the form also has a manual namespace text
+    field so the feature still works if this call fails or times out."""
+    resp = hydrus_client.search_tags("*", timeout=30)
     if not resp.success:
         return [], resp.error
     raw = (resp.data or {}).get("tags", [])
@@ -55,6 +58,8 @@ def build_config_from_form(form) -> Config:
     """Turns the tag-cleanup form's POST/GET data into a Config, mirroring wizard_build_config's
     fields (namespaces, unnamespaced, delimiters, split_regex, thresholds)."""
     namespaces = [ns.strip() for ns in form.getlist("namespace") if ns.strip()]
+    custom_namespaces = [ns.strip() for ns in (form.get("custom_namespaces") or "").split(",") if ns.strip()]
+    namespaces = namespaces + [ns for ns in custom_namespaces if ns not in namespaces]
     include_unnamespaced = form.get("unnamespaced") == "on"
     delimiters = [d.strip() for d in form.getlist("delimiter") if d.strip()]
     custom_delims = [d.strip() for d in (form.get("custom_delimiters") or "").split(",") if d.strip()]

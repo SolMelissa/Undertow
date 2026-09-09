@@ -2,6 +2,14 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.1
+- BugFix: The Tag Cleanup tab's live namespace list was hitting `hydrus_client.invoke_hydrus_api`'s
+  default 8s HTTP timeout on real libraries - `search_tags("*")` (a bare wildcard, matching the
+  whole tag store rather than a typed prefix) is much slower than a normal autocomplete lookup.
+  `hydrus_client.search_tags()` now takes an optional `timeout`, and the namespace scan passes
+  30s. Also added a manual "other namespace(s), comma-separated" text field to the form so the
+  tab still works if the live scan fails or times out anyway.
+
 ## 1.16.0
 - Significant: Added the first-party "Tag Cleanup" GUI tab, replacing the need to drive Tag
   Cleanup X's interactive CLI wizard through the Scripts tab's terminal for day-to-day use.

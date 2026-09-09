@@ -1635,6 +1635,7 @@ if HAVE_FLASK:
         default_tag_key, _ = hydrus_client.get_local_tag_service_key()
 
         selected_namespaces = form.get("namespace") or ["dir"]
+        custom_namespaces = form.get("custom_namespaces", "")
         selected_delimiters = form.get("delimiter") or list(_TAG_CLEANUP_DEFAULT_DELIMITERS)
         custom_delimiters = form.get("custom_delimiters", "")
         split_regex = form.get("split_regex")
@@ -1645,7 +1646,8 @@ if HAVE_FLASK:
             "tc_namespaces": namespaces, "tc_namespaces_error": ns_err,
             "tc_tag_services": tag_services, "tc_source_key": form.get("source_key") or default_tag_key,
             "tc_dest_key": form.get("dest_key") or default_tag_key,
-            "tc_selected_namespaces": selected_namespaces, "tc_unnamespaced": form.get("unnamespaced") == "on",
+            "tc_selected_namespaces": selected_namespaces, "tc_custom_namespaces": custom_namespaces,
+            "tc_unnamespaced": form.get("unnamespaced") == "on",
             "tc_default_delimiters": _TAG_CLEANUP_DEFAULT_DELIMITERS, "tc_selected_delimiters": selected_delimiters,
             "tc_custom_delimiters": custom_delimiters, "tc_split_regex": split_regex,
             "tc_drop_truncation": form.get("drop_truncation", "on") == "on",
@@ -1669,7 +1671,8 @@ if HAVE_FLASK:
 
     def _form_dict(form) -> dict:
         return {
-            "namespace": form.getlist("namespace"), "unnamespaced": form.get("unnamespaced", ""),
+            "namespace": form.getlist("namespace"), "custom_namespaces": form.get("custom_namespaces", ""),
+            "unnamespaced": form.get("unnamespaced", ""),
             "source_key": form.get("source_key", ""), "dest_key": form.get("dest_key", ""),
             "delimiter": form.getlist("delimiter"), "custom_delimiters": form.get("custom_delimiters", ""),
             "split_regex": form.get("split_regex", ""), "drop_truncation": form.get("drop_truncation", ""),

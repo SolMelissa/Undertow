@@ -20,9 +20,13 @@
             {{ ns }}
           </label>
           {% else %}
-          <span class="text-xs" style="color:var(--k-text-dim-text);">no namespaces found - is Hydrus connected?</span>
+          <span class="text-xs" style="color:var(--k-text-dim-text);">
+            {% if tc_namespaces_error %}live list unavailable - type namespace(s) manually below{% else %}no namespaces found{% endif %}
+          </span>
           {% endfor %}
         </div>
+        <input type="text" name="custom_namespaces" value="{{ tc_custom_namespaces }}" placeholder="other namespace(s), comma-separated&hellip;"
+               autocomplete="off" class="kawaii-input" style="margin-top:0.5rem; width:100%;">
         <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
           <input type="checkbox" name="unnamespaced" {% if tc_unnamespaced %}checked{% endif %}>
           Also include unnamespaced tags
