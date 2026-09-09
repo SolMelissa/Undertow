@@ -122,9 +122,15 @@
   {% if tc_preview_error %}
   <div class="text-xs" style="color:var(--k-danger-text); margin-top:0.75rem;">{{ tc_preview_error }}</div>
   {% elif tc_preview_lines is not none %}
-  <p class="text-xs" style="color:var(--k-text-dim-text); margin-top:0.75rem;">
-    Sampled {{ tc_preview_sample }} of {{ tc_preview_total }} matching file(s):
-  </p>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; margin-top:0.75rem; flex-wrap:wrap;">
+    <p class="text-xs" style="color:var(--k-text-dim-text); margin:0;">
+      Sampled {{ tc_preview_sample }} of {{ tc_preview_total }} matching file(s):
+    </p>
+    <button type="button" class="kawaii-btn"
+            hx-post="/tag-cleanup/preview" hx-include="#tag-cleanup-form" hx-target="#girly-tag-cleanup-panel" hx-swap="outerHTML">
+      Refresh sample
+    </button>
+  </div>
   <pre style="margin:0.4rem 0 0; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-family:'Consolas','Courier New',monospace; font-size:12px; background:#0d0f12; color:#c9f7c9; border-radius:8px; padding:0.75rem;">{{ tc_preview_lines | join('\n') }}</pre>
   {% endif %}
 

@@ -2,6 +2,12 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.8
+- Patch: Added a "Refresh sample" button next to Tag Cleanup's Preview results - reposts the
+  same form to `/tag-cleanup/preview`, which already draws a fresh `random.sample()` of files
+  on every request, so this just makes it a one-click way to re-roll the sample instead of
+  needing to scroll up and hit "Preview sample" again.
+
 ## 1.16.7
 - BugFix: Tag Cleanup's dry-run Preview now collapses duplicate raw tags before displaying
   them, showing up to 25 *distinct* tags instead of up to 40 raw entries that were often the
