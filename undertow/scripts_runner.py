@@ -65,14 +65,9 @@ SCRIPT_META: dict[str, dict[str, str]] = {
         "desc": "Build the performer-name cache Tag Cleanup X's name detection reads.",
         "group": "Interactive Wizards",
     },
-    "tagrank_setup_hidden_tags_marker": {
-        "icon": ">", "label": "Setup TagRank Hidden Tags Marker",
-        "desc": "One-time setup: import marker image to Hydrus.",
-        "group": "TagRank",
-    },
-    "sync_hidden_tags_to_marker": {
-        "icon": ">", "label": "Sync TagRank Hidden Tags",
-        "desc": "Sync hidden tags from TagRank config to Hydrus marker file.",
+    "tagrank_setup": {
+        "icon": ">", "label": "Setup/Sync TagRank Hidden Tags",
+        "desc": "Import the hidden-tags marker file if needed, then sync its tags to config/TAG_FILTERS.",
         "group": "TagRank",
     },
 }

@@ -2,6 +2,19 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.33
+- Patch: Merged the two TagRank hidden-tags-marker scripts
+  (`tagrank_setup_hidden_tags_marker.py` and `sync_hidden_tags_to_marker.py`), which were
+  really two halves of one flow, into a single idempotent `scripts/tagrank_setup.py`: it
+  imports the marker file only if config/KEYS doesn't already have its hash, then always syncs
+  its tags to config/TAG_FILTERS. Their logic moved into a new `scripts/tagrank/` subfolder -
+  `tagrank_connect.py` (generic `connect()` for talking to Hydrus via TagRank's own
+  client/settings, reusable by any future TagRank-integration script) and `tagrank_marker.py`
+  (the marker-file-specific import/tag/note/sync logic) - since none of it is generic enough
+  for `scripts/modules/`, which only holds logic reusable by scripts that don't need TagRank's
+  own config/settings modules. Updated `scripts_runner.py`'s `SCRIPT_META` manifest to match
+  (one "Setup/Sync TagRank Hidden Tags" entry replacing the old two).
+
 ## 1.14.32
 - Patch: Split `scripts/performer_gazetteer.py` the same way `tag_cleanup_x.py` was split
   earlier: all its logic (ThePornDB/StashDB fetching, gazetteer building/saving, the wizard
