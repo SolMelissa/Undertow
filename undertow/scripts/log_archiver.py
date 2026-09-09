@@ -6,11 +6,16 @@ untouched - this is purely about the flat pile of daily logs that otherwise accu
 
 from __future__ import annotations
 
+import sys
 import time
 import zipfile
 from datetime import datetime
+from pathlib import Path
 
-from _common import config, section
+sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+
+from undertow_bridge import config  # noqa: E402
+from report import section  # noqa: E402
 
 KEEP_RAW_DAYS = 14
 KEEP_ARCHIVE_DAYS = 90

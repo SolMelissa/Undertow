@@ -139,8 +139,8 @@ _runs: dict[str, ScriptRun] = {}
 
 # Files under scripts/ that are support/library modules, not runnable scripts - imported by
 # webui.py or other scripts rather than meant to be launched as a subprocess. They can't use
-# the leading-underscore convention (_common.py) because other code imports them by this
-# exact name (webui.py: `import tag_cleanup_lists`).
+# a leading-underscore convention because other code imports them by this exact name
+# (webui.py: `import tag_cleanup_lists`).
 NOT_RUNNABLE = {"tag_cleanup_lists"}
 
 

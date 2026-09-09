@@ -5,7 +5,13 @@ the local tag service - a quick "what's actually in my tag soup" overview instea
 
 from __future__ import annotations
 
-from _common import hydrus_client, section
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+
+from undertow_bridge import hydrus_client  # noqa: E402
+from report import section  # noqa: E402
 
 NAMESPACES = [
     "creator", "character", "series", "meta", "studio", "performer",

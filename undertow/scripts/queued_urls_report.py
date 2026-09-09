@@ -6,9 +6,14 @@ through the daemon's own admin UI.
 
 from __future__ import annotations
 
+import sys
 from collections import Counter
+from pathlib import Path
 
-from _common import api_client, section
+sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+
+from undertow_bridge import api_client  # noqa: E402
+from report import section  # noqa: E402
 
 
 def main() -> int:

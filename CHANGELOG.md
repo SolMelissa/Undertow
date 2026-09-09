@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.29
+- Patch: Moved `scripts/_common.py` into `scripts/modules/`, split by concern to match the
+  folder's existing convention: `modules/undertow_bridge.py` (repo-root `sys.path` fix +
+  re-exports of `undertow.api_client`/`config`/`hydrus_client`) and `modules/report.py`
+  (`hr_size`, `hr_age`, `section`). Updated the five scripts still importing it
+  (`log_archiver.py`, `queued_urls_report.py`, `subscription_health_report.py`,
+  `tag_namespace_summary.py`, `untagged_files_report.py`) to add `modules/` to `sys.path` and
+  import from the new flat module names, same pattern `tag_cleanup_x.py` already uses.
+
 ## 1.14.28
 - Significant: Flattened the `Tag Cleanup X/` subfolder into `undertow/scripts/`: the wizard
   entry point `tag_cleanup_x.py` and the generic `modules/` folder (Hydrus client, console/

@@ -6,7 +6,13 @@ by one in the dashboard.
 
 from __future__ import annotations
 
-from _common import api_client, section
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+
+from undertow_bridge import api_client  # noqa: E402
+from report import section  # noqa: E402
 
 
 def main() -> int:
