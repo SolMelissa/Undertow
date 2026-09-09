@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.9
+- BugFix: `fetch_tags_by_file`'s `get_file_metadata(include_tags=True)` call was still using the
+  30s `_SEARCH_TIMEOUT` shared with the cheaper `search_files` call, and was timing out even for
+  Preview's 25-file sample on a large library (pulling tags is a much heavier Hydrus DB
+  operation than searching the index). Split it into its own `_METADATA_TIMEOUT = 120`, which
+  also covers the full-library Apply job since both share this function.
+
 ## 1.16.8
 - Patch: Added a "Refresh sample" button next to Tag Cleanup's Preview results - reposts the
   same form to `/tag-cleanup/preview`, which already draws a fresh `random.sample()` of files

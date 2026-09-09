@@ -51,8 +51,11 @@ PREVIEW_UNIQUE_TAG_LIMIT = 25
 
 # search_files/get_file_metadata default to invoke_hydrus_api's own 8s timeout, which a wide
 # wildcard predicate (or a large file_ids chunk) over a real library can comfortably exceed -
-# same reasoning as search_tags's timeout in list_services below.
+# same reasoning as search_tags's timeout in list_services below. get_file_metadata with
+# include_tags=True is the slower of the two (Hydrus has to pull every tag row per file, not
+# just search the index), so it gets its own longer budget even for the small dry-run sample.
 _SEARCH_TIMEOUT = 30
+_METADATA_TIMEOUT = 120
 
 # Hydrus service `type` codes (same constants webui.py's TagRank services panel uses, confirmed
 # against a live /get_services response) worth offering as tag-service/file-domain checkboxes.
@@ -178,7 +181,7 @@ def fetch_tags_by_file(file_ids: list[int], tag_service_keys: list[str], chunk_s
     metadata: dict[int, list[str]] = {}
     for start in range(0, len(file_ids), chunk_size):
         chunk = file_ids[start:start + chunk_size]
-        resp = hydrus_client.get_file_metadata(chunk, include_tags=True, timeout=_SEARCH_TIMEOUT)
+        resp = hydrus_client.get_file_metadata(chunk, include_tags=True, timeout=_METADATA_TIMEOUT)
         if not resp.success:
             return {}, resp.error
         for entry in (resp.data or {}).get("metadata", []):
