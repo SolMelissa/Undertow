@@ -1,5 +1,5 @@
 """
-Tag Cleanup X text engine: content-agnostic parsing of filename-derived tags.
+Tag Cleanup X's text engine: content-agnostic parsing of filename-derived tags.
 
 This module handles text processing only - no network, no terminal I/O, no prompts.
 Its only file reads are the editable word lists (via tag_cleanup_x_lists) and the

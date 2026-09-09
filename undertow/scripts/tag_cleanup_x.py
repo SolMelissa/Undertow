@@ -37,12 +37,13 @@ earlier and dropped as too heavy and unreliable for lowercase filename text with
 signal. With no gazetteer cached, names pass through the same content/attribute pipeline as
 any other word, same as before this feature existed.
 
-Architecture: the text-processing engine (tag_cleanup_x_engine), tag-specific preview
-rendering (tag_cleanup_x_render), and self-test fixtures (tag_cleanup_x_selftest) are split
-out as focused, tag-cleanup-specific modules. Generic, content-agnostic pieces any future
-script in this folder can reuse - the Hydrus API client (hydrus_client) and console/log tee +
-progress + prompts (console) - live under modules/ instead, with no tag-cleanup logic in
-them. This wizard entry point orchestrates all of the above.
+Architecture: this wizard entry point lives directly in scripts/ alongside the other one-off
+tools. The text-processing engine (tag_cleanup_x_engine), tag-specific preview rendering
+(tag_cleanup_x_render), editable word lists (tag_cleanup_x_lists), and self-test fixtures
+(tag_cleanup_x_selftest) are tag-cleanup-specific and live under scripts/tag_cleanup/.
+Generic, content-agnostic pieces any future script in scripts/ can reuse - the Hydrus API
+client (hydrus_client) and console/log tee + progress + prompts (console) - live under
+scripts/modules/ instead, with no tag-cleanup logic in them.
 """
 
 from __future__ import annotations
@@ -65,9 +66,10 @@ except ImportError:
     sys.exit(1)
 
 # Generic, reusable modules (no tag-cleanup-specific logic) live in modules/ so any future
-# script in this folder can import them too - Python doesn't add subdirectories to sys.path
-# on its own, so it has to be inserted explicitly before importing from there.
+# script in scripts/ can import them too - Python doesn't add subdirectories to sys.path
+# on its own, so both subfolders have to be inserted explicitly before importing from them.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "tag_cleanup"))
 
 import tag_cleanup_x_lists as tag_cleanup_lists
 from tag_cleanup_x_engine import Config, PerformerGazetteer, ParsedTag, FilePreview, parse_filename_tag_batch, load_performer_gazetteer
@@ -86,7 +88,7 @@ from tag_cleanup_x_selftest import run_self_test
 
 def _config_dir() -> Path:
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
         from undertow import config as _undertow_config  # type: ignore
         return _undertow_config.DATA_DIR
     except Exception:

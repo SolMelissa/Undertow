@@ -11,7 +11,7 @@ from typing import List, Set, Tuple
 
 from rich.text import Text
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "modules"))
 from console import Renderer
 
 from tag_cleanup_x_engine import FilePreview, ParsedTag

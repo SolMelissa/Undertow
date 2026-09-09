@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.28
+- Significant: Flattened the `Tag Cleanup X/` subfolder into `undertow/scripts/`: the wizard
+  entry point `tag_cleanup_x.py` and the generic `modules/` folder (Hydrus client, console/
+  progress/prompts) now live directly under `scripts/`, and the remaining tag-cleanup-specific
+  modules (`tag_cleanup_x_engine.py`, `tag_cleanup_x_render.py`, `tag_cleanup_x_lists.py`,
+  `tag_cleanup_x_selftest.py`) moved to `scripts/tag_cleanup/`. Rewired every import and
+  `sys.path` insert for the new depths; nothing else under `scripts/` was touched. Note:
+  `scripts_runner.list_scripts()` globs `scripts/*.py` non-recursively, so `tag_cleanup_x.py`
+  is no longer hidden from the dashboard's Scripts tab - it will now appear there.
+
 ## 1.14.27
 - Patch: Pulled the content-agnostic pieces of Tag Cleanup X out into a reusable
   `Tag Cleanup X/modules/` folder so future scripts in that directory aren't tied to tag
