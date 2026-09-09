@@ -43,11 +43,11 @@
 
     <div style="display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:1rem;">
       <div style="flex:1; min-width:14rem;">
-        <p style="font-weight:600; margin:0 0 0.4rem;">Read raw tags from</p>
+        <p style="font-weight:600; margin:0 0 0.4rem;">Read raw tags from <span class="text-xs" style="font-weight:400; color:var(--k-text-dim-text);">(check as many as you like)</span></p>
         <div class="tc-service-group" data-name="source_key" style="display:flex; flex-direction:column; gap:0.3rem; max-height:8rem; overflow-y:auto;">
           {% for svc in tc_tag_services %}
           <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
-            <input type="checkbox" name="source_key" value="{{ svc.key }}" {% if svc.key == tc_source_key %}checked{% endif %}>
+            <input type="checkbox" name="source_key" value="{{ svc.key }}" {% if svc.key in tc_source_keys %}checked{% endif %}>
             {{ svc.name }}
           </label>
           {% else %}
@@ -59,24 +59,24 @@
         <div class="tc-service-group" data-name="dest_key" style="display:flex; flex-direction:column; gap:0.3rem; max-height:8rem; overflow-y:auto;">
           {% for svc in tc_tag_services %}
           <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
-            <input type="checkbox" name="dest_key" value="{{ svc.key }}" {% if svc.key == tc_dest_key %}checked{% endif %}>
+            <input type="checkbox" name="dest_key" value="{{ svc.key }}" {% if svc.key in tc_dest_keys %}checked{% endif %}>
             {{ svc.name }}
           </label>
           {% endfor %}
         </div>
 
-        <p style="font-weight:600; margin:0.75rem 0 0.4rem;">File domain</p>
+        <p style="font-weight:600; margin:0.75rem 0 0.4rem;">File domain(s) to search</p>
         <div class="tc-service-group" data-name="file_key" style="display:flex; flex-direction:column; gap:0.3rem; max-height:8rem; overflow-y:auto;">
           {% for svc in tc_file_services %}
           <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
-            <input type="checkbox" name="file_key" value="{{ svc.key }}" {% if svc.key == tc_file_key %}checked{% endif %}>
+            <input type="checkbox" name="file_key" value="{{ svc.key }}" {% if svc.key in tc_file_keys %}checked{% endif %}>
             {{ svc.name }}
           </label>
           {% else %}
           <span class="text-xs" style="color:var(--k-text-dim-text);">no file domains found</span>
           {% endfor %}
         </div>
-        <p class="text-xs" style="color:var(--k-text-dim-text); margin:0.3rem 0 0;">Leave unchecked to search Hydrus's default "all my files" domain. Picks above are remembered between launches.</p>
+        <p class="text-xs" style="color:var(--k-text-dim-text); margin:0.3rem 0 0;">Leave unchecked to search Hydrus's default "all my files" domain. Checking several searches all of them (results merged). Picks above are remembered between launches.</p>
       </div>
 
       <div style="flex:1; min-width:14rem;">
@@ -137,21 +137,18 @@
   var form = document.getElementById('tag-cleanup-form');
   if (!form) return;
 
-  // Tag service / file domain "checkboxes" behave as single-select within each group (checking
-  // one unchecks its siblings) - literal checkboxes per the requested UI, not <select>s, but
-  // still exactly one active pick per role. Persist the picks immediately on change so they're
-  // remembered next launch even if the user never clicks Preview/Apply this session.
+  // Tag service / file domain checkboxes are genuine multi-select (check as many source tag
+  // services, destination tag services, or file domains as you want searched/written at once).
+  // Persist the picks immediately on change so they're remembered next launch even if the user
+  // never clicks Preview/Apply this session.
   form.querySelectorAll('.tc-service-group').forEach(function (group) {
-    var boxes = group.querySelectorAll('input[type="checkbox"]');
-    boxes.forEach(function (box) {
+    group.querySelectorAll('input[type="checkbox"]').forEach(function (box) {
       box.addEventListener('change', function () {
-        if (box.checked) {
-          boxes.forEach(function (other) { if (other !== box) other.checked = false; });
-        }
         var body = new URLSearchParams();
         form.querySelectorAll('.tc-service-group').forEach(function (g) {
-          var checked = g.querySelector('input[type="checkbox"]:checked');
-          body.append(g.dataset.name, checked ? checked.value : '');
+          g.querySelectorAll('input[type="checkbox"]:checked').forEach(function (checked) {
+            body.append(g.dataset.name, checked.value);
+          });
         });
         fetch('/tag-cleanup/prefs', {
           method: 'POST',

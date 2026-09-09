@@ -2,6 +2,22 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.5
+- Significant: Tag Cleanup's service checkboxes (source tag services, destination tag
+  services, file domains) are now genuine multi-select instead of single-select-via-checkbox -
+  check as many as you want searched/written at once. `search_files` runs once per checked
+  file domain and unions the results (Hydrus's API only takes one `file_service_key` per call);
+  `fetch_tags_by_file` merges (dedups) current tags across every checked source tag service
+  before parsing. On apply, cleaned tags are added to every checked destination service, and
+  raw tags are deleted from every checked source service (a delete against a service that
+  never had the tag is a harmless no-op on Hydrus's end, so this doesn't need to track exactly
+  which service each tag came from). Persisted prefs (`tag-cleanup-web-config.json`) now store
+  `source_keys`/`dest_keys`/`file_keys` lists instead of single keys.
+- BugFix: Preview sample was hitting `invoke_hydrus_api`'s default 8s timeout on `search_files`
+  and `get_file_metadata` calls against a real library - same root cause as 1.16.1's
+  `search_tags` timeout fix, just on the two calls Preview itself makes. Both gained an
+  optional `timeout` and Tag Cleanup now passes 30s.
+
 ## 1.16.4
 - BugFix: Dropped the Tag Cleanup tab's live namespace checklist entirely - it was pulling a
   bare `search_tags("*")` wildcard (the *entire* tag store, not a typed prefix) on every load,

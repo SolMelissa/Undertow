@@ -195,12 +195,15 @@ def get_hydrus_stats() -> HydrusStats:
 #     GET /add_tags/get_siblings_and_parents. Hydrus's own docs say pair-based editing "will
 #     appear in a different API request in future" - it doesn't exist today, on any route name.
 
-def search_files(predicates: list[str], return_hashes: bool = False, file_service_key: str | None = None) -> ApiResult:
+def search_files(predicates: list[str], return_hashes: bool = False, file_service_key: str | None = None,
+                  timeout: float = 8) -> ApiResult:
     """General-purpose search, unlike _search_file_count (which only returns a length). Callers
     pass a plain list of strings exactly as Hydrus's own search bar takes them - tags
     (`creator:foo`) and system predicates (`system:inbox`) mixed freely - with no client-side
     interpretation; Hydrus itself ANDs every entry in the list. `file_service_key` scopes the
-    search to one file domain (Hydrus defaults to "all my files" when omitted)."""
+    search to one file domain (Hydrus defaults to "all my files" when omitted). `timeout`
+    defaults to invoke_hydrus_api's own 8s - a wide wildcard predicate over a large library can
+    take noticeably longer than that; callers doing that should pass a higher value."""
     params = {
         "tags": str(predicates).replace("'", '"'),
         "return_file_ids": "true",
@@ -208,10 +211,10 @@ def search_files(predicates: list[str], return_hashes: bool = False, file_servic
     }
     if file_service_key:
         params["file_service_key"] = file_service_key
-    return invoke_hydrus_api("/get_files/search_files", params=params)
+    return invoke_hydrus_api("/get_files/search_files", params=params, timeout=timeout)
 
 
-def get_file_metadata(file_ids: list[int], include_tags: bool = True) -> ApiResult:
+def get_file_metadata(file_ids: list[int], include_tags: bool = True, timeout: float = 8) -> ApiResult:
     """Per-file metadata for the detail view - dimensions, size, and (with include_service_keys_
     to_tags) every tag on the file grouped by tag service. Hydrus caps how many ids one call can
     take; callers doing full-library operations should chunk, but the browser's own page-sized
@@ -224,7 +227,7 @@ def get_file_metadata(file_ids: list[int], include_tags: bool = True) -> ApiResu
     params = {"file_ids": str(file_ids)}
     if include_tags:
         params["include_service_keys_to_tags"] = "true"
-    return invoke_hydrus_api("/get_files/file_metadata", params=params)
+    return invoke_hydrus_api("/get_files/file_metadata", params=params, timeout=timeout)
 
 
 def search_tags(query: str, tag_service_key: str | None = None, timeout: float = 8) -> ApiResult:

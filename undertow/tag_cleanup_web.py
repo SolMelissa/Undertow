@@ -44,6 +44,11 @@ from tag_cleanup_x_render import _render_tag_section_plain  # noqa: E402
 
 DRY_RUN_SAMPLE_SIZE = tag_cleanup_x.DRY_RUN_SAMPLE_SIZE
 
+# search_files/get_file_metadata default to invoke_hydrus_api's own 8s timeout, which a wide
+# wildcard predicate (or a large file_ids chunk) over a real library can comfortably exceed -
+# same reasoning as search_tags's timeout in list_services below.
+_SEARCH_TIMEOUT = 30
+
 # Hydrus service `type` codes (same constants webui.py's TagRank services panel uses, confirmed
 # against a live /get_services response) worth offering as tag-service/file-domain checkboxes.
 _TAG_SERVICE_TYPES = {0, 5}  # TAG_REPOSITORY, TAG_DOMAIN (local tag services)
@@ -143,36 +148,60 @@ def _extract_current_tags(file_metadata: dict, tag_service_key: str) -> list[str
     return list(legacy_block.get("0", []))
 
 
-def fetch_tags_by_file(file_ids: list[int], tag_service_key: str, chunk_size: int = 256
+def search_files_multi_domain(predicates: list[str], file_service_keys: list[str]
+                                ) -> tuple[list[int], Optional[str]]:
+    """Unions search results across every checked file domain - Hydrus's search_files only
+    accepts one file_service_key per call, so multiple checked domains means one call per
+    domain, deduped. An empty list searches Hydrus's default "all my files" domain (one call,
+    no file_service_key param), same as before file-domain checkboxes existed."""
+    keys = file_service_keys or [None]
+    seen: set[int] = set()
+    for key in keys:
+        resp = hydrus_client.search_files(predicates, file_service_key=key, timeout=_SEARCH_TIMEOUT)
+        if not resp.success:
+            return [], resp.error
+        seen.update((resp.data or {}).get("file_ids") or [])
+    return list(seen), None
+
+
+def fetch_tags_by_file(file_ids: list[int], tag_service_keys: list[str], chunk_size: int = 256
                         ) -> tuple[dict[int, list[str]], Optional[str]]:
+    """Per-file current tags, merged (union, deduped) across every checked source tag service -
+    parsing doesn't care which service a raw tag came from, only whether it matches the
+    configured source namespace(s). Which exact service(s) each raw tag should be deleted from
+    on apply is handled separately in _run_apply, not tracked here."""
     metadata: dict[int, list[str]] = {}
     for start in range(0, len(file_ids), chunk_size):
         chunk = file_ids[start:start + chunk_size]
-        resp = hydrus_client.get_file_metadata(chunk, include_tags=True)
+        resp = hydrus_client.get_file_metadata(chunk, include_tags=True, timeout=_SEARCH_TIMEOUT)
         if not resp.success:
             return {}, resp.error
         for entry in (resp.data or {}).get("metadata", []):
             fid = entry.get("file_id")
-            if fid is not None:
-                metadata[fid] = _extract_current_tags(entry, tag_service_key)
+            if fid is None:
+                continue
+            merged = metadata.setdefault(fid, [])
+            for tag_service_key in tag_service_keys:
+                for tag in _extract_current_tags(entry, tag_service_key):
+                    if tag not in merged:
+                        merged.append(tag)
     return metadata, None
 
 
-def dry_run_preview(cfg: Config, tag_service_key: str, file_service_key: Optional[str] = None
+def dry_run_preview(cfg: Config, tag_service_keys: list[str], file_service_keys: Optional[list[str]] = None
                      ) -> tuple[list[str], int, int, Optional[str]]:
     """Returns (preview_lines, sample_size, total_matches, error) - a random-sample dry run,
     same approach and sample size as tag_cleanup_x.run_dry_run_then_apply's own dry run, just
     rendered as plain-text lines for the browser instead of printed via a console Renderer."""
-    resp = hydrus_client.search_files(cfg.target_tag_wildcards, file_service_key=file_service_key)
-    if not resp.success:
-        return [], 0, 0, resp.error
-    file_ids = list((resp.data or {}).get("file_ids") or [])
+    file_ids, err = search_files_multi_domain(cfg.target_tag_wildcards, file_service_keys or [])
+    if err:
+        return [], 0, 0, err
     if not file_ids:
         return [], 0, 0, None
 
     sample_size = min(DRY_RUN_SAMPLE_SIZE, len(file_ids))
     sample_ids = random.sample(file_ids, sample_size)
-    metadata, err = fetch_tags_by_file(sample_ids, tag_service_key)
+    metadata, err = fetch_tags_by_file(sample_ids, tag_service_keys)
     if err:
         return [], sample_size, len(file_ids), err
 
@@ -220,19 +249,19 @@ def is_apply_running() -> bool:
     return bool(job and job.running)
 
 
-def _run_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: Optional[str], log) -> None:
+def _run_apply(cfg: Config, source_keys: list[str], dest_keys: list[str],
+                file_service_keys: Optional[list[str]], log) -> None:
     log(f"Searching for {cfg.target_tag_wildcards} ...")
-    resp = hydrus_client.search_files(cfg.target_tag_wildcards, file_service_key=file_service_key)
-    if not resp.success:
-        log(f"Could not reach Hydrus: {resp.error}")
+    file_ids, err = search_files_multi_domain(cfg.target_tag_wildcards, file_service_keys or [])
+    if err:
+        log(f"Could not reach Hydrus: {err}")
         return
-    file_ids = list((resp.data or {}).get("file_ids") or [])
     log(f"Found {len(file_ids):,} file(s).")
     if not file_ids:
         return
 
     log("Fetching tag data (this is the slow part on a large library)...")
-    metadata, err = fetch_tags_by_file(file_ids, source_key, chunk_size=cfg.batch_size)
+    metadata, err = fetch_tags_by_file(file_ids, source_keys, chunk_size=cfg.batch_size)
     if err:
         log(f"Could not fetch tags: {err}")
         return
@@ -244,10 +273,9 @@ def _run_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: Op
 
     files_affected = len(plan)
     total_raw_tags = sum(len(fp.entries) for fp in previews)
-    same_service = source_key == dest_key
-    dest_note = "in place" if same_service else "into the destination service"
     log(f"Writing cleaned-up tags for {total_raw_tags} raw tag(s) across {files_affected:,} "
-        f"file(s) {dest_note}...")
+        f"file(s) (adding to {len(dest_keys)} destination service(s), deleting raw tags from "
+        f"{len(source_keys)} source service(s))...")
 
     groups: dict[tuple, list[int]] = {}
     for fid, (tags_to_add, tags_to_delete) in plan.items():
@@ -260,13 +288,18 @@ def _run_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: Op
         for start in range(0, len(fids), cfg.batch_size):
             batch = fids[start:start + cfg.batch_size]
             if tags_to_add:
-                r = hydrus_client.add_tags(batch, list(tags_to_add), dest_key)
-                if not r.success:
-                    errors.append(r.error or "add_tags failed")
+                for dest_key in dest_keys:
+                    r = hydrus_client.add_tags(batch, list(tags_to_add), dest_key)
+                    if not r.success:
+                        errors.append(r.error or "add_tags failed")
             if tags_to_delete:
-                r = hydrus_client.delete_tags(batch, list(tags_to_delete), source_key)
-                if not r.success:
-                    errors.append(r.error or "delete_tags failed")
+                # A raw tag may only actually live on some of the checked source services -
+                # deleting it from a service it isn't on is a harmless no-op on Hydrus's end,
+                # so this doesn't need to track exactly which service each tag came from.
+                for source_key in source_keys:
+                    r = hydrus_client.delete_tags(batch, list(tags_to_delete), source_key)
+                    if not r.success:
+                        errors.append(r.error or "delete_tags failed")
             done += len(batch)
             log(f"Progress: {done:,}/{files_affected:,} file(s)...")
 
@@ -277,7 +310,8 @@ def _run_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: Op
     log(f"Done. Submitted changes for {files_affected:,} file(s) to Hydrus (applies in the background).")
 
 
-def start_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: Optional[str] = None) -> bool:
+def start_apply(cfg: Config, source_keys: list[str], dest_keys: list[str],
+                 file_service_keys: Optional[list[str]] = None) -> bool:
     if is_apply_running():
         return False
     job = ApplyJob(running=True)
@@ -289,7 +323,7 @@ def start_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: O
 
     def worker() -> None:
         try:
-            _run_apply(cfg, source_key, dest_key, file_service_key, log)
+            _run_apply(cfg, source_keys, dest_keys, file_service_keys, log)
         except Exception as exc:  # keep the job panel alive/reportable on an unexpected failure
             log(f"[error] {exc}")
         finally:
