@@ -2,6 +2,18 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.15.0
+- Significant: Tag Cleanup X's engine and CLI wizard now support multi-namespace processing in
+  one pass (e.g. `dir` + `filename` together), an "include unnamespaced tags" toggle, and an
+  advanced split-regex field (auto-derived from the delimiter-character list via the new
+  `build_split_regex()` translator, hand-editable from there). `Config.source_namespace: str`
+  became `Config.source_namespaces: list` + `Config.include_unnamespaced: bool`; the new
+  `match_source_namespace()` helper replaces every hardcoded single-namespace prefix check in
+  `tag_cleanup_x_engine.py`. Multi-namespace file search uses one Hydrus OR-group predicate
+  (`[[f"{ns}:*", ...]]`, plus a bare `"*"` for unnamespaced) rather than per-namespace AND'd
+  wildcards. This is the shared foundation for the first-party GUI tab landing next - both the
+  CLI wizard and the upcoming dashboard page call the same `Config`/`parse_filename_tag_batch`.
+
 ## 1.14.34
 - BugFix: Deduplicated two exact-duplicate error-handling blocks across the `scripts/` report
   utilities into new `scripts/modules/report.py` helpers - `unwrap_or_error()` (check an

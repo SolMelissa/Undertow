@@ -72,7 +72,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "tag_cleanup"))
 
 import tag_cleanup_x_lists as tag_cleanup_lists
-from tag_cleanup_x_engine import Config, PerformerGazetteer, ParsedTag, FilePreview, parse_filename_tag_batch, load_performer_gazetteer
+from tag_cleanup_x_engine import (
+    Config, PerformerGazetteer, ParsedTag, FilePreview, parse_filename_tag_batch,
+    load_performer_gazetteer, match_source_namespace, build_split_regex,
+)
 from hydrus_client import HydrusClient
 from console import Renderer, ProgressReporter
 from tag_cleanup_x_render import print_preview_table
@@ -145,7 +148,7 @@ def _build_plan(metadata: Dict[int, List[str]], cfg: Config, renderer: Renderer,
         (fid, raw_tag)
         for fid, current_tags in metadata.items()
         for raw_tag in current_tags
-        if raw_tag.startswith(f"{cfg.source_namespace}:")
+        if match_source_namespace(raw_tag, cfg) is not None
     ]
     plan: Dict[int, Tuple[List[str], List[str]]] = {}
     entries_by_fid: Dict[int, List[ParsedTag]] = {}
@@ -169,6 +172,26 @@ def _build_plan(metadata: Dict[int, List[str]], cfg: Config, renderer: Renderer,
             to_delete.append(raw_tag)
     previews = [FilePreview(label=f"file_id {fid}", entries=entries) for fid, entries in entries_by_fid.items()]
     return plan, previews
+
+
+def _namespace_selection_label(cfg: Config) -> str:
+    parts = [f"{ns}:*" for ns in cfg.source_namespaces]
+    if cfg.include_unnamespaced:
+        parts.append("unnamespaced")
+    return ", ".join(parts)
+
+
+def _target_tag_wildcards(namespaces: List[str], include_unnamespaced: bool) -> List[str]:
+    """Builds the Hydrus search predicate for "any of these namespaces, plus optionally
+    unnamespaced tags". Hydrus ORs together wildcards nested as a sub-list; a bare "*" is
+    Hydrus's own predicate for "any unnamespaced tag" (it does not cross into namespaced
+    tags), so it can sit in the same OR group as the namespaced wildcards."""
+    predicates = [f"{ns}:*" for ns in namespaces]
+    if include_unnamespaced:
+        predicates.append("*")
+    if len(predicates) <= 1:
+        return predicates
+    return [predicates]
 
 
 def _chunked(seq: List[int], size: int) -> List[List[int]]:
@@ -204,8 +227,8 @@ def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: "Service
 
     _, sample_previews = _build_plan(sample_metadata, cfg, renderer, show_progress=False)
     if not sample_previews:
-        renderer.out(f"None of the {sample_size} sampled file(s) had a {cfg.source_namespace!r}-namespaced tag. "
-              "Nothing to preview.")
+        renderer.out(f"None of the {sample_size} sampled file(s) had a matching tag "
+              f"({_namespace_selection_label(cfg)}). Nothing to preview.")
         return 0
 
     print_preview_table(sample_previews, renderer)
@@ -233,7 +256,7 @@ def run_dry_run_then_apply(client: HydrusClient, cfg: Config, services: "Service
 
     plan, previews = _build_plan(metadata, cfg, renderer, show_progress=True)
     if not previews:
-        renderer.out(f"No tags with namespace {cfg.source_namespace!r} found in "
+        renderer.out(f"No matching tags ({_namespace_selection_label(cfg)}) found in "
               f"{services.source_tag_service_name!r} on the matched files. Nothing to do.")
         return 0
 
@@ -420,10 +443,27 @@ def wizard_pick_services(renderer: Renderer, client: HydrusClient, saved: dict) 
 
 def wizard_build_config(renderer: Renderer, saved: dict) -> Config:
     renderer.out()
-    source_namespace = renderer.text("Namespace holding the raw filename tags", default=saved.get("source_namespace", "dir"))
+    default_cfg = Config()
+    namespaces_text = renderer.text(
+        "Namespace(s) holding the raw filename tags (comma-separated, e.g. \"dir, filename\")",
+        default=", ".join(saved.get("source_namespaces", default_cfg.source_namespaces)))
+    source_namespaces = [ns.strip() for ns in namespaces_text.split(",") if ns.strip()]
+    include_unnamespaced = renderer.yes_no(
+        "Also include unnamespaced tags (no namespace prefix at all)?",
+        default=saved.get("include_unnamespaced", default_cfg.include_unnamespaced))
+
+    delimiters_text = renderer.text(
+        "Character(s) to split tags on, in addition to word/case boundaries (e.g. \"-, _\")",
+        default=", ".join(saved.get("delimiters", default_cfg.delimiters)))
+    delimiters = [d.strip() for d in delimiters_text.split(",") if d.strip()]
+    suggested_regex = build_split_regex(delimiters)
+    split_regex = renderer.text(
+        "Advanced: regex to split on (auto-filled from the characters above; edit for custom patterns, "
+        "or clear to disable)",
+        default=saved.get("split_regex", suggested_regex)) or None
+
     drop_truncation = renderer.yes_no("Drop suspected truncated trailing tokens (short consonant-only remnants)?",
                                      default=saved.get("drop_suspected_truncation", True))
-    default_cfg = Config()
     min_process_tag_length = renderer.integer(
         "Minimum full raw-tag length to bother parsing at all (shorter tags are left unchanged)",
         default=saved.get("min_process_tag_length", default_cfg.min_process_tag_length), min_value=1)
@@ -432,15 +472,19 @@ def wizard_build_config(renderer: Renderer, saved: dict) -> Config:
         default=saved.get("min_token_len", default_cfg.min_token_len), min_value=1)
 
     save_local_config({
-        "source_namespace": source_namespace,
+        "source_namespaces": source_namespaces,
+        "include_unnamespaced": include_unnamespaced,
+        "delimiters": delimiters,
+        "split_regex": split_regex,
         "drop_suspected_truncation": drop_truncation,
         "min_process_tag_length": min_process_tag_length,
         "min_token_len": min_token_len,
     })
 
-    cfg = Config(source_namespace=source_namespace, drop_suspected_truncation=drop_truncation,
+    cfg = Config(source_namespaces=source_namespaces, include_unnamespaced=include_unnamespaced,
+                 delimiters=delimiters, split_regex=split_regex, drop_suspected_truncation=drop_truncation,
                  min_process_tag_length=min_process_tag_length, min_token_len=min_token_len)
-    cfg.target_tag_wildcards = [f"{source_namespace}:*"]
+    cfg.target_tag_wildcards = _target_tag_wildcards(source_namespaces, include_unnamespaced)
     return cfg
 
 

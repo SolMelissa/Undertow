@@ -43,12 +43,20 @@ CASE_BOUNDARIES = [
 
 @dataclass
 class Config:
-    source_namespace: str = "dir"
+    # Which namespace(s) hold the raw filename tags to clean up, e.g. ["dir", "filename"].
+    # A raw tag with no namespace at all (no ":") is only considered when
+    # include_unnamespaced is True.
+    source_namespaces: list = field(default_factory=lambda: ["dir"])
+    include_unnamespaced: bool = False
     target_service_name: str = "my tags"
     file_service_name: str = "all local files"
     target_tag_wildcards: list = field(default_factory=lambda: ["dir:*"])
     primary_delimiter: str = " - "
     delimiters: list = field(default_factory=lambda: ["_", ",", "|", ";"])
+    # Optional advanced override, normally auto-derived from `delimiters` via
+    # build_split_regex() and shown/edited as a regex field in the GUI/wizard: any
+    # match is treated as an additional block-splitting boundary, on top of `delimiters`.
+    split_regex: Optional[str] = None
     strip_leading_number_prefix: bool = True
     # These five sets, plus compound_noun_pairs below, are user-editable - their actual
     # working values live in tag_cleanup_lists.json (see tag_cleanup_x_lists.py), edited via
@@ -111,6 +119,27 @@ class Config:
 NUMBER_PREFIX_RE = re.compile(r"^\d+-")
 RESOLUTION_RE = re.compile(r"^\d{2,4}x\d{2,4}$")
 AGE_UNIT_TOKENS = {"year", "years"}
+
+
+def match_source_namespace(raw_tag: str, cfg: Config) -> Optional[str]:
+    """Returns the matched namespace prefix (e.g. "dir:") if raw_tag belongs to one of
+    cfg.source_namespaces, "" if it has no namespace at all and cfg.include_unnamespaced is
+    True, or None if raw_tag doesn't qualify for processing under the current selection."""
+    if ":" in raw_tag:
+        prefix, _, _ = raw_tag.partition(":")
+        return f"{prefix}:" if prefix in cfg.source_namespaces else None
+    return "" if cfg.include_unnamespaced else None
+
+
+def build_split_regex(delimiter_chars: List[str]) -> str:
+    """Translates a list of literal split characters (e.g. from GUI/wizard checkboxes plus
+    a free-text "other characters" field) into an equivalent regex character class, for
+    display in - and further hand-editing of - an advanced regex field. Returns "" when
+    there's nothing to translate."""
+    chars = [c for c in delimiter_chars if c]
+    if not chars:
+        return ""
+    return "[" + "".join(re.escape(c) for c in chars) + "]"
 
 
 def split_camel_case(text: str) -> str:
@@ -338,6 +367,8 @@ def _tokenize_block(block: str, cfg: Config) -> List[str]:
     block = split_camel_case(block)
     for delim in cfg.delimiters:
         block = block.replace(delim, " ")
+    if cfg.split_regex:
+        block = re.sub(cfg.split_regex, " ", block)
     block = block.replace("&", " ")
 
     tokens: List[str] = []
@@ -357,11 +388,10 @@ def _tokenize_raw_tag(raw_tag: str, cfg: Config) -> Tuple[str, List[List[str]], 
     purely so the exploded-view preview can show them as their own leading
     elements."""
     value = raw_tag
-    prefix = f"{cfg.source_namespace}:"
-    namespace_text = ""
-    if value.startswith(prefix):
-        namespace_text = prefix
-        value = value[len(prefix):]
+    matched_prefix = match_source_namespace(raw_tag, cfg)
+    namespace_text = matched_prefix or ""
+    if namespace_text:
+        value = value[len(namespace_text):]
     original_value = value
 
     blocks = value.split(cfg.primary_delimiter)
@@ -505,9 +535,9 @@ def _should_skip_processing(raw_tag: str, cfg: Config) -> bool:
     if not cfg.skip_single_word_tags:
         return False
     value = raw_tag
-    prefix = f"{cfg.source_namespace}:"
-    if value.startswith(prefix):
-        value = value[len(prefix):]
+    matched_prefix = match_source_namespace(raw_tag, cfg)
+    if matched_prefix:
+        value = value[len(matched_prefix):]
     if cfg.strip_leading_number_prefix:
         block0, _, rest = value.partition(cfg.primary_delimiter)
         value = strip_number_prefix(block0) + (cfg.primary_delimiter + rest if rest else "")
@@ -523,9 +553,9 @@ def parse_filename_tag_batch(raw_tags: List[str], cfg: Config,
     for raw_tag in raw_tags:
         if _should_skip_processing(raw_tag, cfg):
             value = raw_tag
-            prefix = f"{cfg.source_namespace}:"
-            if value.startswith(prefix):
-                value = value[len(prefix):]
+            matched_prefix = match_source_namespace(raw_tag, cfg)
+            if matched_prefix:
+                value = value[len(matched_prefix):]
             if cfg.strip_leading_number_prefix:
                 block0, _, rest = value.partition(cfg.primary_delimiter)
                 value = strip_number_prefix(block0) + (cfg.primary_delimiter + rest if rest else "")
