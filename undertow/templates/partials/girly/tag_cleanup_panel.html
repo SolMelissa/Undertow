@@ -10,23 +10,9 @@
     <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
       <div style="flex:1; min-width:16rem;">
         <p style="font-weight:600; margin:0 0 0.4rem;">Source namespace(s)</p>
-        {% if tc_namespaces_error %}
-        <p class="text-xs" style="color:var(--k-danger-text);">{{ tc_namespaces_error }}</p>
-        {% endif %}
-        <div style="display:flex; flex-wrap:wrap; gap:0.4rem 0.9rem; max-height:8rem; overflow-y:auto;">
-          {% for ns in tc_namespaces %}
-          <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
-            <input type="checkbox" name="namespace" value="{{ ns }}" class="tc-regex-input" {% if ns in tc_selected_namespaces %}checked{% endif %}>
-            {{ ns }}
-          </label>
-          {% else %}
-          <span class="text-xs" style="color:var(--k-text-dim-text);">
-            {% if tc_namespaces_error %}live list unavailable - type namespace(s) manually below{% else %}no namespaces found{% endif %}
-          </span>
-          {% endfor %}
-        </div>
-        <input type="text" name="custom_namespaces" value="{{ tc_custom_namespaces }}" placeholder="other namespace(s), comma-separated&hellip;"
-               autocomplete="off" class="kawaii-input" style="margin-top:0.5rem; width:100%;">
+        <input type="text" name="namespaces" value="{{ tc_namespaces_text }}" placeholder="e.g. dir, filename&hellip;"
+               autocomplete="off" class="kawaii-input" style="width:100%;">
+        <p class="text-xs" style="color:var(--k-text-dim-text); margin:0.3rem 0 0;">Comma-separated namespace(s) holding the raw filename tags.</p>
         <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem; margin-top:0.5rem;">
           <input type="checkbox" name="unnamespaced" {% if tc_unnamespaced %}checked{% endif %}>
           Also include unnamespaced tags
@@ -51,23 +37,46 @@
       </div>
     </div>
 
+    {% if tc_services_error %}
+    <p class="text-xs" style="color:var(--k-danger-text); margin-top:0.75rem;">{{ tc_services_error }}</p>
+    {% endif %}
+
     <div style="display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:1rem;">
       <div style="flex:1; min-width:14rem;">
-        <p style="font-weight:600; margin:0 0 0.4rem;">Tag services</p>
-        <label class="text-xs">Read raw tags from
-          <select name="source_key" class="kawaii-input" style="width:100%; margin-top:0.2rem;">
-            {% for svc in tc_tag_services %}
-            <option value="{{ svc.key }}" {% if svc.key == tc_source_key %}selected{% endif %}>{{ svc.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="text-xs" style="display:block; margin-top:0.5rem;">Write cleaned tags to
-          <select name="dest_key" class="kawaii-input" style="width:100%; margin-top:0.2rem;">
-            {% for svc in tc_tag_services %}
-            <option value="{{ svc.key }}" {% if svc.key == tc_dest_key %}selected{% endif %}>{{ svc.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
+        <p style="font-weight:600; margin:0 0 0.4rem;">Read raw tags from</p>
+        <div class="tc-service-group" data-name="source_key" style="display:flex; flex-direction:column; gap:0.3rem; max-height:8rem; overflow-y:auto;">
+          {% for svc in tc_tag_services %}
+          <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
+            <input type="checkbox" name="source_key" value="{{ svc.key }}" {% if svc.key == tc_source_key %}checked{% endif %}>
+            {{ svc.name }}
+          </label>
+          {% else %}
+          <span class="text-xs" style="color:var(--k-text-dim-text);">no tag services found - is Hydrus connected?</span>
+          {% endfor %}
+        </div>
+
+        <p style="font-weight:600; margin:0.75rem 0 0.4rem;">Write cleaned tags to</p>
+        <div class="tc-service-group" data-name="dest_key" style="display:flex; flex-direction:column; gap:0.3rem; max-height:8rem; overflow-y:auto;">
+          {% for svc in tc_tag_services %}
+          <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
+            <input type="checkbox" name="dest_key" value="{{ svc.key }}" {% if svc.key == tc_dest_key %}checked{% endif %}>
+            {{ svc.name }}
+          </label>
+          {% endfor %}
+        </div>
+
+        <p style="font-weight:600; margin:0.75rem 0 0.4rem;">File domain</p>
+        <div class="tc-service-group" data-name="file_key" style="display:flex; flex-direction:column; gap:0.3rem; max-height:8rem; overflow-y:auto;">
+          {% for svc in tc_file_services %}
+          <label class="text-xs" style="display:flex; align-items:center; gap:0.3rem;">
+            <input type="checkbox" name="file_key" value="{{ svc.key }}" {% if svc.key == tc_file_key %}checked{% endif %}>
+            {{ svc.name }}
+          </label>
+          {% else %}
+          <span class="text-xs" style="color:var(--k-text-dim-text);">no file domains found</span>
+          {% endfor %}
+        </div>
+        <p class="text-xs" style="color:var(--k-text-dim-text); margin:0.3rem 0 0;">Leave unchecked to search Hydrus's default "all my files" domain. Picks above are remembered between launches.</p>
       </div>
 
       <div style="flex:1; min-width:14rem;">
@@ -127,6 +136,32 @@
   // until the next full panel re-render, same convention as the wizard's own editable default).
   var form = document.getElementById('tag-cleanup-form');
   if (!form) return;
+
+  // Tag service / file domain "checkboxes" behave as single-select within each group (checking
+  // one unchecks its siblings) - literal checkboxes per the requested UI, not <select>s, but
+  // still exactly one active pick per role. Persist the picks immediately on change so they're
+  // remembered next launch even if the user never clicks Preview/Apply this session.
+  form.querySelectorAll('.tc-service-group').forEach(function (group) {
+    var boxes = group.querySelectorAll('input[type="checkbox"]');
+    boxes.forEach(function (box) {
+      box.addEventListener('change', function () {
+        if (box.checked) {
+          boxes.forEach(function (other) { if (other !== box) other.checked = false; });
+        }
+        var body = new URLSearchParams();
+        form.querySelectorAll('.tc-service-group').forEach(function (g) {
+          var checked = g.querySelector('input[type="checkbox"]:checked');
+          body.append(g.dataset.name, checked ? checked.value : '');
+        });
+        fetch('/tag-cleanup/prefs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString(),
+        });
+      });
+    });
+  });
+
   var regexBox = document.getElementById('tc-split-regex');
   var userEdited = false;
   regexBox.addEventListener('input', function () { userEdited = true; });

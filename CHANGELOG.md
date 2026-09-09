@@ -2,6 +2,21 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.4
+- BugFix: Dropped the Tag Cleanup tab's live namespace checklist entirely - it was pulling a
+  bare `search_tags("*")` wildcard (the *entire* tag store, not a typed prefix) on every load,
+  which is a needlessly heavy Hydrus DB query just to save typing "dir, filename" once. Source
+  namespace(s) is now a plain comma-separated text field, no live scan at all.
+- Significant: Tag services (source/dest) and the file domain are now real checkboxes (single-
+  select within each group via JS, not `<select>` dropdowns) populated from `get_services()` -
+  cheap service metadata, not a search - and persisted to a new
+  `tag-cleanup-web-config.json` (separate from `tag_cleanup_x`'s own saved CLI-wizard config)
+  so the picks are remembered between dashboard launches instead of resetting to "my tags"
+  every time. Persisted immediately on checkbox change via `POST /tag-cleanup/prefs`, not just
+  when Preview/Apply is clicked. `hydrus_client.search_files()` gained an optional
+  `file_service_key` so the file-domain pick actually scopes the search (Hydrus defaults to
+  "all my files" when omitted).
+
 ## 1.16.3
 - BugFix: Removed RAM usage from the resource-alert thresholds (Settings modal, watchdog
   checks, and the hoststats breach banner) - it was out of scope for what the watchdog should

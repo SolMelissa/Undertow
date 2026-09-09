@@ -195,19 +195,20 @@ def get_hydrus_stats() -> HydrusStats:
 #     GET /add_tags/get_siblings_and_parents. Hydrus's own docs say pair-based editing "will
 #     appear in a different API request in future" - it doesn't exist today, on any route name.
 
-def search_files(predicates: list[str], return_hashes: bool = False) -> ApiResult:
+def search_files(predicates: list[str], return_hashes: bool = False, file_service_key: str | None = None) -> ApiResult:
     """General-purpose search, unlike _search_file_count (which only returns a length). Callers
     pass a plain list of strings exactly as Hydrus's own search bar takes them - tags
     (`creator:foo`) and system predicates (`system:inbox`) mixed freely - with no client-side
-    interpretation; Hydrus itself ANDs every entry in the list."""
-    return invoke_hydrus_api(
-        "/get_files/search_files",
-        params={
-            "tags": str(predicates).replace("'", '"'),
-            "return_file_ids": "true",
-            "return_hashes": str(return_hashes).lower(),
-        },
-    )
+    interpretation; Hydrus itself ANDs every entry in the list. `file_service_key` scopes the
+    search to one file domain (Hydrus defaults to "all my files" when omitted)."""
+    params = {
+        "tags": str(predicates).replace("'", '"'),
+        "return_file_ids": "true",
+        "return_hashes": str(return_hashes).lower(),
+    }
+    if file_service_key:
+        params["file_service_key"] = file_service_key
+    return invoke_hydrus_api("/get_files/search_files", params=params)
 
 
 def get_file_metadata(file_ids: list[int], include_tags: bool = True) -> ApiResult:

@@ -1,11 +1,20 @@
 """
 Backs the dashboard's Tag Cleanup tab. Reuses tag_cleanup_x's Config/engine/plan-building
 logic in-process (imported directly, not shelled out to as a subprocess) so the browser gets
-a live namespace/regex-preview form instead of driving the interactive CLI wizard. Hydrus I/O
-goes through undertow's own hydrus_client.py (the webui's stored API key) - only the
+a live regex-preview form instead of driving the interactive CLI wizard. Hydrus I/O goes
+through undertow's own hydrus_client.py (the webui's stored API key) - only the
 text-processing engine and a couple of small private helpers are reused from tag_cleanup_x.py
 itself, which stays otherwise untouched (its own subprocess-driven CLI wizard on the Scripts
 tab keeps working exactly as before).
+
+Source namespaces are a plain typed list, not a live-pulled checklist: an earlier version
+pulled every namespace in the library via a bare search_tags("*") wildcard scan (Hydrus has no
+dedicated "list namespaces" endpoint) to populate a checkbox grid, but that's a full-tag-store
+scan - needlessly expensive, and not something worth doing just to save typing "dir, filename"
+once. Tag services and the file domain, by contrast, come from get_services() (cheap - no
+search, just service metadata) and are shown as real checkboxes; the picks are persisted to
+disk (see load_web_config/save_web_config) so they're remembered between launches instead of
+defaulting back to "my tags" every time.
 
 Applying is a background job (large libraries take minutes) tracked the same way
 scripts_runner.py tracks a running script - one job at a time, polled by offset cursor - just
@@ -15,6 +24,7 @@ process/stdout to capture here.
 
 from __future__ import annotations
 
+import json
 import random
 import sys
 import threading
@@ -22,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from . import hydrus_client
+from . import config, hydrus_client
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
@@ -34,32 +44,62 @@ from tag_cleanup_x_render import _render_tag_section_plain  # noqa: E402
 
 DRY_RUN_SAMPLE_SIZE = tag_cleanup_x.DRY_RUN_SAMPLE_SIZE
 
+# Hydrus service `type` codes (same constants webui.py's TagRank services panel uses, confirmed
+# against a live /get_services response) worth offering as tag-service/file-domain checkboxes.
+_TAG_SERVICE_TYPES = {0, 5}  # TAG_REPOSITORY, TAG_DOMAIN (local tag services)
+_FILE_SERVICE_TYPES = {2, 15, 21}  # FILE_DOMAIN, ALL_LOCAL_FILES, ALL_MY_FILES
 
-def list_known_namespaces(limit: int = 500) -> tuple[list[str], Optional[str]]:
-    """Live namespace list for the form's checkboxes. Hydrus has no dedicated "list namespaces"
-    endpoint, so - the same workaround the tag-namespace browse panel uses - this pulls a wide
-    tag sample via search_tags and takes the unique prefixes before ':'. A bare "*" query (all
-    tags in the store, not a typed prefix) can be slow on a large library, well past the
-    default 8s HTTP timeout - give it more room; the form also has a manual namespace text
-    field so the feature still works if this call fails or times out."""
-    resp = hydrus_client.search_tags("*", timeout=30)
+
+def list_services() -> tuple[list[dict], list[dict], Optional[str]]:
+    """(tag_services, file_services) as [{"key", "name"}, ...] for the form's checkboxes - a
+    single cheap get_services() call, not a tag-store scan."""
+    resp = hydrus_client.get_services()
     if not resp.success:
-        return [], resp.error
-    raw = (resp.data or {}).get("tags", [])
-    namespaces: set[str] = set()
-    for entry in raw[:limit]:
-        value = entry.get("value") if isinstance(entry, dict) else entry
-        if isinstance(value, str) and ":" in value:
-            namespaces.add(value.split(":", 1)[0])
-    return sorted(namespaces), None
+        return [], [], resp.error
+    services_map = (resp.data or {}).get("services", {})
+    tag_services, file_services = [], []
+    for key, svc in services_map.items():
+        name = svc.get("name", key)
+        svc_type = svc.get("type")
+        if svc_type in _TAG_SERVICE_TYPES:
+            tag_services.append({"key": key, "name": name})
+        if svc_type in _FILE_SERVICE_TYPES:
+            file_services.append({"key": key, "name": name})
+    tag_services.sort(key=lambda s: s["name"])
+    file_services.sort(key=lambda s: s["name"])
+    return tag_services, file_services, None
+
+
+# ---------------------------------------------------------------------------------- persisted prefs
+# Which tag services / file domain the checkboxes had checked last time - a separate small file
+# from tag_cleanup_x's own LOCAL_CONFIG_FILE (scripts/tag-cleanup-x-config.json), same convention
+# that file's own docstring establishes: the web tab's picks shouldn't disturb the CLI wizard's
+# saved run, and vice versa.
+
+_WEB_CONFIG_FILE = config.DATA_DIR / "tag-cleanup-web-config.json"
+
+
+def load_web_config() -> dict:
+    try:
+        with open(_WEB_CONFIG_FILE, encoding="utf-8") as f:
+            stored = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return stored if isinstance(stored, dict) else {}
+
+
+def save_web_config(updates: dict) -> None:
+    stored = load_web_config()
+    stored.update(updates)
+    _WEB_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_WEB_CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(stored, f, indent=2)
 
 
 def build_config_from_form(form) -> Config:
     """Turns the tag-cleanup form's POST/GET data into a Config, mirroring wizard_build_config's
     fields (namespaces, unnamespaced, delimiters, split_regex, thresholds)."""
-    namespaces = [ns.strip() for ns in form.getlist("namespace") if ns.strip()]
-    custom_namespaces = [ns.strip() for ns in (form.get("custom_namespaces") or "").split(",") if ns.strip()]
-    namespaces = namespaces + [ns for ns in custom_namespaces if ns not in namespaces]
+    namespaces = [ns.strip() for ns in (form.get("namespaces") or "dir").split(",") if ns.strip()]
     include_unnamespaced = form.get("unnamespaced") == "on"
     delimiters = [d.strip() for d in form.getlist("delimiter") if d.strip()]
     custom_delims = [d.strip() for d in (form.get("custom_delimiters") or "").split(",") if d.strip()]
@@ -118,11 +158,12 @@ def fetch_tags_by_file(file_ids: list[int], tag_service_key: str, chunk_size: in
     return metadata, None
 
 
-def dry_run_preview(cfg: Config, tag_service_key: str) -> tuple[list[str], int, int, Optional[str]]:
+def dry_run_preview(cfg: Config, tag_service_key: str, file_service_key: Optional[str] = None
+                     ) -> tuple[list[str], int, int, Optional[str]]:
     """Returns (preview_lines, sample_size, total_matches, error) - a random-sample dry run,
     same approach and sample size as tag_cleanup_x.run_dry_run_then_apply's own dry run, just
     rendered as plain-text lines for the browser instead of printed via a console Renderer."""
-    resp = hydrus_client.search_files(cfg.target_tag_wildcards)
+    resp = hydrus_client.search_files(cfg.target_tag_wildcards, file_service_key=file_service_key)
     if not resp.success:
         return [], 0, 0, resp.error
     file_ids = list((resp.data or {}).get("file_ids") or [])
@@ -179,9 +220,9 @@ def is_apply_running() -> bool:
     return bool(job and job.running)
 
 
-def _run_apply(cfg: Config, source_key: str, dest_key: str, log) -> None:
+def _run_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: Optional[str], log) -> None:
     log(f"Searching for {cfg.target_tag_wildcards} ...")
-    resp = hydrus_client.search_files(cfg.target_tag_wildcards)
+    resp = hydrus_client.search_files(cfg.target_tag_wildcards, file_service_key=file_service_key)
     if not resp.success:
         log(f"Could not reach Hydrus: {resp.error}")
         return
@@ -236,7 +277,7 @@ def _run_apply(cfg: Config, source_key: str, dest_key: str, log) -> None:
     log(f"Done. Submitted changes for {files_affected:,} file(s) to Hydrus (applies in the background).")
 
 
-def start_apply(cfg: Config, source_key: str, dest_key: str) -> bool:
+def start_apply(cfg: Config, source_key: str, dest_key: str, file_service_key: Optional[str] = None) -> bool:
     if is_apply_running():
         return False
     job = ApplyJob(running=True)
@@ -248,7 +289,7 @@ def start_apply(cfg: Config, source_key: str, dest_key: str) -> bool:
 
     def worker() -> None:
         try:
-            _run_apply(cfg, source_key, dest_key, log)
+            _run_apply(cfg, source_key, dest_key, file_service_key, log)
         except Exception as exc:  # keep the job panel alive/reportable on an unexpected failure
             log(f"[error] {exc}")
         finally:

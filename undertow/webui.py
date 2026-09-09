@@ -1625,17 +1625,17 @@ if HAVE_FLASK:
     def _tag_cleanup_ctx(form: dict | None = None, preview_lines=None, preview_sample=None,
                           preview_total=None, preview_error=None, message: str = None, error: bool = False) -> dict:
         form = form or {}
-        namespaces, ns_err = tag_cleanup_web.list_known_namespaces()
-        tag_services_resp = hydrus_client.get_services()
-        tag_services: list[dict] = []
-        if tag_services_resp.success:
-            for key, svc in ((tag_services_resp.data or {}).get("services", {})).items():
-                if svc.get("type") == 5:  # local tag service
-                    tag_services.append({"key": key, "name": svc.get("name", key)})
+        tag_services, file_services, svc_err = tag_cleanup_web.list_services()
+        saved = tag_cleanup_web.load_web_config()
         default_tag_key, _ = hydrus_client.get_local_tag_service_key()
 
-        selected_namespaces = form.get("namespace") or ["dir"]
-        custom_namespaces = form.get("custom_namespaces", "")
+        source_key = form.get("source_key") or saved.get("source_key") or default_tag_key
+        dest_key = form.get("dest_key") or saved.get("dest_key") or source_key
+        file_key = form.get("file_key") if "file_key" in form else saved.get("file_key")
+
+        namespaces_text = form.get("namespaces")
+        if namespaces_text is None:
+            namespaces_text = ", ".join(saved.get("source_namespaces", ["dir"]))
         selected_delimiters = form.get("delimiter") or list(_TAG_CLEANUP_DEFAULT_DELIMITERS)
         custom_delimiters = form.get("custom_delimiters", "")
         split_regex = form.get("split_regex")
@@ -1643,11 +1643,9 @@ if HAVE_FLASK:
             split_regex = tag_cleanup_web.build_split_regex(selected_delimiters)
 
         return {
-            "tc_namespaces": namespaces, "tc_namespaces_error": ns_err,
-            "tc_tag_services": tag_services, "tc_source_key": form.get("source_key") or default_tag_key,
-            "tc_dest_key": form.get("dest_key") or default_tag_key,
-            "tc_selected_namespaces": selected_namespaces, "tc_custom_namespaces": custom_namespaces,
-            "tc_unnamespaced": form.get("unnamespaced") == "on",
+            "tc_tag_services": tag_services, "tc_file_services": file_services, "tc_services_error": svc_err,
+            "tc_source_key": source_key, "tc_dest_key": dest_key, "tc_file_key": file_key,
+            "tc_namespaces_text": namespaces_text, "tc_unnamespaced": form.get("unnamespaced") == "on",
             "tc_default_delimiters": _TAG_CLEANUP_DEFAULT_DELIMITERS, "tc_selected_delimiters": selected_delimiters,
             "tc_custom_delimiters": custom_delimiters, "tc_split_regex": split_regex,
             "tc_drop_truncation": form.get("drop_truncation", "on") == "on",
@@ -1669,16 +1667,36 @@ if HAVE_FLASK:
         ]
         return tag_cleanup_web.build_split_regex(delimiters)
 
+    @app.route("/tag-cleanup/prefs", methods=["POST"])
+    def tag_cleanup_prefs():
+        # Fired immediately on checkbox change (hx-swap="none") so the source/dest tag service
+        # and file domain picks are remembered between launches even if the user never gets
+        # around to clicking Preview/Apply this session.
+        tag_cleanup_web.save_web_config({
+            "source_key": (request.form.get("source_key") or "").strip() or None,
+            "dest_key": (request.form.get("dest_key") or "").strip() or None,
+            "file_key": (request.form.get("file_key") or "").strip() or None,
+        })
+        return "", 204
+
     def _form_dict(form) -> dict:
         return {
-            "namespace": form.getlist("namespace"), "custom_namespaces": form.get("custom_namespaces", ""),
-            "unnamespaced": form.get("unnamespaced", ""),
+            "namespaces": form.get("namespaces", ""), "unnamespaced": form.get("unnamespaced", ""),
             "source_key": form.get("source_key", ""), "dest_key": form.get("dest_key", ""),
+            "file_key": form.get("file_key", ""),
             "delimiter": form.getlist("delimiter"), "custom_delimiters": form.get("custom_delimiters", ""),
             "split_regex": form.get("split_regex", ""), "drop_truncation": form.get("drop_truncation", ""),
             "min_process_tag_length": form.get("min_process_tag_length", ""),
             "min_token_len": form.get("min_token_len", ""),
         }
+
+    def _save_service_prefs(form) -> None:
+        tag_cleanup_web.save_web_config({
+            "source_key": (form.get("source_key") or "").strip() or None,
+            "dest_key": (form.get("dest_key") or "").strip() or None,
+            "file_key": (form.get("file_key") or "").strip() or None,
+            "source_namespaces": [ns.strip() for ns in (form.get("namespaces") or "").split(",") if ns.strip()] or ["dir"],
+        })
 
     @app.route("/tag-cleanup/preview", methods=["POST"])
     def tag_cleanup_preview():
@@ -1687,8 +1705,10 @@ if HAVE_FLASK:
         if not source_key:
             return render_template("partials/girly/tag_cleanup_panel.html",
                                     **_tag_cleanup_ctx(form_dict, message="Pick a tag service first.", error=True))
+        _save_service_prefs(request.form)
         cfg = tag_cleanup_web.build_config_from_form(request.form)
-        lines, sample_size, total, err = tag_cleanup_web.dry_run_preview(cfg, source_key)
+        file_key = (request.form.get("file_key") or "").strip() or None
+        lines, sample_size, total, err = tag_cleanup_web.dry_run_preview(cfg, source_key, file_key)
         return render_template(
             "partials/girly/tag_cleanup_panel.html",
             **_tag_cleanup_ctx(form_dict, preview_lines=lines, preview_sample=sample_size,
@@ -1703,8 +1723,10 @@ if HAVE_FLASK:
         if not source_key:
             return render_template("partials/girly/tag_cleanup_panel.html",
                                     **_tag_cleanup_ctx(form_dict, message="Pick a tag service first.", error=True))
+        _save_service_prefs(request.form)
         cfg = tag_cleanup_web.build_config_from_form(request.form)
-        started = tag_cleanup_web.start_apply(cfg, source_key, dest_key)
+        file_key = (request.form.get("file_key") or "").strip() or None
+        started = tag_cleanup_web.start_apply(cfg, source_key, dest_key, file_key)
         message = "Started applying in the background - watch the log below." if started else \
             "An apply job is already running."
         return render_template("partials/girly/tag_cleanup_panel.html",
