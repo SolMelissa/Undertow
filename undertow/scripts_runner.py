@@ -25,24 +25,9 @@ SCRIPTS_DIR = PACKAGE_DIR / "scripts"
 # entry here still runs fine (list_scripts() only reads the filesystem), it just renders as a
 # bare pill with its filename, same as before this manifest existed.
 SCRIPT_META: dict[str, dict[str, str]] = {
-    "hydrus_health_check": {
-        "icon": "\U0001fa7a", "label": "Hydrus Health Check",
-        "desc": "Ping Hydrus + hydownloader; show file/inbox counts and daemon status.",
-        "group": "Reports",
-    },
-    "inbox_triage_report": {
-        "icon": "\U0001f4e5", "label": "Inbox Triage",
-        "desc": "Bucket the Hydrus inbox by file age so backlog is visible at a glance.",
-        "group": "Reports",
-    },
     "untagged_files_report": {
         "icon": "\U0001f3f7️", "label": "Untagged Files",
         "desc": "List files with zero tags on the local tag service.",
-        "group": "Reports",
-    },
-    "duplicate_tag_finder": {
-        "icon": "\U0001f50d", "label": "Duplicate Tag Finder",
-        "desc": "Find probable near-duplicate tags (casing/whitespace variants).",
         "group": "Reports",
     },
     "tag_namespace_summary": {
@@ -60,19 +45,9 @@ SCRIPT_META: dict[str, dict[str, str]] = {
         "desc": "Summarize hydownloader's queued URLs and flag the oldest entries.",
         "group": "Reports",
     },
-    "disk_usage_report": {
-        "icon": "\U0001f4be", "label": "Disk Usage",
-        "desc": "Folder size breakdown plus free space on the install drive.",
-        "group": "Reports",
-    },
     "log_archiver": {
         "icon": "\U0001f5c3️", "label": "Log Archiver",
         "desc": "Zip logs older than 14 days; prune archives older than 90.",
-        "group": "Housekeeping",
-    },
-    "empty_folder_sweep": {
-        "icon": "\U0001f9f9", "label": "Empty Folder Sweep",
-        "desc": "Remove empty leftover folders under hydownloader-data.",
         "group": "Housekeeping",
     },
     "tag_cleanup": {
@@ -82,12 +57,12 @@ SCRIPT_META: dict[str, dict[str, str]] = {
     },
     "tag_cleanup_x": {
         "icon": "🧪", "label": "Tag Cleanup X",
-        "desc": "Next-gen tag splitter/cleaner - where new cleanup features land (tag_cleanup is frozen).",
+        "desc": "Next-gen tag splitter/cleaner, replacing Tag Cleanup Wizard.",
         "group": "Interactive Wizards",
     },
     "performer_gazetteer": {
         "icon": "\U0001f575️", "label": "Performer Gazetteer",
-        "desc": "Build the performer-name cache Tag Cleanup's name detection reads.",
+        "desc": "Build the performer-name cache Tag Cleanup X's name detection reads.",
         "group": "Interactive Wizards",
     },
     "tagrank_setup_hidden_tags_marker": {
@@ -98,16 +73,6 @@ SCRIPT_META: dict[str, dict[str, str]] = {
     "sync_hidden_tags_to_marker": {
         "icon": ">", "label": "Sync TagRank Hidden Tags",
         "desc": "Sync hidden tags from TagRank config to Hydrus marker file.",
-        "group": "TagRank",
-    },
-    "tagrank_demo_fix": {
-        "icon": ">", "label": "TagRank Dashboard Demo",
-        "desc": "Demo showing TagRank dashboard with 4 charts.",
-        "group": "TagRank",
-    },
-    "tagrank_test_dashboard": {
-        "icon": ">", "label": "TagRank Dashboard E2E Test",
-        "desc": "End-to-end test for TagRank session summary dashboard.",
         "group": "TagRank",
     },
 }

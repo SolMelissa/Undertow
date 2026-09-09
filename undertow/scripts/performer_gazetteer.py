@@ -1,18 +1,19 @@
 """
-Standalone fetcher/builder for the performer-name gazetteer that tag_cleanup.py's optional
+Standalone fetcher/builder for the performer-name gazetteer that tag_cleanup_x.py's optional
 name-detection pass reads. Pulls performer names + known aliases from ThePornDB and/or
-StashDB, normalizes each one the same way tag_cleanup.py tokenizes tags (so gazetteer
+StashDB, normalizes each one the same way tag_cleanup_x.py tokenizes tags (so gazetteer
 phrases match tag tokens exactly), and writes the merged result to performer-gazetteer.json
-next to tag-cleanup-config.json.
+next to tag-cleanup-x-config.json.
 
 Run it standalone: `python performer_gazetteer.py`. It walks you through entering (or
 reusing saved) API keys for either/both sources, same local-config convention as
-tag_cleanup.py's Hydrus connection. tag_cleanup.py never calls these APIs itself - it only
-ever reads the cache file this script writes, so name detection stays off there until this
-has been run at least once.
+tag_cleanup_x.py's Hydrus connection. tag_cleanup_x.py never calls these APIs itself - it
+only ever reads the cache file this script writes, so name detection stays off there until
+this has been run at least once.
 
 Hard dependency: requests. Also imports a few shared helpers (text normalization, local
-JSON config storage) directly from the sibling tag_cleanup.py module.
+JSON config storage) from the sibling tag_cleanup_x.py wizard and its tag_cleanup_x_engine.py
+text engine.
 """
 
 from __future__ import annotations
@@ -31,12 +32,14 @@ except ImportError:
     print("This tool requires the 'requests' package: pip install requests", file=sys.stderr)
     sys.exit(1)
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from tag_cleanup import (  # noqa: E402
-    LOCAL_CONFIG_FILE, PERFORMER_GAZETTEER_CACHE_FILE, PerformerGazetteer,
-    load_local_config, load_performer_gazetteer, normalize_token, prompt_secret,
-    prompt_yes_no, save_local_config, split_camel_case,
+sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "tag_cleanup"))
+from console import Renderer  # noqa: E402
+from tag_cleanup_x_engine import (  # noqa: E402
+    PERFORMER_GAZETTEER_CACHE_FILE, PerformerGazetteer, load_performer_gazetteer,
+    normalize_token, split_camel_case,
 )
+from tag_cleanup_x import load_local_config, save_local_config  # noqa: E402
 
 TPDB_BASE_URL = "https://api.theporndb.net"
 STASHDB_GRAPHQL_URL = "https://stashdb.org/graphql"
@@ -55,12 +58,12 @@ def build_performer_gazetteer(raw_entries: List[Tuple[str, List[str]]]) -> Perfo
     endpoints - see name_pairs below. A single-word stage name can't corroborate itself for
     that adjacency check (it would just become a silent single-token accept-list, the exact
     false-positive failure mode name_pairs exists to avoid), so it goes into single_names
-    instead: tag_cleanup.py uses that set only to keep the token from being absorbed into a
+    instead: tag_cleanup_x.py uses that set only to keep the token from being absorbed into a
     neighboring attribute/content phrase, NOT to assert real-name confidence the way a
     full-phrase or name_pairs match does - a deliberately lower, precision-doesn't-matter bar.
 
     name_pairs stores the (first_token, last_token) ENDPOINTS of each real multi-word
-    name/alias - not independent first-name/last-name sets - so tag_cleanup.py's adjacency
+    name/alias - not independent first-name/last-name sets - so tag_cleanup_x.py's adjacency
     check can require that a pair actually co-occurred, rather than accepting any first name
     next to any last name regardless of whether that specific pairing ever existed."""
     full_phrases = set()
@@ -183,7 +186,7 @@ def fetch_stashdb_performer_names(api_key: str, on_progress=None) -> List[Tuple[
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Fetch/refresh the performer-name gazetteer tag_cleanup.py uses for "
+        description="Fetch/refresh the performer-name gazetteer tag_cleanup_x.py uses for "
                      "optional name detection.",
         epilog="Just run `python performer_gazetteer.py` with no arguments - it walks you "
                "through the rest.",
@@ -196,6 +199,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
     print("=== Performer-name gazetteer builder (ThePornDB / StashDB) ===")
+    renderer = Renderer()
 
     existing = load_performer_gazetteer()
     if existing:
@@ -204,8 +208,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     saved = {} if args.reconfigure else load_local_config()
 
     tpdb_key = saved.get("theporndb_api_key")
-    if prompt_yes_no("Fetch performers from ThePornDB?", default=bool(tpdb_key)):
-        entered = prompt_secret("ThePornDB API key", has_saved=bool(tpdb_key))
+    if renderer.yes_no("Fetch performers from ThePornDB?", default=bool(tpdb_key)):
+        entered = renderer.secret("ThePornDB API key", has_saved=bool(tpdb_key))
         tpdb_key = entered or tpdb_key
         if tpdb_key:
             save_local_config({"theporndb_api_key": tpdb_key})
@@ -213,8 +217,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         tpdb_key = None
 
     stashdb_key = saved.get("stashdb_api_key")
-    if prompt_yes_no("Fetch performers from StashDB?", default=bool(stashdb_key)):
-        entered = prompt_secret("StashDB API key", has_saved=bool(stashdb_key))
+    if renderer.yes_no("Fetch performers from StashDB?", default=bool(stashdb_key)):
+        entered = renderer.secret("StashDB API key", has_saved=bool(stashdb_key))
         stashdb_key = entered or stashdb_key
         if stashdb_key:
             save_local_config({"stashdb_api_key": stashdb_key})

@@ -2,6 +2,22 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.31
+- BugFix: Committed the removal of `disk_usage_report.py`, `duplicate_tag_finder.py`,
+  `empty_folder_sweep.py`, `hydrus_health_check.py`, `inbox_triage_report.py`,
+  `tag_cleanup.py`, `tagrank_demo_fix.py`, and `tagrank_test_dashboard.py` from
+  `undertow/scripts/` (deleted by the user directly), and dropped their now-dead
+  `SCRIPT_META` entries from `scripts_runner.py` so the dashboard's Scripts tab manifest
+  doesn't describe cards for scripts that no longer exist. Also dropped `tag_cleanup_x`'s
+  stale "(tag_cleanup is frozen)" description now that `tag_cleanup.py` is gone entirely.
+- Deleting `tag_cleanup.py` broke `performer_gazetteer.py`, which imported 7 names straight
+  out of it (`LOCAL_CONFIG_FILE`, `PERFORMER_GAZETTEER_CACHE_FILE`, `PerformerGazetteer`,
+  `load_local_config`, `load_performer_gazetteer`, `normalize_token`, `prompt_secret`,
+  `prompt_yes_no`, `save_local_config`, `split_camel_case`). Repointed it at `tag_cleanup_x.py`
+  / `tag_cleanup_x_engine.py` instead, and switched its `prompt_secret`/`prompt_yes_no` calls
+  (removed in the earlier module split, folded into `Renderer.secret`/`Renderer.yes_no`) to a
+  local `Renderer()` instance.
+
 ## 1.14.30
 - Patch: Moved `scripts/tag_cleanup_lists.py` into `scripts/tag_cleanup/`, renamed to
   `tag_cleanup_x_lists.py` to match the folder's naming convention and the name
