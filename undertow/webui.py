@@ -1257,7 +1257,7 @@ if HAVE_FLASK:
 
         try:
             thresholds = {}
-            for key in ("disk_pct", "ram_pct"):
+            for key in ("disk_pct",):
                 v = float(form.get(f"threshold_{key}") or "")
                 if not (0 < v <= 100):
                     raise ValueError

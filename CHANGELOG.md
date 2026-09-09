@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.3
+- BugFix: Removed RAM usage from the resource-alert thresholds (Settings modal, watchdog
+  checks, and the hoststats breach banner) - it was out of scope for what the watchdog should
+  page about and its threshold breaches were confusing pop-up noise. Disk-usage alerting is
+  unaffected; the Memory stat tile on the dashboard still displays RAM usage, it just no longer
+  triggers a notification.
+
 ## 1.16.2
 - BugFix: The real cause of the Tag Cleanup tab's read timeouts (1.16.1's longer timeout was
   only a band-aid): its panel used plain `hx-trigger="load"`, which - like every other tab's

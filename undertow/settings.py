@@ -31,7 +31,7 @@ DEFAULTS: dict = {
     "max_files_regular": 100,
     "check_interval_hours_min": 12.0,
     "check_interval_hours_max": 24.0,
-    "resource_alert_thresholds": {"disk_pct": 90.0, "ram_pct": 90.0},
+    "resource_alert_thresholds": {"disk_pct": 90.0},
     "windows_toast_enabled": True,
 }
 

@@ -786,17 +786,16 @@ def get_host_stats() -> dict:
     return stats
 
 
-# get_host_stats() calls the RAM metric "mem_pct" (matching psutil's own virtual_memory().percent
-# naming), but settings.py/the Settings page call the user-facing threshold "ram_pct" (reads
-# better in a form label) - this is the one place that mapping has to be spelled out.
-_THRESHOLD_TO_HOST_KEY = {"disk_pct": "disk_pct", "ram_pct": "mem_pct"}
+# RAM has no alert threshold - only disk usage is checked/notified on. This is the one place
+# that mapping has to be spelled out.
+_THRESHOLD_TO_HOST_KEY = {"disk_pct": "disk_pct"}
 
 
 def check_resource_thresholds(host_stats: dict, thresholds: dict) -> dict[str, str]:
     """Returns {metric_name: message} for every metric in `thresholds` currently at or above
     its configured percentage - pure logic over the already-existing get_host_stats() output,
     no new data-gathering. `metric_name` matches settings.json's resource_alert_thresholds keys
-    (disk_pct/ram_pct), which is what watchdog.py's own per-metric dedup set keys on.
+    (disk_pct), which is what watchdog.py's own per-metric dedup set keys on.
     A metric missing from `thresholds` or `host_stats` (e.g. GPU-only stats, which this doesn't
     cover) is silently skipped rather than treated as a breach."""
     breaches: dict[str, str] = {}
