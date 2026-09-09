@@ -66,10 +66,10 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from . import tag_cleanup_lists
+    from .tag_cleanup import tag_cleanup_x_lists as tag_cleanup_lists
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import tag_cleanup_lists  # type: ignore
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "tag_cleanup"))
+    import tag_cleanup_x_lists as tag_cleanup_lists  # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ class Config:
     delimiters: list = field(default_factory=lambda: ["_", ",", "|", ";"])
     strip_leading_number_prefix: bool = True
     # These five sets, plus compound_noun_pairs below, are user-editable - their actual
-    # working values live in tag_cleanup_lists.json (see tag_cleanup_lists.py), edited via
+    # working values live in tag_cleanup_lists.json (see tag_cleanup/tag_cleanup_x_lists.py), edited via
     # the webui's "Tag Cleanup Lists" panel. The default_factory below always reflects
     # whatever's on disk (falling back to tag_cleanup_lists.DEFAULT_LISTS on first run), so
     # a fresh Config() picks up the user's current customizations automatically.

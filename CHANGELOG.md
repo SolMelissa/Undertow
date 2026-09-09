@@ -2,6 +2,17 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.30
+- Patch: Moved `scripts/tag_cleanup_lists.py` into `scripts/tag_cleanup/`, renamed to
+  `tag_cleanup_x_lists.py` to match the folder's naming convention and the name
+  `tag_cleanup_x_engine.py` already expected of it (a dangling import left over from the
+  earlier `Tag Cleanup X/` flattening). Fixed its now-one-level-deeper `sys.path` insert
+  (`parents[2]` → `parents[3]`) and updated the two other importers to match:
+  `tag_cleanup.py`'s import block and `webui.py`'s "Tag Cleanup Lists" editor import.
+  `tag_cleanup.py` is no longer frozen (superseded by `tag_cleanup_x.py`), so this includes a
+  small edit to it. Removed the now-empty `NOT_RUNNABLE` special-case from `scripts_runner.py`
+  - the file moving into a subfolder already hides it from `list_scripts()`'s non-recursive glob.
+
 ## 1.14.29
 - Patch: Moved `scripts/_common.py` into `scripts/modules/`, split by concern to match the
   folder's existing convention: `modules/undertow_bridge.py` (repo-root `sys.path` fix +

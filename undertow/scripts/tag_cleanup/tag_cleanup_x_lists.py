@@ -1,13 +1,14 @@
 """
-Editable word/filter lists for tag_cleanup.py's wizard, split out into their own
-dependency-free module (json + pathlib only) so webui.py can read/write them for its
-"Tag Cleanup Lists" editor without importing tag_cleanup.py itself, which hard-requires
-requests/wordfreq/rich at import time (and sys.exit(1)s if they're missing) - not something
-the main dashboard process should risk pulling in just to render a settings form.
+Editable word/filter lists shared by tag_cleanup.py and tag_cleanup_x.py's wizards, split
+out into their own dependency-free module (json + pathlib only) so webui.py can read/write
+them for its "Tag Cleanup Lists" editor without importing either wizard itself, which
+hard-requires requests/wordfreq/rich at import time (and sys.exit(1)s if they're missing) -
+not something the main dashboard process should risk pulling in just to render a settings
+form.
 
-tag_cleanup.py's Config dataclass sources these same fields from load_lists() at
-construction time, so this file is the single source of truth for both the wizard's
-actual parsing behavior and the webui's editor.
+Both wizards' Config dataclasses source these same fields from load_lists() at construction
+time, so this file is the single source of truth for both wizards' actual parsing behavior
+and the webui's editor.
 
 The on-disk file only ever stores what the user has customized (see save_lists), but
 load_lists() always seeds it with DEFAULT_LISTS on first read so the editor immediately

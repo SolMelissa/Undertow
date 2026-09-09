@@ -140,8 +140,11 @@ _runs: dict[str, ScriptRun] = {}
 # Files under scripts/ that are support/library modules, not runnable scripts - imported by
 # webui.py or other scripts rather than meant to be launched as a subprocess. They can't use
 # a leading-underscore convention because other code imports them by this exact name
-# (webui.py: `import tag_cleanup_lists`).
-NOT_RUNNABLE = {"tag_cleanup_lists"}
+# (webui.py: `import tag_cleanup_x_lists`).
+#
+# list_scripts() only globs scripts/*.py non-recursively, so modules living one level down
+# (scripts/modules/, scripts/tag_cleanup/) are already excluded without needing an entry here.
+NOT_RUNNABLE: set[str] = set()
 
 
 def list_scripts() -> list[str]:
