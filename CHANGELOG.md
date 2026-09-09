@@ -2,6 +2,13 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.7
+- BugFix: Tag Cleanup's dry-run Preview now collapses duplicate raw tags before displaying
+  them, showing up to 25 *distinct* tags instead of up to 40 raw entries that were often the
+  same handful of common tags repeated across the randomly-sampled files. The random file
+  sampling itself (`random.sample` over the full search-matched set) was already correct; the
+  narrow-feeling cut was duplicate tag text crowding out variety, not a first-N bug.
+
 ## 1.16.6
 - Patch: Added an "Edit Filter Word Lists" button to the Tag Cleanup tab, reusing the existing
   `/scripts/tag-cleanup-lists` modal (previously only reachable from the Scripts tab's

@@ -44,6 +44,11 @@ from tag_cleanup_x_render import _render_tag_section_plain  # noqa: E402
 
 DRY_RUN_SAMPLE_SIZE = tag_cleanup_x.DRY_RUN_SAMPLE_SIZE
 
+# How many *distinct* raw tags the preview shows, after collapsing duplicate tag text
+# seen across multiple sampled files - keeps the preview varied instead of repeating
+# the same common tag (e.g. a franchise or performer name) over and over.
+PREVIEW_UNIQUE_TAG_LIMIT = 25
+
 # search_files/get_file_metadata default to invoke_hydrus_api's own 8s timeout, which a wide
 # wildcard predicate (or a large file_ids chunk) over a real library can comfortably exceed -
 # same reasoning as search_tags's timeout in list_services below.
@@ -206,25 +211,40 @@ def dry_run_preview(cfg: Config, tag_service_keys: list[str], file_service_keys:
         return [], sample_size, len(file_ids), err
 
     _, previews = tag_cleanup_x._build_plan(metadata, cfg, renderer=None, show_progress=False)
-    flat = [(fp.label, e) for fp in previews for e in fp.entries if not e.skipped]
-    total_skipped = sum(len(fp.entries) for fp in previews) - len(flat)
-    if not flat:
+    all_flat = [(fp.label, e) for fp in previews for e in fp.entries if not e.skipped]
+    total_skipped = sum(len(fp.entries) for fp in previews) - len(all_flat)
+    if not all_flat:
         msg = "(nothing to preview)" if not total_skipped else (
             f"(nothing to preview - all {total_skipped} matched tag(s) in the sample were "
             "skipped as single-word/short)")
         return [msg], sample_size, len(file_ids), None
 
-    lines: list[str] = []
-    shown = flat[:40]
-    for idx, (label, entry) in enumerate(shown, start=1):
-        lines.extend(_render_tag_section_plain(idx, len(flat), label, entry))
-    if len(flat) > len(shown):
-        lines.append(f"... {len(flat) - len(shown)} more tag(s) not shown here ...")
+    # Sampled files often share the same raw tag (a franchise/performer name repeated
+    # across dozens of files) - dedupe by the original tag text so the preview shows
+    # a variety of distinct tags instead of the same one over and over.
+    seen_originals: set[str] = set()
+    flat: list[tuple[str, object]] = []
+    total_duplicates = 0
+    for label, entry in all_flat:
+        if entry.original in seen_originals:
+            total_duplicates += 1
+            continue
+        seen_originals.add(entry.original)
+        flat.append((label, entry))
 
-    total_kept = sum(len(e.tags) for _, e in flat)
-    total_dropped = sum(len(e.dropped) for _, e in flat)
-    lines.append(f"Summary: {len(previews)} file(s) sampled, {len(flat)} tag(s) processed "
-                 f"({total_skipped} more skipped as single-word/short, not shown above), "
+    lines: list[str] = []
+    shown = flat[:PREVIEW_UNIQUE_TAG_LIMIT]
+    for idx, (label, entry) in enumerate(shown, start=1):
+        lines.extend(_render_tag_section_plain(idx, len(shown), label, entry))
+    if len(flat) > len(shown):
+        lines.append(f"... {len(flat) - len(shown)} more distinct tag(s) not shown here ...")
+    if total_duplicates:
+        lines.append(f"... {total_duplicates} duplicate tag occurrence(s) collapsed ...")
+
+    total_kept = sum(len(e.tags) for _, e in all_flat)
+    total_dropped = sum(len(e.dropped) for _, e in all_flat)
+    lines.append(f"Summary: {len(previews)} file(s) sampled, {len(all_flat)} tag(s) processed "
+                 f"({len(flat)} distinct, {total_skipped} more skipped as single-word/short, not shown above), "
                  f"{total_kept} tag(s) kept, {total_dropped} token(s) dropped.")
     return lines, sample_size, len(file_ids), None
 
