@@ -1,10 +1,16 @@
 <div class="kawaii-card" id="girly-tag-cleanup-panel">
-  <p class="text-xs" style="color:var(--k-text-dim-text); margin-bottom:0.75rem;">
-    Splits bulk-imported "filename tags" (e.g. <code>dir:sunset hike - teen couple watches full moon rise</code>)
-    into well-formed individual tags. Pick which namespace(s) hold the raw filename tags, how to
-    split them, then preview a random sample before applying to the whole library. Same engine as
-    the Scripts tab's Tag Cleanup X wizard, just with a form instead of a terminal.
-  </p>
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:0.75rem;">
+    <p class="text-xs" style="color:var(--k-text-dim-text); margin:0;">
+      Splits bulk-imported "filename tags" (e.g. <code>dir:sunset hike - teen couple watches full moon rise</code>)
+      into well-formed individual tags. Pick which namespace(s) hold the raw filename tags, how to
+      split them, then preview a random sample before applying to the whole library. Same engine as
+      the Scripts tab's Tag Cleanup X wizard, just with a form instead of a terminal.
+    </p>
+    <button type="button" class="kawaii-btn" style="font-size:0.75rem; padding:0.3rem 0.6rem; white-space:nowrap;"
+            hx-get="/scripts/tag-cleanup-lists" hx-target="#modal-content" hx-swap="innerHTML">
+      &#9998; Edit Filter Word Lists
+    </button>
+  </div>
 
   <form id="tag-cleanup-form">
     <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">

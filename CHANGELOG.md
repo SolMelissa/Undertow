@@ -2,6 +2,12 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.6
+- Patch: Added an "Edit Filter Word Lists" button to the Tag Cleanup tab, reusing the existing
+  `/scripts/tag-cleanup-lists` modal (previously only reachable from the Scripts tab's
+  "Interactive Wizards" group header) - no new route needed, just wired the same
+  `hx-get`/`#modal-content` pattern into `tag_cleanup_panel.html`.
+
 ## 1.16.5
 - Significant: Tag Cleanup's service checkboxes (source tag services, destination tag
   services, file domains) are now genuine multi-select instead of single-select-via-checkbox -
