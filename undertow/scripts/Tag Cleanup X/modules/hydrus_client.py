@@ -1,5 +1,7 @@
 """
-Hydrus Client API layer for tag_cleanup_x.
+Generic Hydrus Client API layer - no tag-cleanup-specific logic. Any script in this folder
+that needs to talk to Hydrus (search files, fetch/add/delete tags, list services) should use
+this module rather than rolling its own requests session.
 """
 
 import json

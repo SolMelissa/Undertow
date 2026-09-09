@@ -37,10 +37,12 @@ earlier and dropped as too heavy and unreliable for lowercase filename text with
 signal. With no gazetteer cached, names pass through the same content/attribute pipeline as
 any other word, same as before this feature existed.
 
-Architecture: the text-processing engine (tag_cleanup_x_engine), Hydrus API client
-(tag_cleanup_x_hydrus), rendering + progress + prompts (tag_cleanup_x_render), and
-self-test fixtures (tag_cleanup_x_selftest) are all split out as focused modules. This
-wizard entry point orchestrates them.
+Architecture: the text-processing engine (tag_cleanup_x_engine), tag-specific preview
+rendering (tag_cleanup_x_render), and self-test fixtures (tag_cleanup_x_selftest) are split
+out as focused, tag-cleanup-specific modules. Generic, content-agnostic pieces any future
+script in this folder can reuse - the Hydrus API client (hydrus_client) and console/log tee +
+progress + prompts (console) - live under modules/ instead, with no tag-cleanup logic in
+them. This wizard entry point orchestrates all of the above.
 """
 
 from __future__ import annotations
@@ -62,10 +64,16 @@ except ImportError:
     print("This tool requires the 'requests' package: pip install requests", file=sys.stderr)
     sys.exit(1)
 
+# Generic, reusable modules (no tag-cleanup-specific logic) live in modules/ so any future
+# script in this folder can import them too - Python doesn't add subdirectories to sys.path
+# on its own, so it has to be inserted explicitly before importing from there.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
+
 import tag_cleanup_x_lists as tag_cleanup_lists
 from tag_cleanup_x_engine import Config, PerformerGazetteer, ParsedTag, FilePreview, parse_filename_tag_batch, load_performer_gazetteer
-from tag_cleanup_x_hydrus import HydrusClient
-from tag_cleanup_x_render import Renderer, ProgressReporter, print_preview_table
+from hydrus_client import HydrusClient
+from console import Renderer, ProgressReporter
+from tag_cleanup_x_render import print_preview_table
 from tag_cleanup_x_selftest import run_self_test
 
 

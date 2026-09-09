@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.27
+- Patch: Pulled the content-agnostic pieces of Tag Cleanup X out into a reusable
+  `Tag Cleanup X/modules/` folder so future scripts in that directory aren't tied to tag
+  cleanup: `tag_cleanup_x_hydrus.py` renamed and moved to `modules/hydrus_client.py`
+  (`HydrusClient`, unchanged), and the generic half of `tag_cleanup_x_render.py` (the
+  `Renderer` console/log tee, prompts, and `ProgressReporter`) split out into
+  `modules/console.py`. `tag_cleanup_x_render.py` now holds only the tag-specific
+  exploded-tag-view preview rendering and imports `Renderer` from `console`.
+
 ## 1.14.26
 - Significant: Split `tag_cleanup_x.py` into four focused modules plus self-test fixtures:
   `tag_cleanup_x_engine.py` (text parsing only), `tag_cleanup_x_hydrus.py` (Hydrus API client),
