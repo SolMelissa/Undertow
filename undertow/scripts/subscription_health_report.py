@@ -12,15 +12,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
 
 from undertow_bridge import api_client  # noqa: E402
-from report import section  # noqa: E402
+from report import section, unwrap_or_error  # noqa: E402
 
 
 def main() -> int:
-    subs_resp = api_client.get_subscriptions()
-    if not subs_resp.success:
-        print(f"ERROR: {subs_resp.error}")
+    subs_data = unwrap_or_error(api_client.get_subscriptions())
+    if subs_data is None:
         return 1
-    subs = subs_resp.data if isinstance(subs_resp.data, list) else []
+    subs = subs_data if isinstance(subs_data, list) else []
     if not subs:
         print("No subscriptions configured.")
         return 0

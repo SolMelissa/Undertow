@@ -2,6 +2,14 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.14.34
+- BugFix: Deduplicated two exact-duplicate error-handling blocks across the `scripts/` report
+  utilities into new `scripts/modules/report.py` helpers - `unwrap_or_error()` (check an
+  `ApiResponse`, print `ERROR: {error}` and return `None` on failure) and
+  `require_local_tag_service_key()` (resolve the local tag service key or print/return `None`).
+  Used by `queued_urls_report.py`, `subscription_health_report.py`, `tag_namespace_summary.py`,
+  and `untagged_files_report.py`. No behavior change.
+
 ## 1.14.33
 - Patch: Merged the two TagRank hidden-tags-marker scripts
   (`tagrank_setup_hidden_tags_marker.py` and `sync_hidden_tags_to_marker.py`), which were

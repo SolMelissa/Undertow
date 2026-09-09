@@ -12,13 +12,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
 
 from undertow_bridge import hydrus_client  # noqa: E402
-from report import section  # noqa: E402
+from report import section, require_local_tag_service_key  # noqa: E402
 
 
 def main() -> int:
-    key, reason = hydrus_client.get_local_tag_service_key()
+    key = require_local_tag_service_key(hydrus_client)
     if not key:
-        print(f"ERROR: {reason}")
         return 1
 
     resp = hydrus_client.search_files(["system:number of tags = 0"])

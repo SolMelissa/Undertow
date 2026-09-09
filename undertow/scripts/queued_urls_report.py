@@ -13,15 +13,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "modules"))
 
 from undertow_bridge import api_client  # noqa: E402
-from report import section  # noqa: E402
+from report import section, unwrap_or_error  # noqa: E402
 
 
 def main() -> int:
-    resp = api_client.get_queued_urls()
-    if not resp.success:
-        print(f"ERROR: {resp.error}")
+    data = unwrap_or_error(api_client.get_queued_urls())
+    if data is None:
         return 1
-    urls = resp.data if isinstance(resp.data, list) else []
+    urls = data if isinstance(data, list) else []
 
     section("Queue summary")
     print(f"Total queued URLs: {len(urls):,}")

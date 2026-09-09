@@ -6,7 +6,7 @@ rolling its own formatting.
 
 from __future__ import annotations
 
-__all__ = ["hr_size", "hr_age", "section"]
+__all__ = ["hr_size", "hr_age", "section", "unwrap_or_error", "require_local_tag_service_key"]
 
 
 def hr_size(num_bytes: float) -> str:
@@ -31,3 +31,22 @@ def hr_age(seconds: float) -> str:
 
 def section(title: str) -> None:
     print(f"\n=== {title} ===")
+
+
+def unwrap_or_error(resp):
+    """Returns resp.data if the ApiResponse succeeded, else prints 'ERROR: {resp.error}' and
+    returns None. Scripts should treat a None return as "print already handled, bail with 1"."""
+    if not resp.success:
+        print(f"ERROR: {resp.error}")
+        return None
+    return resp.data
+
+
+def require_local_tag_service_key(hydrus_client_module):
+    """Resolves the local tag service key via hydrus_client_module.get_local_tag_service_key(),
+    or prints 'ERROR: {reason}' and returns None if it isn't available."""
+    key, reason = hydrus_client_module.get_local_tag_service_key()
+    if not key:
+        print(f"ERROR: {reason}")
+        return None
+    return key
