@@ -16,7 +16,7 @@ from pathlib import Path
 
 import psutil
 
-from . import config, hydrus_client, tagrank_client
+from . import config, hydrus_client, stash, tagrank_client
 from .api_client import get_daemon_api_info, get_status_info, shutdown as api_shutdown
 
 try:
@@ -36,6 +36,8 @@ class ServiceStatus:
     daemon_pid: int | None
     systray_running: bool
     systray_pid: int | None
+    stash_running: bool = False
+    stash_pid: int | None = None
 
 
 def find_process_by_name(name: str) -> psutil.Process | None:
@@ -117,7 +119,8 @@ def get_service_status() -> ServiceStatus:
     if _service_status_cache is not None and now - _service_status_cache[0] < _SERVICE_STATUS_TTL:
         return _service_status_cache[1]
 
-    hydrus = daemon = systray = None
+    hydrus = daemon = systray = stash_proc = None
+    stash_exe_name = config.STASH_EXE.name.lower()
     for proc in psutil.process_iter(["pid", "name"]):
         try:
             name = (proc.info["name"] or "").lower()
@@ -127,6 +130,8 @@ def get_service_status() -> ServiceStatus:
             hydrus = proc
         elif name == "hydownloader-systray.exe":
             systray = proc
+        elif name == stash_exe_name:
+            stash_proc = proc
         elif name in ("python.exe", "pythonw.exe"):
             try:
                 cmdline = proc.cmdline()
@@ -142,6 +147,8 @@ def get_service_status() -> ServiceStatus:
         daemon_pid=daemon.pid if daemon else None,
         systray_running=systray is not None,
         systray_pid=systray.pid if systray else None,
+        stash_running=stash_proc is not None,
+        stash_pid=stash_proc.pid if stash_proc else None,
     )
     _service_status_cache = (now, status)
     return status
@@ -375,6 +382,10 @@ def stop_everything() -> None:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
+    if stash.find_process():
+        print("  closing Stash...")
+        stash.stop()
+
     hydrus = find_process_by_name("hydrus_client.exe")
     if hydrus:
         print("  closing Hydrus...")
@@ -435,6 +446,17 @@ def start_required_services() -> list[str]:
             lines.append("  hydownloader-systray not found - run Setup-HydrusPipeline.ps1 first.")
     else:
         lines.append("  hydownloader systray already running.")
+
+    # Stash is optional - silently skipped if setup hasn't installed it, so a machine without it
+    # doesn't get a nagging line on every launch.
+    if stash.is_installed():
+        if status.stash_running:
+            lines.append("  Stash already running.")
+        else:
+            lines.append("  starting Stash...")
+            err = stash.start()
+            if err:
+                lines.append(f"  Stash: {err}")
 
     # Kick off TagRank's headless API in the background so it's already warm by the time
     # someone opens the TagRank tab, instead of the tab itself eating the ~15-75s cold-start

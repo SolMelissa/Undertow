@@ -118,6 +118,24 @@ if (-not (Test-Path $HydrusExe)) {
     Write-Host "Hydrus already installed at $HydrusDir"
 }
 
+# Stash (stashapp) - media organizer/player. A single prebuilt exe; first launch serves a setup
+# wizard at http://localhost:9999 where you pick your library folders. It keeps config.yml/db/
+# cache in its working directory, so everything stays under $StashDir. Uses the FFmpeg above.
+$StashDir = Join-Path $InstallRoot "stash"
+$StashExe = Join-Path $StashDir "stash-win.exe"
+if (-not (Test-Path $StashExe)) {
+    Write-Step "Downloading Stash to $StashDir ..."
+    New-Item -ItemType Directory -Force -Path $StashDir | Out-Null
+    try {
+        Invoke-WebRequest -Uri "https://github.com/stashapp/stash/releases/latest/download/stash-win.exe" -OutFile $StashExe
+    } catch {
+        Write-Warn2 "Could not download Stash ($($_.Exception.Message)) - Undertow will just skip it until stash-win.exe is placed in $StashDir."
+        Remove-Item -Force -ErrorAction SilentlyContinue $StashExe
+    }
+} else {
+    Write-Host "Stash already installed at $StashDir"
+}
+
 # Refresh PATH in this session so newly-installed tools are visible without reopening the shell
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 

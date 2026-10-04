@@ -18,6 +18,16 @@ HYDRUS_EXE = HYDRUS_DIR / "hydrus_client.exe"
 HYDOWNLOADER_CONFIG_FILE = DATA_DIR / "hydownloader-config.json"
 SYSTRAY_DIR = INSTALL_ROOT / "hydownloader-systray"
 
+# Stash (github.com/stashapp/stash) - self-hosted media organizer/player. A single prebuilt
+# exe (no venv/poetry), so it lives in its own folder under the install root; it keeps its
+# config.yml/db/cache in its working directory, so everything it creates stays in STASH_DIR.
+STASH_DIR = INSTALL_ROOT / "stash"
+STASH_EXE = STASH_DIR / "stash-win.exe"
+STASH_PORT = 9999
+STASH_URL = f"http://localhost:{STASH_PORT}"
+STASH_LAUNCH_STDOUT_LOG = INSTALL_ROOT / "hydownloader-data" / "logs" / "stash-launch-stdout.log"
+STASH_LAUNCH_STDERR_LOG = INSTALL_ROOT / "hydownloader-data" / "logs" / "stash-launch-stderr.log"
+
 WATCHDOG_INTERVAL_SECONDS = 90
 WATCHDOG_STATUS_FILE = LOGS_DIR / "watchdog-status.json"
 WATCHDOG_HISTORY_FILE = LOGS_DIR / "watchdog-history.jsonl"

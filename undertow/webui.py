@@ -32,7 +32,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-from . import api_client, api_keys, config, hydrus_client, logtail, media, scripts_runner, services, settings, subscriptions, tag_cleanup_web, tags, tagrank_client, version, watchdog
+from . import api_client, api_keys, config, hydrus_client, logtail, media, scripts_runner, services, settings, stash, subscriptions, tag_cleanup_web, tags, tagrank_client, version, watchdog
 from .subscriptions import add_single_subscription
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -510,12 +510,14 @@ if HAVE_FLASK:
         drive_mounted = Path(config.HYDRUS_VOLUME_DRIVE + "\\").exists()
         tagrank_available = tagrank_client.is_available()
         tagrank_running = tagrank_available and tagrank_client.is_server_running()
+        stash_installed = stash.is_installed()
         status_resp = api_client.get_status_info()
         if status_resp.success and status_resp.data:
             d = status_resp.data
             urls_queued = d.get("urls_queued") or 0
             subs_due = d.get("subscriptions_due") or 0
             ctx = dict(
+                stash_installed=stash_installed, stash_url=config.STASH_URL,
                 status=svc, api_ok=True, drive_mounted=drive_mounted,
                 tagrank_available=tagrank_available, tagrank_running=tagrank_running,
                 sub_status=d.get("subscription_worker_status") or "",
@@ -526,6 +528,7 @@ if HAVE_FLASK:
             _activity_history.append((urls_queued, subs_due))
         else:
             ctx = dict(
+                stash_installed=stash_installed, stash_url=config.STASH_URL,
                 status=svc, api_ok=False, drive_mounted=drive_mounted,
                 tagrank_available=tagrank_available, tagrank_running=tagrank_running,
                 sub_status="", url_status="", urls_queued=0, subs_due=0,
@@ -2226,6 +2229,7 @@ if HAVE_FLASK:
     _SERVICE_RESTARTERS = {
         "hydrus": services.restart_hydrus_service,
         "systray": services.restart_systray_service,
+        "stash": stash.restart,
     }
 
     @app.route("/services/<name>/restart", methods=["POST"])

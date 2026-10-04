@@ -10,6 +10,12 @@
   {{ service_pill('Hydrus', 'Hydrus', status.hydrus_running, status.hydrus_pid, 'hydrus') }}
   {{ service_pill('Downloader', 'hydownloader daemon', status.daemon_running, status.daemon_pid, 'daemon') }}
   {{ service_pill('Tray', 'hydownloader systray', status.systray_running, status.systray_pid, 'systray') }}
+  {% if stash_installed %}
+  <span style="display:inline-flex; gap:0.3rem; align-items:center;">
+    {{ service_pill('Stash', 'Stash', status.stash_running, status.stash_pid, 'stash') }}
+    {% if status.stash_running %}<a class="kawaii-pill info" href="{{ stash_url }}" target="_blank" rel="noopener" title="Open Stash">Open</a>{% endif %}
+  </span>
+  {% endif %}
   <button type="button" class="kawaii-pill {{ 'ok' if drive_mounted else 'bad' }}"
           title="A: drive (Hydrus media library) - {{ 'mounted' if drive_mounted else 'not mounted' }} - click to {{ 'dismount' if drive_mounted else 'mount' }}"
           hx-post="/services/drive/toggle" hx-target="#girly-toast-stack" hx-swap="afterbegin"

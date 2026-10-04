@@ -2,6 +2,17 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.17.0
+- Significant: added Stash (stashapp, the media organizer/player) to the stack as an optional
+  managed service. New `undertow/stash.py` (install check, start hidden with `--nobrowser`,
+  stop, restart); `services.get_service_status()` now reports `stash_running`/`stash_pid`;
+  launch starts it and full shutdown closes it; the dashboard shows a clickable Stash pill
+  (restart) plus an Open link to http://localhost:9999. Stash is never auto-restarted by the
+  watchdog (same as Hydrus - closing it is assumed deliberate), and the pill/startup are
+  hidden entirely if it isn't installed. `Setup-HydrusPipeline.ps1` downloads `stash-win.exe`
+  to `%USERPROFILE%\HydrusPipeline\stash`. First launch needs a one-time library-folder wizard
+  in Stash's own web UI.
+
 ## 1.16.11
 - BugFix: downloaded files were importing into Hydrus with no tags at all. hydownloader-import-jobs.py
   mapped "my tags" to a tag-service key that no longer exists in Hydrus, so every add_tags call
