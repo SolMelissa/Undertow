@@ -380,6 +380,27 @@ def apply_hydrus_key(api_key: str) -> tuple[bool, str]:
     return True, "Saved. Hydrus API key is now configured. (This does NOT touch hydownloader-config.json's own separate 'daemon.access-key' secret.)"
 
 
+def find_missing_import_tag_services() -> list[str]:
+    """Service keys in the import-jobs script's defServiceNamesToKeys that Hydrus doesn't know.
+    hydownloader's importer sends every tag to those keys, and Hydrus rejects the whole
+    add_tags call (400 "Could not find the tag service") if one is missing - the file still
+    lands but with NO tags, so this is checked at launch. Returns [] if Hydrus isn't
+    reachable or the script can't be read (can't tell, so don't cry wolf)."""
+    from . import hydrus_client
+    try:
+        content = config.IMPORT_JOBS_FILE.read_text(encoding="utf-8-sig")
+    except OSError:
+        return []
+    block = re.search(r"defServiceNamesToKeys\s*=\s*\{(.*?)\}", content, re.S)
+    resp = hydrus_client.get_services()
+    if not block or not resp.success:
+        return []
+    known = set((resp.data or {}).get("services", {}))
+    used = {n: k for n, k in re.findall(r"[\"']([^\"']+)[\"']\s*:\s*[\"']([0-9a-fA-F]+)[\"']", block.group(1))}
+    wanted = {used[n] for n in re.findall(r"defTagRepos\w*\s*=\s*\[([^\]]*)\]", content) for n in re.findall(r"[\"']([^\"']+)[\"']", n) if n in used}
+    return sorted(wanted - known)
+
+
 def show_status() -> None:
     reddit_ok, reddit_cid = get_reddit_status()
     hydrus_ok, hydrus_key = get_hydrus_key_status()

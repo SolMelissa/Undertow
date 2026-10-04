@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import threading
 
-from . import services, subscriptions, tagrank_client
+from . import api_keys, services, subscriptions, tagrank_client
 from .watchdog import Watchdog
 
 _shutdown_lock = threading.Lock()
@@ -82,6 +82,11 @@ def main() -> None:
         print(f"  updated queue priority for {prioritized} of {prio_total} subscription(s).")
     else:
         print(f"  all {prio_total} subscription(s) already correctly prioritized.")
+
+    missing = api_keys.find_missing_import_tag_services()
+    if missing:
+        print("WARNING: hydownloader-import-jobs.py sends tags to Hydrus tag service key(s) that no longer")
+        print(f"  exist ({', '.join(missing)}) - downloaded files will import with NO tags until defServiceNamesToKeys is fixed.")
 
     watchdog = Watchdog()
     watchdog.start()

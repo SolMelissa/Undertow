@@ -2,6 +2,12 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.16.11
+- BugFix: downloaded files were importing into Hydrus with no tags at all. hydownloader-import-jobs.py
+  mapped "my tags" to a tag-service key that no longer exists in Hydrus, so every add_tags call
+  400'd (file added, tags dropped, job marked error). Re-pointed it at "local file tags" and
+  requeued the errored jobs. Launch now warns if an import-job tag service key is missing.
+
 ## 1.16.10
 - BugFix: `performer_gazetteer.py`'s API-key prompt (`console.Renderer.secret`) used
   `getpass.getpass()` unconditionally, which on Windows reads from the console via `msvcrt`
