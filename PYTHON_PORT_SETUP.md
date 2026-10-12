@@ -55,7 +55,7 @@ system Python otherwise.
 
 **This changed from the TUI-first design described further down in this doc's history:**
 once services are checked/started, `menu.main()` now launches the **web dashboard**
-(`undertow/webui.py`, http://127.0.0.1:8765) as the primary and only interface and hides its
+(`undertow/webui.py`, http://127.0.0.1:8766) as the primary and only interface and hides its
 own console window - there's nothing left to interact with in the console day to day. The
 dashboard has a **Shutdown** button (stops the daemon/systray if idle, then exits the process)
 since there's no window left to close or Ctrl+C once it's hidden.

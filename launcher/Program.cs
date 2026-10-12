@@ -34,7 +34,7 @@ internal static class Program
     // the real port the backend reports and polls/navigates to that instead, so this constant
     // only matters for the "already running" fast-path check below, before any such fallback
     // could be known about.
-    private const int Port = 8765;
+    private const int Port = 8766;
     private static readonly string DashboardUrl = $"http://127.0.0.1:{Port}/";
 
     [STAThread]

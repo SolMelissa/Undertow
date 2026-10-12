@@ -3,7 +3,7 @@ Local web dashboard - a Flask + htmx + Alpine.js app serving the "cockpit" contr
 (subscribe/pause/resume/delete/force-check, diagnostics, API key setup), backed by the
 api_client/services/subscriptions/api_keys/logtail functions. This is the primary and only
 interface - menu.main() launches this and hides its own console window once it's up.
-Reachable directly at http://127.0.0.1:8765.
+Reachable directly at http://127.0.0.1:8766.
 
 Styling is Tailwind + daisyUI loaded from a CDN, interactivity is htmx (server-rendered HTML
 fragments swapped into the page - polling for live data, hx-post for actions) plus a small
@@ -2411,7 +2411,7 @@ def _reclaim_dead_listener(port: int) -> None:
         print(f"  couldn't clear the stuck process (pid {pid}): {exc} - trying to bind anyway.")
 
 
-def run_webui(port: int = 8765, open_browser: bool = True) -> int | None:
+def run_webui(port: int = config.DASHBOARD_PORT, open_browser: bool = True) -> int | None:
     """Starts the Flask app in a background daemon thread (so it dies with the console
     process, same lifetime as everything else this pipeline starts) and returns the port it's
     listening on, or None if Flask isn't installed. Calling this again while already running
@@ -2443,7 +2443,7 @@ def run_webui(port: int = 8765, open_browser: bool = True) -> int | None:
             # bind again (short of a reboot), fall back to the next few ports until one is
             # actually free. menu.py prints whatever port this function returns, and the
             # WebView2 launcher (launcher/Program.cs) parses that same line to find out which
-            # port to actually talk to - neither one assumes 8765 specifically.
+            # port to actually talk to - neither one assumes 8766 specifically.
             for candidate in range(port + 1, port + 10):
                 if not _port_already_bound(candidate):
                     print(f"  port {port} is still stuck - using port {candidate} instead.")

@@ -11,6 +11,9 @@ All notable changes to Undertow are tracked here, one section per version. Newes
   `stash\stash_main`. The tag-cleanup script fallbacks, `tagrank_connect.py`,
   `Setup-HydrusPipeline.ps1` and the docs follow suit. After moving the folder, run
   `scripts\setup\repair_hydownloader_venv.py` (Poetry's venv name is a hash of the repo path).
+- Dashboard default port is now 8766 (`config.DASHBOARD_PORT`). TubeFinder owns 8765, and
+  `run_webui` mistook its answering HTTP server for an earlier Undertow backend and adopted it.
+  `launcher\Program.cs` follows; rebuild `Undertow.exe` with `build_launcher.bat` to pick it up.
 
 ## 1.17.0
 - Significant: added Stash (stashapp, the media organizer/player) to the stack as an optional

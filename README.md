@@ -16,7 +16,7 @@ installs (see [Configuration](#configuration) below and the folder map in `<hydr
   running (and leaves them alone if they are).
 - Runs a background watchdog that restarts the daemon/systray if either crashes.
   Hydrus itself is never auto-restarted — closing it is assumed to be deliberate.
-- Opens a local **web dashboard** (`http://127.0.0.1:8765`) as the primary interface — add/
+- Opens a local **web dashboard** (`http://127.0.0.1:8766`) as the primary interface — add/
   pause/resume/delete subscriptions, queue a one-off URL download, watch what the daemon is
   doing right now, run health diagnostics, and configure API keys, all from a browser tab. The
   launcher's own console window hides itself once the dashboard is up, since there's nothing
@@ -52,7 +52,7 @@ The last command (re)creates the "Undertow" Desktop shortcut pointing at `run.ba
 ## Daily use: the web dashboard
 
 `run.bat` (via `python -m undertow`) checks/starts services, then opens
-`http://127.0.0.1:8765` in your browser: real-time Hydrus/daemon/systray status, the
+`http://127.0.0.1:8766` in your browser: real-time Hydrus/daemon/systray status, the
 subscriptions table (click a row to pause/resume/delete/force-check/view history), a
 quick-subscribe bar, a live-colorized tail of hydownloader's log, and a column of instrument
 panels (fleet counts, per-site activity, host RAM/disk/GPU, daemon API call stats).
@@ -84,7 +84,7 @@ undertow/
   subscriptions.py  add/pause/resume/delete subscriptions, batch import, force-recheck, history
   api_client.py     thin HTTP client for the hydownloader daemon's own API (tracks call stats)
   watchdog.py       background thread that restarts the daemon/systray if either crashes
-  webui.py          Flask dashboard at http://127.0.0.1:8765 - the primary and only interface
+  webui.py          Flask dashboard at http://127.0.0.1:8766 - the primary and only interface
   api_keys.py       Reddit OAuth + Hydrus Client API key setup flow
   logtail.py        tails hydownloader's daemon.txt log for the dashboard
   shortcut.py       (re)creates the Desktop shortcut

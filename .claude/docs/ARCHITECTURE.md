@@ -29,7 +29,7 @@ both removed as unneeded overhead — girly/kawaii is now the dashboard's only t
 
 - `menu.py` — startup wiring: starts services/watchdog, then launches the web dashboard and
   hides this process's own console window
-- `webui.py` — Flask dashboard at `http://127.0.0.1:8765`, the **primary and only daily-use
+- `webui.py` — Flask dashboard at `http://127.0.0.1:8766`, the **primary and only daily-use
   interface** (subscriptions, diagnostics, API keys, host/GPU/network stats, a Shutdown
   button). `templates/` holds its Jinja2 templates (htmx + Alpine.js + Tailwind/daisyUI from
   CDNs, no build step).

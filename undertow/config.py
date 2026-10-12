@@ -35,6 +35,10 @@ STASH_URL = f"http://localhost:{STASH_PORT}"
 STASH_LAUNCH_STDOUT_LOG = LOGS_DIR / "stash-launch-stdout.log"
 STASH_LAUNCH_STDERR_LOG = LOGS_DIR / "stash-launch-stderr.log"
 
+# Dashboard port. 8766, not 8765: TubeFinder (stash\plugins\tubefinder) owns 8765, and run_webui would
+# otherwise mistake its answering HTTP server for an earlier Undertow backend and adopt it.
+DASHBOARD_PORT = 8766
+
 WATCHDOG_INTERVAL_SECONDS = 90
 WATCHDOG_STATUS_FILE = LOGS_DIR / "watchdog-status.json"
 WATCHDOG_HISTORY_FILE = LOGS_DIR / "watchdog-history.jsonl"
