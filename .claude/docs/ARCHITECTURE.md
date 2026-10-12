@@ -71,3 +71,8 @@ both removed as unneeded overhead — girly/kawaii is now the dashboard's only t
 - **No automated test suite.** There used to be a pytest suite in `tests/` (plus `pytest.ini`,
   `run_tests.bat`, `requirements-dev.txt`) - it was deliberately removed since it wasn't
   pulling its weight. Verify changes by running the app directly.
+- **Image-tagging split.** General taggers (STAG+, NudeNet/CLIP, the networked JoyTag
+  server/client, tag sets) live outside this repo in `<image_and_video_management>\image_tagging`
+  (`config.IMAGE_TAGGING_DIR`, `config.STAG_DIR`). Only the Hydrus-specific wrappers live here:
+  `undertow/scripts/image_tagging/` (`Run-HydrusTagger.ps1`, `Convert-StagXmpToHydrus.ps1`,
+  `settings.json` namespace mapping), launched from the Scripts tab via `scripts/stag_tagger.py`.

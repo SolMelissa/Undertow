@@ -1,0 +1,47 @@
+{
+  "Paths": {
+    "ImageRoot": "",
+    "LogDirectory": "logs"
+  },
+  "ModelSettings": {
+    "IncludeAesthetic": true,
+    "IncludeQuality": true,
+    "QualityBins": 3,
+    "WriteStars": true
+  },
+  "ExecutionFlags": {
+    "Force": false,
+    "ForceCpu": false,
+    "TestMode": false,
+    "AllTags": false,
+    "QualityOnly": false,
+    "AestheticOnly": false
+  },
+  "Categorization": {
+    "DefaultNamespace": "general",
+    "NamespaceSeparator": ":",
+    "NamespaceMapping": {
+      "person": [
+        "woman", "man", "girl", "boy", "character", "portrait"
+      ],
+      "clothing": [
+        "dress", "shirt", "skirt", "hat", "shoes", "uniform", "silk", "lace"
+      ],
+      "environment": [
+        "forest", "city", "indoor", "outdoor", "beach", "mountain", "room"
+      ],
+      "color": [
+        "red", "blue", "green", "yellow", "black", "white", "purple"
+      ],
+      "quality": [
+        "masterpiece", "highres", "best quality", "extremely detailed"
+      ]
+    },
+    "CaseNormalization": "lowercase"
+  },
+  "Pipeline": {
+    "AutoConvert": true,
+    "DeleteXmpAfterConversion": true,
+    "OutputEncoding": "UTF-8"
+  }
+}

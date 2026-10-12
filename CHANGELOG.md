@@ -2,6 +2,15 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.17.2
+- Significant: the image-tagging projects (STAG+ install, NudeNet/CLIP scripts, the networked JoyTag
+  server/client, tag sets) were consolidated into `image_and_video_management\image_tagging`
+  (`local\`, `networked\`, `tag_sets\`, `test_images\`). The Hydrus-specific parts moved here:
+  `undertow/scripts/image_tagging/` holds `Run-HydrusTagger.ps1`, `Convert-StagXmpToHydrus.ps1`
+  and `settings.json` (namespace mapping). They find STAG+ through `config.IMAGE_TAGGING_DIR` /
+  `STAG_DIR` (override env `IMAGE_TAGGING_DIR`); logs go to `image_tagging\_logs\stag`.
+- New Scripts-tab entry "AI-Tag a Folder (STAG+)" (`scripts/stag_tagger.py`), group "AI Tagging".
+
 ## 1.17.1
 - Significant: the Hydrus/hydownloader/addon install was consolidated into one folder,
   `image_and_video_management\hydrus_pipeline` (`hydrus_main\`, `hydownloader_main\{hydownloader,

@@ -70,9 +70,14 @@ SCRIPT_META: dict[str, dict[str, str]] = {
         "desc": "Import the hidden-tags marker file if needed, then sync its tags to config/TAG_FILTERS.",
         "group": "TagRank",
     },
+    "stag_tagger": {
+        "icon": ">", "label": "AI-Tag a Folder (STAG+)",
+        "desc": "Run STAG+ on an image folder and write Hydrus .txt sidecars (ai: namespace).",
+        "group": "AI Tagging",
+    },
 }
 
-GROUP_ORDER = ["Reports", "Housekeeping", "Interactive Wizards", "TagRank", "Other"]
+GROUP_ORDER = ["Reports", "Housekeeping", "Interactive Wizards", "TagRank", "AI Tagging", "Other"]
 
 
 def meta_for(name: str) -> dict[str, str]:

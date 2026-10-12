@@ -109,6 +109,12 @@ def find_systray_exe() -> Path | None:
 # out there, the TagRank tab just reports it's unavailable instead of erroring the rest of the app.
 TAGRANK_DIR = ADDONS_DIR / "tagrank"
 TAGRANK_PORT = 8420
+# General (non-Hydrus) image taggers - STAG+, NudeNet/CLIP, the networked JoyTag server - live in the
+# sibling <image_and_video_management>\image_tagging folder. Only the Hydrus-specific wrappers
+# (scripts/image_tagging/*.ps1: namespace mapping, .txt sidecars) live in this repo and reach STAG+
+# through this path. Override with env IMAGE_TAGGING_DIR.
+IMAGE_TAGGING_DIR = Path(os.environ.get("IMAGE_TAGGING_DIR") or PIPELINE_ROOT.parent / "image_tagging")
+STAG_DIR = IMAGE_TAGGING_DIR / "local" / "stag"
 TAGRANK_API_URL = f"http://127.0.0.1:{TAGRANK_PORT}"
 
 
