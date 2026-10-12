@@ -16,12 +16,15 @@ we hit actually lived.
 
 ## One-time setup
 
-This folder lives at `F:\Apple\iCloudDrive\0Docs\AI\Claude\The Pipeline` (it used to be
-`C:\0Docs\AI\Claude\The Pipeline`). Only this app moved - the Hydrus install, the
-hydownloader clone, and all databases and media stay at `%USERPROFILE%\Undertow`,
-which is what `undertow/config.py` still points at.
+This folder lives at `C:\0Programming\image_and_video_management\hydrus_pipeline\undertow`
+(it used to be `F:\Apple\iCloudDrive\0Docs\AI\Claude\The Pipeline`, and before that
+`C:\0Docs\AI\Claude\The Pipeline`). As of 2026-10-12 the Hydrus install, the hydownloader
+clone and its data, and the addons (TagRank, ...) were consolidated beside it under
+`hydrus_pipeline\` - `undertow/config.py` derives all of those paths from its own location.
+See `..\README.md` for the folder map.
 
-Because the folder is now cloud-synced, the venv lives **outside** it. Open a terminal
+The venv lives **outside** this folder (a leftover from when it was cloud-synced, and still
+convenient: it keeps thousands of small files out of the repo tree). Open a terminal
 (PowerShell or Command Prompt) in this folder and run:
 
 ```

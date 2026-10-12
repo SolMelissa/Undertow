@@ -95,8 +95,8 @@ def _config_dir() -> Path:
         from undertow import config as _undertow_config  # type: ignore
         return _undertow_config.DATA_DIR
     except Exception:
-        root = Path(os.environ.get("USERPROFILE", str(Path.home())))
-        return root / "HydrusPipeline" / "hydownloader-data"
+        root = Path(os.environ.get("HYDRUS_PIPELINE_ROOT") or Path(__file__).resolve().parents[3])
+        return root / "hydownloader_main" / "data"
 
 
 def _default_local_config_path() -> Path:

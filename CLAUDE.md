@@ -3,8 +3,11 @@
 A Python web-dashboard app that manages **Hydrus** (media manager) + **hydownloader** (its
 subscription downloader daemon) as one cockpit, so daily use is "double-click a shortcut" instead of
 juggling two separate programs. This folder is the app itself, not the Hydrus/hydownloader
-installs — those live under `%USERPROFILE%\HydrusPipeline\` (see `undertow/config.py`
-for exact paths).
+installs — those live in sibling folders of this repo under the consolidated
+`<hydrus_pipeline>\` root (`hydrus_main\`, `hydownloader_main\`, `addons\`; see
+`undertow/config.py` for exact paths and `..\README.md` for the folder map). This repo sits at
+`<hydrus_pipeline>\undertow\`; nothing is hard-coded to a drive, config derives the root from
+its own location (override: `HYDRUS_PIPELINE_ROOT`).
 
 This project is a git repo (`origin` = `github.com/SolMelissa/Undertow`). When a task changes
 code, commit and push to `master` when done — don't leave finished work sitting only on a

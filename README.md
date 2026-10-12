@@ -6,8 +6,9 @@ A cockpit that manages [Hydrus Network](https://hydrusnetwork.github.io/hydrus/)
 daemon) as a single app, so daily use is "double-click a shortcut" instead of juggling two
 separate programs and their processes by hand.
 
-This repo is the cockpit app itself — **not** the Hydrus or hydownloader installs. Those live
-under `%USERPROFILE%\HydrusPipeline\` once set up (see [Configuration](#configuration) below).
+This repo is the cockpit app itself — **not** the Hydrus or hydownloader installs. It lives at
+`<hydrus_pipeline>\undertow\`, and its siblings `hydrus_main\` and `hydownloader_main\` hold those
+installs (see [Configuration](#configuration) below and the folder map in `<hydrus_pipeline>\README.md`).
 
 ## What it actually does
 
@@ -98,15 +99,24 @@ dashboard's old hacker/terminal theme have all been removed as fully superseded/
 
 ## Configuration
 
-Everything Hydrus/hydownloader-related lives under `%USERPROFILE%\HydrusPipeline\`:
+Everything Hydrus/hydownloader-related lives next to this repo under `<hydrus_pipeline>\`
+(located automatically from `undertow/config.py`'s own path; set the `HYDRUS_PIPELINE_ROOT`
+environment variable to override). Paths below are relative to `<hydrus_pipeline>`:
 
 | Path | What |
 | --- | --- |
-| `HydrusPipeline\hydrus\` | The Hydrus Network install |
-| `HydrusPipeline\hydownloader\` | The cloned hydownloader repo (its own Python/Poetry env, run as the daemon) |
-| `HydrusPipeline\hydownloader-data\` | hydownloader's database, config (`hydownloader-config.json`), and logs |
-| `HydrusPipeline\hydownloader-data\logs\daemon.txt` | The live log the web dashboard tails |
-| `HydrusPipeline\hydownloader-systray\` | The systray GUI (exe path varies by commit hash, so it's searched for at runtime) |
+| `hydrus_main\` | The Hydrus Network install (`hydrus_client.exe`, `db\`) |
+| `hydownloader_main\hydownloader\` | The cloned hydownloader repo (its own Python/Poetry env, run as the daemon) |
+| `hydownloader_main\data\` | hydownloader's database, config (`hydownloader-config.json`), downloads, and logs |
+| `hydownloader_main\data\logs\daemon.txt` | The live log the web dashboard tails |
+| `hydownloader_main\systray\` | The systray GUI (exe path varies by commit hash, so it's searched for at runtime) |
+| `addons\tagrank\` | TagRank, driven over its local HTTP API by the TagRank tab |
+| `..\stash\stash_main\` | Stash (sibling of `hydrus_pipeline`; launched from the Services panel) |
+
+If you ever move the `hydrus_pipeline` folder, run
+`python <hydrus_pipeline>\scripts\setup\repair_hydownloader_venv.py` afterwards: Poetry names
+hydownloader's virtualenv after a hash of its repo path, so a move orphans it. Details in
+`<hydrus_pipeline>\README.md`.
 
 See [`undertow/config.py`](undertow/config.py) for the exact constants.
 

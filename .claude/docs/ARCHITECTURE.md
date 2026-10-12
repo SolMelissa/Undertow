@@ -40,7 +40,8 @@ both removed as unneeded overhead — girly/kawaii is now the dashboard's only t
   subscription now (`force_recheck`) and reading its per-run history (`get_check_history`,
   `get_latest_checks` - the latter also backs the subs table's "New Files" column)
 - `stash.py` — optional Stash (stashapp) lifecycle: is_installed/start/stop/restart of
-  `stash-win.exe` under `config.STASH_DIR`; not watchdog-restarted (like Hydrus)
+  `stash-win.exe` under `config.STASH_DIR` (= `<image_and_video_management>\stash\stash_main`, outside this
+  pipeline folder); not watchdog-restarted (like Hydrus)
 - `watchdog.py` — background thread that restarts the daemon/systray if they crash (Hydrus
   itself is never auto-restarted — closing it is assumed deliberate); on any restart/alert
   action it also calls `alerts.notify()`

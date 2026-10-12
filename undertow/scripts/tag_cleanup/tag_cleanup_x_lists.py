@@ -31,8 +31,8 @@ def _default_lists_config_path() -> Path:
         from undertow import config as _undertow_config  # type: ignore
         return _undertow_config.DATA_DIR / "tag-cleanup-lists.json"
     except Exception:
-        root = Path(os.environ.get("USERPROFILE", str(Path.home())))
-        return root / "HydrusPipeline" / "hydownloader-data" / "tag-cleanup-lists.json"
+        root = Path(os.environ.get("HYDRUS_PIPELINE_ROOT") or Path(__file__).resolve().parents[4])
+        return root / "hydownloader_main" / "data" / "tag-cleanup-lists.json"
 
 
 LISTS_CONFIG_FILE = _default_lists_config_path()

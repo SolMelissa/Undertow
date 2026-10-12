@@ -9,24 +9,31 @@ import os
 import shutil
 from pathlib import Path
 
-INSTALL_ROOT = Path(os.environ["USERPROFILE"]) / "HydrusPipeline"
-HYDRUS_DIR = INSTALL_ROOT / "hydrus"
-HYDOWNLOADER_REPO_DIR = INSTALL_ROOT / "hydownloader"
-DATA_DIR = INSTALL_ROOT / "hydownloader-data"
+# Everything is located relative to this file: <PIPELINE_ROOT>\undertow\undertow\config.py.
+# See <PIPELINE_ROOT>\README.md for the folder map. HYDRUS_PIPELINE_ROOT overrides it (e.g. to
+# point a checkout at a different install).
+PIPELINE_ROOT = Path(os.environ.get("HYDRUS_PIPELINE_ROOT") or Path(__file__).resolve().parents[2])
+INSTALL_ROOT = PIPELINE_ROOT  # legacy name, still referenced in comments/docs
+HYDRUS_DIR = PIPELINE_ROOT / "hydrus_main"
+HYDOWNLOADER_MAIN_DIR = PIPELINE_ROOT / "hydownloader_main"
+HYDOWNLOADER_REPO_DIR = HYDOWNLOADER_MAIN_DIR / "hydownloader"
+DATA_DIR = HYDOWNLOADER_MAIN_DIR / "data"
 LOGS_DIR = DATA_DIR / "logs"
 HYDRUS_EXE = HYDRUS_DIR / "hydrus_client.exe"
 HYDOWNLOADER_CONFIG_FILE = DATA_DIR / "hydownloader-config.json"
-SYSTRAY_DIR = INSTALL_ROOT / "hydownloader-systray"
+SYSTRAY_DIR = HYDOWNLOADER_MAIN_DIR / "systray"
+ADDONS_DIR = PIPELINE_ROOT / "addons"
 
 # Stash (github.com/stashapp/stash) - self-hosted media organizer/player. A single prebuilt
-# exe (no venv/poetry), so it lives in its own folder under the install root; it keeps its
-# config.yml/db/cache in its working directory, so everything it creates stays in STASH_DIR.
-STASH_DIR = INSTALL_ROOT / "stash"
+# exe (no venv/poetry). It has its own consolidated home as a sibling of this pipeline folder
+# (<image_and_video_management>\stash\stash_main); it keeps its config.yml/db/cache in its
+# working directory, so everything it creates stays in STASH_DIR.
+STASH_DIR = PIPELINE_ROOT.parent / "stash" / "stash_main"
 STASH_EXE = STASH_DIR / "stash-win.exe"
 STASH_PORT = 9999
 STASH_URL = f"http://localhost:{STASH_PORT}"
-STASH_LAUNCH_STDOUT_LOG = INSTALL_ROOT / "hydownloader-data" / "logs" / "stash-launch-stdout.log"
-STASH_LAUNCH_STDERR_LOG = INSTALL_ROOT / "hydownloader-data" / "logs" / "stash-launch-stderr.log"
+STASH_LAUNCH_STDOUT_LOG = LOGS_DIR / "stash-launch-stdout.log"
+STASH_LAUNCH_STDERR_LOG = LOGS_DIR / "stash-launch-stderr.log"
 
 WATCHDOG_INTERVAL_SECONDS = 90
 WATCHDOG_STATUS_FILE = LOGS_DIR / "watchdog-status.json"
@@ -90,14 +97,13 @@ def find_systray_exe() -> Path | None:
     return matches[0] if matches else None
 
 
-# TagRank (github.com's own separate project, not part of the HydrusPipeline install tree) -
-# a standalone tool that rates Hydrus tags/files via pairwise comparison. Undertow drives it
-# headlessly through its local HTTP API (see undertow/tagrank_client.py and
-# tagrank/docs/api.md) rather than importing it as a library, so only a filesystem path and a
-# port are needed here, not a dependency. This is a fixed dev-machine path, not something the
-# installer provisions - if TagRank isn't checked out there, the TagRank tab just reports it's
-# unavailable instead of erroring the rest of the app.
-TAGRANK_DIR = Path(r"F:\0DocsF\0Docs\AI\Claude\tagrank")
+# TagRank (github.com/SolMelissa/tagrank, its own git repo) - a standalone tool that rates Hydrus
+# tags/files via pairwise comparison. Undertow drives it headlessly through its local HTTP API
+# (see undertow/tagrank_client.py and tagrank/docs/api.md) rather than importing it as a library,
+# so only a filesystem path and a port are needed here, not a dependency. It lives under
+# <PIPELINE_ROOT>\addons\tagrank (not something the installer provisions) - if it isn't checked
+# out there, the TagRank tab just reports it's unavailable instead of erroring the rest of the app.
+TAGRANK_DIR = ADDONS_DIR / "tagrank"
 TAGRANK_PORT = 8420
 TAGRANK_API_URL = f"http://127.0.0.1:{TAGRANK_PORT}"
 

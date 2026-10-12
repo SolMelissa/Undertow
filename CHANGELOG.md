@@ -2,6 +2,16 @@
 
 All notable changes to Undertow are tracked here, one section per version. Newest first.
 
+## 1.17.1
+- Significant: the Hydrus/hydownloader/addon install was consolidated into one folder,
+  `image_and_video_management\hydrus_pipeline` (`hydrus_main\`, `hydownloader_main\{hydownloader,
+  data,systray}`, `undertow\` (this repo), `addons\`). `config.py` now derives every path from its
+  own location (`PIPELINE_ROOT`, override with `HYDRUS_PIPELINE_ROOT`) instead of
+  `%USERPROFILE%\HydrusPipeline`; TagRank is expected at `addons\tagrank`, Stash at the sibling
+  `stash\stash_main`. The tag-cleanup script fallbacks, `tagrank_connect.py`,
+  `Setup-HydrusPipeline.ps1` and the docs follow suit. After moving the folder, run
+  `scripts\setup\repair_hydownloader_venv.py` (Poetry's venv name is a hash of the repo path).
+
 ## 1.17.0
 - Significant: added Stash (stashapp, the media organizer/player) to the stack as an optional
   managed service. New `undertow/stash.py` (install check, start hidden with `--nobrowser`,

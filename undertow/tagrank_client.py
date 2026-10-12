@@ -1,6 +1,6 @@
 """
 Subprocess lifecycle + HTTP client for TagRank's headless API (see
-F:\\0DocsF\\0Docs\\AI\\Claude\\tagrank\\docs\\api.md). Undertow launches TagRank's own
+addons\\tagrank\\docs\\api.md under the hydrus_pipeline root). Undertow launches TagRank's own
 `python main.py --serve` as a localhost-only subprocess the first time the TagRank tab is
 opened, and stops it when Undertow shuts down - it's never run as a persistent daemon of its
 own. Every request/response shape here mirrors the API doc's JSON exactly; nothing is
@@ -436,7 +436,7 @@ def get_file_rating_details(file_id: int, file_hash: str, tags: list[str]) -> tu
     score/badge/win-probability display (see tagrank_comparer.html and webui.py's
     _tagrank_compare_side_ctx). Implemented server-side by TagRank's GET
     /files/{file_id}/rating-details (see the contract at
-    F:\\0DocsF\\0Docs\\AI\\Claude\\tagrank\\plans\\undertow-comparer-rating-details.md and its
+    addons\\tagrank\\plans\\undertow-comparer-rating-details.md and its
     implementation in tagrank/server.py + tagrank/service.py:get_rating_details). Callers should
     still treat a non-None error here as "feature not available" rather than a hard failure -
     e.g. an older TagRank build without this route, or Hydrus briefly unreachable - since the

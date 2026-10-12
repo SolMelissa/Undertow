@@ -21,7 +21,8 @@
       installed/run with admin rights.
     - Requires winget (built into Windows 10 2004+ / Windows 11). If missing, install
       "App Installer" from the Microsoft Store first.
-    - Edit the $InstallRoot variable below if you don't want it under your user profile.
+    - The install root is the folder above this script (<hydrus_pipeline>); set the
+      HYDRUS_PIPELINE_ROOT environment variable if you want it somewhere else.
 
   This script has been reviewed but NOT executed end-to-end on a real Windows machine
   (it was written from an environment with no Windows access). Read through it before running,
@@ -31,10 +32,13 @@
 # ============================================================
 # 0. CONFIG - edit these if you want different locations
 # ============================================================
-$InstallRoot   = "$env:USERPROFILE\HydrusPipeline"
-$HydrusDir     = Join-Path $InstallRoot "hydrus"
-$HydownloaderRepoDir = Join-Path $InstallRoot "hydownloader"
-$DataDir       = Join-Path $InstallRoot "hydownloader-data"
+# This script lives in <hydrus_pipeline>\undertow\, so the install root is its parent folder.
+# Set HYDRUS_PIPELINE_ROOT to override (same variable undertow\config.py honours).
+$InstallRoot   = if ($env:HYDRUS_PIPELINE_ROOT) { $env:HYDRUS_PIPELINE_ROOT } else { Split-Path -Parent $PSScriptRoot }
+$HydrusDir     = Join-Path $InstallRoot "hydrus_main"
+$HydownloaderMainDir = Join-Path $InstallRoot "hydownloader_main"
+$HydownloaderRepoDir = Join-Path $HydownloaderMainDir "hydownloader"
+$DataDir       = Join-Path $HydownloaderMainDir "data"
 $DownloadedDir = Join-Path $DataDir "downloaded"
 $LogsDir       = Join-Path $DataDir "logs"
 $HydrusApiUrl  = "http://localhost:45869"
@@ -121,7 +125,7 @@ if (-not (Test-Path $HydrusExe)) {
 # Stash (stashapp) - media organizer/player. A single prebuilt exe; first launch serves a setup
 # wizard at http://localhost:9999 where you pick your library folders. It keeps config.yml/db/
 # cache in its working directory, so everything stays under $StashDir. Uses the FFmpeg above.
-$StashDir = Join-Path $InstallRoot "stash"
+$StashDir = Join-Path (Split-Path -Parent $InstallRoot) "stash\stash_main"   # consolidated Stash home, sibling of hydrus_pipeline
 $StashExe = Join-Path $StashDir "stash-win.exe"
 if (-not (Test-Path $StashExe)) {
     Write-Step "Downloading Stash to $StashDir ..."
@@ -357,9 +361,9 @@ if ($existingDaemon) {
 # not a Python/poetry entry point. Download it, configure settings.ini,
 # and launch the .exe directly.
 # ------------------------------------------------------------
-$SystrayDir      = Join-Path $InstallRoot "hydownloader-systray"
+$SystrayDir      = Join-Path $HydownloaderMainDir "systray"
 $SystrayZipUrl   = "https://gitgud.io/thatfuckingbird/hydownloader-assets/-/raw/master/hydownloader-systray-2053acef01cfd0ff464a3d55536da334dc350366.zip"
-$SystrayZipPath  = Join-Path $InstallRoot "hydownloader-systray.zip"
+$SystrayZipPath  = Join-Path $HydownloaderMainDir "hydownloader-systray.zip"
 $SystrayExe      = Join-Path $SystrayDir "hydownloader-systray.exe"
 
 # The exe actually lands inside a commit-hash-named subfolder after extraction, not

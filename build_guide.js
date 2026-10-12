@@ -233,14 +233,14 @@ const bodyChildren = [
   h2("File & Folder Reference"),
   twoColTable(
     [
-      ["C:\\Users\\Matt\\HydrusPipeline\\hydrus\\", "Hydrus Network install (hydrus_client.exe)"],
-      ["C:\\Users\\Matt\\HydrusPipeline\\hydownloader\\", "hydownloader source clone (poetry project - daemon runs from here)"],
-      ["C:\\Users\\Matt\\HydrusPipeline\\hydownloader-data\\", "The hydownloader database folder - config, queues, logs"],
+      ["C:\\0Programming\\image_and_video_management\\hydrus_pipeline\\hydrus_main\\", "Hydrus Network install (hydrus_client.exe)"],
+      ["C:\\0Programming\\image_and_video_management\\hydrus_pipeline\\hydownloader_main\\hydownloader\\", "hydownloader source clone (poetry project - daemon runs from here)"],
+      ["C:\\0Programming\\image_and_video_management\\hydrus_pipeline\\hydownloader_main\\data\\", "The hydownloader database folder - config, queues, logs"],
       ["  \\hydownloader-config.json", "hydownloader's own settings (daemon host/port/access-key, quick mode, etc.)"],
       ["  \\hydownloader-import-jobs.py", "Hydrus API URL + access key live here (defAPIURL / defAPIKey)"],
       ["  \\downloaded\\", "Where gallery-dl drops files before import (emptied automatically after import)"],
       ["  \\logs\\", "Daemon/systray stdout+stderr logs and per-URL gallery-dl logs"],
-      ["C:\\Users\\Matt\\HydrusPipeline\\hydownloader-systray\\", "The separate, prebuilt native systray app + its settings.ini"],
+      ["C:\\0Programming\\image_and_video_management\\hydrus_pipeline\\hydownloader_main\\systray\\", "The separate, prebuilt native systray app + its settings.ini"],
       ["C:\\Users\\Matt\\gallery-dl\\config.json", "Base gallery-dl config (directory layout, site extractor settings)"],
       ["Desktop\\Undertow.lnk", "The shortcut - runs Launch-HydrusPipeline.ps1"],
     ],
@@ -277,7 +277,7 @@ const bodyChildren = [
 
   h3("hydownloader daemon won't start / crashes immediately"),
   p("Usually caused by a config key hydownloader expects being missing from hydownloader-config.json (this happened once during setup - a KeyError on shared-db-override). Re-run Setup-HydrusPipeline.ps1: it scans the config for a known set of default keys and adds any that are missing, without touching existing values (so it's safe to re-run and won't regenerate the real access-key or overwrite anything you've configured). Check the daemon's stderr log afterward if it still won't start:"),
-  ...code("C:\\Users\\Matt\\HydrusPipeline\\hydownloader-data\\logs\\daemon-launch-stderr.log"),
+  ...code("C:\\0Programming\\image_and_video_management\\hydrus_pipeline\\hydownloader_main\\data\\logs\\daemon-launch-stderr.log"),
 
   h3("systray shows “Network error (status 0). Host not found”"),
   p("This means the systray's settings.ini has a blank or mismatched apiURL - usually because it was generated before the daemon's host/port/access-key were correctly written to hydownloader-config.json. Re-running Setup-HydrusPipeline.ps1 regenerates settings.ini from whatever's currently in the config. If the daemon was already running with a stale config when this happens, run Stop-HydrusPipelineServices.ps1 first, then Setup-HydrusPipeline.ps1, so the daemon actually restarts with the corrected values instead of continuing to run with what it loaded at its last start."),
@@ -315,7 +315,7 @@ const bodyChildren = [
   h2("Updating hydownloader"),
   p("hydownloader is an actively developed project on GitLab (not GitHub - the upstream repo is gitgud.io/thatfuckingbird/hydownloader). To update to the latest version:"),
   bullet("Run Stop-HydrusPipelineServices.ps1 first."),
-  ...code("cd C:\\Users\\Matt\\HydrusPipeline\\hydownloader\ngit pull\npython -m poetry install"),
+  ...code("cd C:\\0Programming\\image_and_video_management\\hydrus_pipeline\\hydownloader_main\\hydownloader\ngit pull\npython -m poetry install"),
   bullet("Then re-run Setup-HydrusPipeline.ps1 to restart everything and re-check the config for any new keys the update might have introduced."),
   p("hydownloader-systray is a separate repository with its own prebuilt binary releases. Setup-HydrusPipeline.ps1 currently downloads a specific pinned build; check gitgud.io/thatfuckingbird/hydownloader-assets for newer builds if you want to update it independently."),
 

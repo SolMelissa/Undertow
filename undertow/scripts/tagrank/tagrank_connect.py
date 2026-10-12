@@ -5,7 +5,7 @@ that needs to talk to Hydrus the way TagRank itself does (as opposed to the plai
 modules/hydrus_client.py used by the rest of scripts/, which doesn't know about TagRank's
 config/settings modules) should import connect() from here rather than duplicating this setup.
 
-Requires the sibling `tagrank/` checkout to exist next to this repo (see TAGRANK_PATH below) -
+Requires the TagRank checkout at <hydrus_pipeline>\addons\tagrank (see TAGRANK_PATH below) -
 this module inserts it onto sys.path itself so callers don't each have to.
 """
 
@@ -15,7 +15,8 @@ import logging
 import sys
 from pathlib import Path
 
-TAGRANK_PATH = Path(__file__).resolve().parent.parent.parent.parent.parent / "tagrank"
+# <hydrus_pipeline>\undertow\undertow\scripts\tagrank\tagrank_connect.py -> 5 levels up is <hydrus_pipeline>
+TAGRANK_PATH = Path(__file__).resolve().parents[4] / "addons" / "tagrank"
 if TAGRANK_PATH.exists():
     sys.path.insert(0, str(TAGRANK_PATH))
 
